@@ -1785,9 +1785,9 @@ $('#navUploadBtn')?.addEventListener('click', () => {
   openPlayUploadChoiceModal();
 });
 $$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
-$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
+$$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
-  $('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
+  $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
 }));
