@@ -1800,6 +1800,7 @@ $('#navUploadBtn')?.addEventListener('click', () => {
 $('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
 
 let currentCompany = null;
+let companyLoaded = false;
 let pendingCompanyLogo = '';
 
 function renderCompanyDashboard() {
@@ -1836,7 +1837,7 @@ async function loadCompanyDashboard() {
   if (!currentUser || !sb) return;
   const onboarding = $('#companyOnboarding');
   const dashboard = $('#companyDashboard');
-  if (!currentCompany) {
+  if (!companyLoaded) {
     const { data, error } = await sb.from('product_companies')
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
       .eq('owner_id', currentUser.id).maybeSingle();
@@ -1849,6 +1850,7 @@ async function loadCompanyDashboard() {
       return;
     }
     currentCompany = data || null;
+    companyLoaded = true;
   }
   renderCompanyDashboard();
 }
@@ -1898,6 +1900,7 @@ $('#companyCreateForm')?.addEventListener('submit', async e => {
     return;
   }
   currentCompany = data;
+  companyLoaded = true;
   pendingCompanyLogo = '';
   $('#companyCreateForm')?.reset();
   if ($('#companyLogoPreview')) $('#companyLogoPreview').textContent = '＋';
