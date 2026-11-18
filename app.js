@@ -1741,6 +1741,11 @@ function showPage(page) {
     grindbot: 'GRIND-BOT',
     pass: `Season ${passState.season || 1} Pass`,
     marketplace: 'Marketplace',
+    company: 'Company',
+    'company-design': 'Design',
+    'company-research': 'Research',
+    'company-products': 'Products',
+
     account: 'Account settings',
     report: 'Report player or bug',
     notifications: 'Notifications',
@@ -1750,6 +1755,7 @@ function showPage(page) {
   $('#pageTitle').textContent = titles[page] || 'GRIND';
   $('#feedTypeSwitch')?.classList.toggle('hidden', page !== 'feed');
   if (page === 'feed') renderFeed();
+  if (page === 'company') loadCompanyDashboard();
   if (page === 'live') loadLiveFeed();
   if (page === 'money') renderMoney();
   if (page === 'global') renderLeaderboard();
@@ -1791,7 +1797,115 @@ $('#navUploadBtn')?.addEventListener('click', () => {
   if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
   openPlayUploadChoiceModal();
 });
-$$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
+$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
+
+let currentCompany = null;
+let pendingCompanyLogo = '';
+
+function renderCompanyDashboard() {
+  const onboarding = $('#companyOnboarding');
+  const dashboard = $('#companyDashboard');
+  if (!currentCompany) {
+    onboarding?.classList.remove('hidden');
+    dashboard?.classList.add('hidden');
+    return;
+  }
+  onboarding?.classList.add('hidden');
+  dashboard?.classList.remove('hidden');
+  $('#companyDashboardName').textContent = currentCompany.company_name || 'Company';
+  $('#companyDashboardDescription').textContent = currentCompany.description || 'No company description yet.';
+  const logo = $('#companyDashboardLogo');
+  if (logo) {
+    logo.innerHTML = currentCompany.logo_data_url
+      ? '<img src="' + escapeHtml(currentCompany.logo_data_url) + '" alt="Company logo">'
+      : '▣';
+  }
+  $('#companyRevenue').textContent = money(Number(currentCompany.total_revenue || 0));
+  $('#companyCosts').textContent = money(Number(currentCompany.total_costs || 0));
+  const change = Number(currentCompany.change_pct || 0);
+  const changeEl = $('#companyChange');
+  if (changeEl) {
+    changeEl.textContent = (change > 0 ? '+' : '') + change.toFixed(2) + '%';
+    changeEl.classList.toggle('positive', change > 0);
+    changeEl.classList.toggle('negative', change < 0);
+  }
+  $('#companyProductCount').textContent = '0';
+}
+
+async function loadCompanyDashboard() {
+  if (!currentUser || !sb) return;
+  const onboarding = $('#companyOnboarding');
+  const dashboard = $('#companyDashboard');
+  if (!currentCompany) {
+    const { data, error } = await sb.from('product_companies')
+      .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
+      .eq('owner_id', currentUser.id).maybeSingle();
+    if (error) {
+      console.error('Company load error:', error);
+      const msg = $('#companyCreateMessage');
+      if (msg) msg.textContent = 'Could not load company: ' + error.message;
+      onboarding?.classList.remove('hidden');
+      dashboard?.classList.add('hidden');
+      return;
+    }
+    currentCompany = data || null;
+  }
+  renderCompanyDashboard();
+}
+
+$('#companyLogoPreview')?.addEventListener('click', () => $('#companyLogoInput')?.click());
+$('#companyLogoInput')?.addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
+    toast('Please choose a PNG, JPG or WEBP image.');
+    e.target.value = '';
+    return;
+  }
+  compressImg(file, dataUrl => {
+    pendingCompanyLogo = dataUrl;
+    const preview = $('#companyLogoPreview');
+    if (preview) preview.innerHTML = '<img src="' + escapeHtml(dataUrl) + '" alt="Company logo preview">';
+  });
+});
+
+$('#companyCreateForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!currentUser || !sb || currentCompany) return;
+  const btn = $('#companyCreateBtn');
+  const msg = $('#companyCreateMessage');
+  const companyName = $('#companyNameInput')?.value.trim() || '';
+  const description = $('#companyDescriptionInput')?.value.trim() || '';
+  if (companyName.length < 2) {
+    if (msg) msg.textContent = 'Company name must be at least 2 characters.';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating company...'; }
+  if (msg) msg.textContent = '';
+  const { data, error } = await sb.from('product_companies').insert({
+    owner_id: currentUser.id,
+    company_name: companyName,
+    logo_data_url: pendingCompanyLogo || null,
+    description,
+    product_lines: ['cpu']
+  }).select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at').single();
+  if (error) {
+    console.error('Company creation error:', error);
+    if (msg) msg.textContent = error.code === '23505'
+      ? 'You already have a company. Refresh this page.'
+      : 'Could not create company: ' + error.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Company · FREE'; }
+    return;
+  }
+  currentCompany = data;
+  pendingCompanyLogo = '';
+  $('#companyCreateForm')?.reset();
+  if ($('#companyLogoPreview')) $('#companyLogoPreview').textContent = '＋';
+  playSound('upload');
+  toast('Your company has been created!');
+  renderCompanyDashboard();
+});
+
 $$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
   $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
