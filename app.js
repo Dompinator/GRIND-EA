@@ -1761,7 +1761,6 @@ function showPage(page) {
     marketplace: 'Marketplace',
     company: 'Company',
     'company-design': 'Design',
-    'company-research': 'Research',
     'company-products': 'Products',
 
     account: 'Account settings',
@@ -1773,7 +1772,7 @@ function showPage(page) {
   $('#pageTitle').textContent = titles[page] || 'GRIND';
   $('#feedTypeSwitch')?.classList.toggle('hidden', page !== 'feed');
   if (page === 'feed') renderFeed();
-  if (page === 'company') loadCompanyDashboard();
+  if (page === 'company' || page === 'company-design') loadCompanyDashboard();
   if (page === 'live') loadLiveFeed();
   if (page === 'money') renderMoney();
   if (page === 'global') renderLeaderboard();
@@ -1823,6 +1822,8 @@ let companyLoaded = false;
 let pendingCompanyLogo = '';
 let pendingSettingsCompanyLogo = '';
 let incomingCompanyTransfers = [];
+let companyResearchRows = [], companyProducts = [], selectedCompanyProductId = null;
+let cpuDesignCore = false, cpuDesignThreads = false, cpuDesignMenu = 'body', cpuRotationX = -24, cpuRotationY = -35;
 
 function renderCompanyIncomingTransfers() {
   const wrap = $('#companyIncomingTransfers');
@@ -1872,7 +1873,8 @@ function renderCompanyDashboard() {
     changeEl.classList.toggle('positive', change > 0);
     changeEl.classList.toggle('negative', change < 0);
   }
-  $('#companyProductCount').textContent = '0';
+  $('#companyProductCount').textContent = String(companyProducts.length || 0);
+  renderCpuResearchTree(); renderCpuDesigner(); renderCompanyProducts();
   $('#companySettingsName').value = currentCompany.company_name || '';
   $('#companySettingsDescription').value = currentCompany.description || '';
   const settingsLogo = $('#companySettingsLogoPreview');
@@ -1882,7 +1884,7 @@ function renderCompanyDashboard() {
 }
 
 function switchCompanyDashboardTab(tab) {
-  ['money','products','settings'].forEach(name => {
+  ['money','research','products','settings'].forEach(name => {
     $('#companyPanel' + name[0].toUpperCase() + name.slice(1))?.classList.toggle('hidden', name !== tab);
     document.querySelector('[data-company-tab="' + name + '"]')?.classList.toggle('active', name === tab);
   });
@@ -1927,9 +1929,69 @@ async function loadCompanyDashboard() {
   if (inviteError) console.warn('Could not load incoming company transfers:', inviteError);
   incomingCompanyTransfers = invites || [];
   renderCompanyIncomingTransfers();
+  if(currentCompany) await loadCompanyResearchAndProducts(); else {companyResearchRows=[];companyProducts=[];}
   renderCompanyDashboard();
+  if(currentPage==='company-design') renderCpuDesigner();
 }
 
+
+async function loadCompanyResearchAndProducts(){
+ if(!currentCompany||!sb)return;
+ const [r,p]=await Promise.all([sb.from('product_company_research').select('research_key,unlocked_at').eq('company_id',currentCompany.id),sb.from('product_company_products').select('*').eq('company_id',currentCompany.id).order('created_at',{ascending:false})]);
+ if(r.error)console.warn('CPU research load:',r.error);if(p.error)console.warn('Products load:',p.error);companyResearchRows=r.data||[];companyProducts=p.data||[];
+}
+function hasCpuResearch(k){return companyResearchRows.some(x=>x.research_key===k);}
+function renderCpuResearchTree(){
+ const tree=$('#cpuResearchTree');if(!tree)return;
+ ['simple_1_core','simple_4_threads'].forEach(k=>{const n=tree.querySelector('[data-research-node="'+k+'"]');if(!n)return;const yes=hasCpuResearch(k);n.classList.toggle('researched',yes);n.classList.toggle('available',!yes);n.disabled=yes;const st=n.querySelector('.research-node-status');if(st)st.textContent=yes?'UNLOCKED':'UNLOCK · $75';});
+ const base=tree.querySelector('[data-research-node="baseline_cpu"]');if(base)base.disabled=true;
+}
+async function unlockCpuResearch(k){
+ if(!currentCompany||!currentUser||!sb||hasCpuResearch(k))return;const msg=$('#companyResearchMessage');$('#cpuResearchTree [data-research-node]').forEach(n=>n.disabled=true);if(msg)msg.textContent='Researching...';
+ const {data,error}=await sb.rpc('unlock_cpu_research',{p_company_id:currentCompany.id,p_research_key:k});
+ if(error){if(msg)msg.textContent=error.message;renderCpuResearchTree();return;}
+ const cost=Number(data?.cost||75);currentUser.cash=Math.max(0,Number(currentUser.cash||0)-cost);currentCompany.total_costs=Number(currentCompany.total_costs||0)+cost;
+ await loadCompanyResearchAndProducts();renderCompanyDashboard();if(msg)msg.textContent='Research unlocked! This component is now available in Design.';if(typeof updateUIProfile==='function')updateUIProfile();playSound('upload');toast('Research unlocked!');
+}
+function switchCpuDesignMenu(m){cpuDesignMenu=m;['body','threads','cores'].forEach(x=>{$('#cpuMenu'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('hidden',x!==m);document.querySelector('[data-cpu-menu="'+x+'"]')?.classList.toggle('active',x===m);});}
+function renderCpuDesigner(){
+ const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;
+ const core=hasCpuResearch('simple_1_core'),threads=hasCpuResearch('simple_4_threads'),c=$('#cpuCoresOption'),t=$('#cpuThreadsOption');
+ if(c){c.classList.toggle('locked',!core);c.classList.toggle('selected',cpuDesignCore);c.innerHTML=core?'<span class="cpu-component-icon">◉</span><span><strong>Simple 1 Core</strong><small>+$45 value · $45 production cost</small></span><button class="zoom-btn" type="button" data-cpu-toggle="core">'+(cpuDesignCore?'Selected':'Add')+'</button>':'<span class="cpu-component-icon">◉</span><span><strong>Simple 1 Core</strong><small>Research required · +$45 value</small></span><button class="zoom-btn" type="button" data-research-goto>Research</button>';}
+ if(t){t.classList.toggle('locked',!threads);t.classList.toggle('selected',cpuDesignThreads);t.innerHTML=threads?'<span class="cpu-component-icon">⑂</span><span><strong>Simple 4 Threads</strong><small>+$25 value · $25 production cost</small></span><button class="zoom-btn" type="button" data-cpu-toggle="threads">'+(cpuDesignThreads?'Selected':'Add')+'</button>':'<span class="cpu-component-icon">⑂</span><span><strong>Simple 4 Threads</strong><small>Research required · +$25 value</small></span><button class="zoom-btn" type="button" data-research-goto>Research</button>';}
+ const cost=(cpuDesignCore?45:0)+(cpuDesignThreads?25:0);$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#finishCpuBtn').textContent='Finish · '+money(cost);const model=$('#cpuModel');if(model)model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';
+}
+async function finishCpuDesign(){
+ if(!currentCompany||!currentUser||!sb)return;const name=($('#cpuProductName')?.value||'').trim(),price=Number($('#cpuProductPrice')?.value||0),cost=(cpuDesignCore?45:0)+(cpuDesignThreads?25:0),msg=$('#cpuDesignMessage'),btn=$('#finishCpuBtn');
+ if(name.length<2||name.length>48){if(msg)msg.textContent='Name must be 2–48 characters.';return;}if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}if(btn){btn.disabled=true;btn.textContent='Finishing...';}
+ const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads});
+ if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}
+ currentUser.cash=Math.max(0,Number(currentUser.cash||0)-cost);currentCompany.total_costs=Number(currentCompany.total_costs||0)+cost;selectedCompanyProductId=data.id;cpuDesignCore=false;cpuDesignThreads=false;if(typeof updateUIProfile==='function')updateUIProfile();
+ await loadCompanyResearchAndProducts();renderCompanyDashboard();switchCompanyDashboardTab('products');renderCompanyProducts();toast('CPU design finished and saved as a draft!');if(btn)btn.disabled=false;
+}
+function renderCompanyProducts(){
+ const list=$('#companyProductList');if(!list)return;if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
+ list.innerHTML=companyProducts.map(p=>'<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon">CPU</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(p.status==='published'?'Published':'Draft')+' · '+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</small></span><strong>'+money(Number(p.listed_price||0))+'</strong></button>').join('');
+ list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{selectedCompanyProductId=b.dataset.companyProduct;renderCompanyProducts();loadCompanyProductDetails(selectedCompanyProductId);}));
+ if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){const d=$('#companyProductDetails');if(d&&d.dataset.productId!==selectedCompanyProductId)loadCompanyProductDetails(selectedCompanyProductId);}
+}
+async function loadCompanyProductDetails(id){
+ const p=companyProducts.find(x=>x.id===id),d=$('#companyProductDetails');if(!p||!d)return;d.dataset.productId=id;d.classList.remove('hidden');
+ d.innerHTML='<div class="company-product-details-head"><div><div class="eyebrow purple-text">PRODUCT DETAILS</div><h4>'+escapeHtml(p.product_name)+'</h4></div><span class="company-count-chip">'+(p.status==='published'?'PUBLISHED':'DRAFT')+'</span></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Purchases</span><strong>'+Number(p.purchase_count||0)+'</strong></div><div class="company-product-detail-stat"><span>Product value</span><strong>'+money(Number(p.product_value||0))+'</strong></div><div class="company-product-detail-stat"><span>Production cost</span><strong>'+money(Number(p.production_cost||0))+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" step="1" value="'+Number(p.listed_price||1)+'"></label><div class="company-product-buyer-list" id="companyProductBuyerList">Purchases are not enabled yet. Buyer history will appear here when sales launch.</div><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProductSavePrice">Save price</button>'+(p.status==='draft'?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button>':'<span class="muted tiny">Visible in Product Feed</span>')+'</div><p class="form-message" id="companyProductDetailMessage" aria-live="polite"></p>';
+ $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));$('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+ const {data}=await sb.from('product_company_product_purchases').select('id,purchase_price,profiles(username)').eq('product_id',id).order('created_at',{ascending:false}).limit(100);if(data?.length){const b=$('#companyProductBuyerList');if(b)b.innerHTML='<strong>Recent buyers</strong><br>'+data.map(x=>'@'+escapeHtml(x.profiles?.username||'Trader')+' · '+money(Number(x.purchase_price||0))).join('<br>');}
+}
+async function saveCompanyProductListing(id,publish){
+ const price=Number($('#companyProductPriceEdit')?.value||0),msg=$('#companyProductDetailMessage');if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid price.';return;}
+ const {data,error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:publish});if(error){if(msg)msg.textContent=error.message;return;}const i=companyProducts.findIndex(x=>x.id===id);if(i>=0)companyProducts[i]=data;renderCompanyProducts();await loadCompanyProductDetails(id);toast(publish?'Product published to Product Feed!':'Product price updated.');
+}
+async function loadPublishedProductFeed(){
+ const grid=$('#publishedProductFeed');if(!grid||!sb)return;grid.innerHTML='<div class="muted">Loading products...</div>';
+ const {data,error}=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,product_companies(company_name)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+ if(error){grid.innerHTML='<div class="empty-state"><h3>Could not load products</h3><p class="muted">'+escapeHtml(error.message)+'</p></div>';return;}
+ if(!data?.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">▦</div><h3>No published products yet</h3><p>Products published by companies will appear here.</p></div>';return;}
+ grid.innerHTML=data.map(p=>'<article class="published-product-card"><div class="product-feed-cpu">CPU</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>Purchases are not enabled yet.</p></article>').join('');
+}
 async function respondToCompanyTransfer(requestId, accept) {
   if (!currentUser || !sb) return;
   const promptText = accept
@@ -1958,6 +2020,11 @@ async function respondToCompanyTransfer(requestId, accept) {
   await loadCompanyDashboard();
 }
 
+$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.researchNode!=='baseline_cpu')unlockCpuResearch(n.dataset.researchNode);}));
+$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
+document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads')cpuDesignThreads=!cpuDesignThreads;renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
+$('#finishCpuBtn')?.addEventListener('click',finishCpuDesign);
+const cpuStage=$('#cpuPreviewStage');if(cpuStage){let drag=false,x=0,y=0;cpuStage.addEventListener('pointerdown',e=>{drag=true;x=e.clientX;y=e.clientY;cpuStage.setPointerCapture(e.pointerId);});cpuStage.addEventListener('pointermove',e=>{if(!drag)return;cpuRotationY+=(e.clientX-x)*.8;cpuRotationX=Math.max(-80,Math.min(80,cpuRotationX-(e.clientY-y)*.55));x=e.clientX;y=e.clientY;const m=$('#cpuModel');if(m)m.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';});const stop=()=>drag=false;cpuStage.addEventListener('pointerup',stop);cpuStage.addEventListener('pointercancel',stop);}
 $('#companyLogoPreview')?.addEventListener('click', () => $('#companyLogoInput')?.click());
 $('#companyLogoInput')?.addEventListener('change', e => {
   const file = e.target.files?.[0];
@@ -1999,7 +2066,7 @@ $('#companyCreateForm')?.addEventListener('submit', async e => {
 });
 
 document.querySelectorAll('[data-company-tab]').forEach(btn => {
-  btn.addEventListener('click', () => switchCompanyDashboardTab(btn.dataset.companyTab));
+  btn.addEventListener('click', () => { switchCompanyDashboardTab(btn.dataset.companyTab); if(btn.dataset.companyTab==='research')renderCpuResearchTree(); if(btn.dataset.companyTab==='products')renderCompanyProducts(); });
 });
 
 $('#companySettingsLogoPreview')?.addEventListener('click', () => $('#companySettingsLogoInput')?.click());
@@ -2089,11 +2156,12 @@ $('#companyDeleteBtn')?.addEventListener('click', async () => {
   toast('Company deleted.');
   renderCompanyDashboard();
 });
-$$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
+$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
-  $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
+  $('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
+  if(feedType==='product')loadPublishedProductFeed();
 }));
 $$('.feed-tab').forEach(b => {
   if (b.dataset.feed) {
