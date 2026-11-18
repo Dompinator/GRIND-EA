@@ -2013,10 +2013,10 @@ async function saveCompanyProductListing(id,publish){
 }
 async function loadPublishedProductFeed(){
  const grid=$('#publishedProductFeed');if(!grid||!sb)return;grid.innerHTML='<div class="muted">Loading products...</div>';
- const {data,error}=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,product_companies(company_name)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+ const {data,error}=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,cpu_score,cpu_tier,stock,thread_count,core_count,product_companies(company_name)').eq('status','published').order('created_at',{ascending:false}).limit(100);
  if(error){grid.innerHTML='<div class="empty-state"><h3>Could not load products</h3><p class="muted">'+escapeHtml(error.message)+'</p></div>';return;}
  if(!data?.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">▦</div><h3>No published products yet</h3><p>Products published by companies will appear here.</p></div>';return;}
- grid.innerHTML=data.map(p=>'<article class="published-product-card"><div class="product-feed-cpu">CPU</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>Purchases are not enabled yet.</p></article>').join('');
+ grid.innerHTML=data.map(p=>'<article class="published-product-card"><div class="product-feed-cpu">CPU</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</p><p>'+Number(p.cpu_score||0)+' Score · '+escapeHtml(p.cpu_tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>').join('');
 }
 async function respondToCompanyTransfer(requestId, accept) {
   if (!currentUser || !sb) return;
@@ -2048,7 +2048,7 @@ async function respondToCompanyTransfer(requestId, accept) {
 
 $$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.researchNode!=='baseline_cpu')unlockCpuResearch(n.dataset.researchNode);}));
 $$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
-document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads')cpuDesignThreads=!cpuDesignThreads;if(t.dataset.cpuToggle==='silicon')cpuDesignSilicon=!cpuDesignSilicon;if(t.dataset.cpuToggle==='six_threads')cpuDesignSixThreads=!cpuDesignSixThreads;if(t.dataset.cpuToggle==='two_cores')cpuDesignTwoCores=!cpuDesignTwoCores;renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads'){cpuDesignThreads=!cpuDesignThreads;if(cpuDesignThreads)cpuDesignSixThreads=false;}if(t.dataset.cpuToggle==='silicon')cpuDesignSilicon=!cpuDesignSilicon;if(t.dataset.cpuToggle==='six_threads'){cpuDesignSixThreads=!cpuDesignSixThreads;if(cpuDesignSixThreads)cpuDesignThreads=false;}if(t.dataset.cpuToggle==='two_cores'){cpuDesignTwoCores=!cpuDesignTwoCores;if(cpuDesignTwoCores)cpuDesignCore=false;}renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
 $('#finishCpuBtn')?.addEventListener('click',finishCpuDesign);
 const researchTree=$('#cpuResearchTree'),researchWorld=$('#cpuResearchWorld');
 if(researchTree&&researchWorld&&!researchTree.dataset.navigationReady){
