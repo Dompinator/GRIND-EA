@@ -23,6 +23,11 @@ let customBuyValue = '';
 let feedMode = 'new';
 let feedType = 'coin';
 const CURVE_K = 0.30;
+const PREMIUM_REQUEST_STATUS_TTL_MS = 30000;
+let premiumRequestStatus = { userId: null, pending: false, checkedAt: 0 };
+let premiumRequestStatusPromise = null;
+let premiumRequestSending = false;
+let premiumRequestPollTimer = null;
 
 let lbMode = 'networth';
 let lbWeeklySort = 'up';
@@ -10258,11 +10263,7 @@ function renderThemeSettings() {
 }
 
 // ---------- Premium requests ----------
-const PREMIUM_REQUEST_STATUS_TTL_MS = 30000;
-let premiumRequestStatus = { userId: null, pending: false, checkedAt: 0 };
-let premiumRequestStatusPromise = null;
-let premiumRequestSending = false;
-let premiumRequestPollTimer = null;
+
 
 async function _checkOwnPremiumRequestPending(uid) {
   const { data: pendingRow, error: pendingError } = await sb
