@@ -530,6 +530,7 @@
                   <strong style="color:#fca5a5;">Delete account</strong>
                   <p class="muted tiny" style="margin:2px 0 0;">Permanently delete your account and all your market data.</p>
                 </div>
+                <button type="button" class="zoom-btn" id="resetOwnProgressBtn">Reset progress</button>
                 <button type="button" class="ban-btn" id="deleteOwnAccountBtn">Delete account</button>
               </div>
             </div>
@@ -1018,6 +1019,26 @@
         <button class="zoom-btn" id="cancelDeleteAccountBtn" type="button" style="padding:10px 16px;">Cancel</button>
         <button class="danger-reset-btn" id="confirmDeleteAccountBtn" type="button">Yes, Permanently Delete</button>
       </div>
+    </div>
+  </div>
+
+
+  <!-- RESET OWN PROGRESS CONFIRMATION MODAL -->
+  <div id="resetOwnProgressModal" class="modal-backdrop hidden" style="z-index:108;" role="dialog" aria-modal="true" aria-labelledby="resetOwnProgressTitle">
+    <div class="modal-card profile-modal-card danger-modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" style="color:#fbbf24;">RESET GAME PROGRESS</div>
+          <h3 id="resetOwnProgressTitle">Reset your progress?</h3>
+        </div>
+        <button class="zoom-btn" id="closeResetOwnProgressBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="danger-message-box">This permanently resets your Grind gameplay progress. Your account, login, username and avatar stay, but your cash and net worth return to <strong>$15</strong>. Your coins, holdings, trades, company, products, research, purchases, premium status and playtime will be cleared. This cannot be undone.</div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">
+        <button class="zoom-btn" id="cancelResetOwnProgressBtn" type="button" style="padding:10px 16px;">Cancel</button>
+        <button class="danger-reset-btn" id="confirmResetOwnProgressBtn" type="button">Yes, Reset My Progress</button>
+      </div>
+      <p id="resetOwnProgressMessage" class="form-message" aria-live="polite"></p>
     </div>
   </div>
 
@@ -1809,6 +1830,6 @@
   <div id="rewardBurstLayer" class="reward-burst-layer" aria-hidden="true"></div>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="app.js?v=76"></script>
+  <script src="app.js?v=77"></script>
 </body>
 </html>
