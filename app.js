@@ -1041,7 +1041,8 @@ async function applyAdminActionsForCurrentUser() {
 
     if (latestResetTs > appliedResetTs) {
       const isGrindTestAccount = String(currentUser.username || '').toLowerCase() === 'grind_test';
-      const resetCash = isGrindTestAccount ? '9999999999999999' : 15;
+      // Grind_Test keeps its existing balance during resets; normal accounts restart at $15.
+      const resetCash = isGrindTestAccount ? currentUser.cash : 15;
       const keepAdminPremium = isDompinator();
       if (!isGrindTestAccount) {
         try {
@@ -1057,8 +1058,13 @@ async function applyAdminActionsForCurrentUser() {
         } catch (e) {}
       }
 
-      currentUser.cash = resetCash;
-      currentUser.net_worth = resetCash;
+      if (!isGrindTestAccount) {
+        currentUser.cash = resetCash;
+        currentUser.net_worth = resetCash;
+      } else {
+        // The database reset RPC preserves cash; keep the in-memory balance unchanged too.
+        currentUser.net_worth = resetCash;
+      }
       currentUser.is_premium = isGrindTestAccount ? false : keepAdminPremium;
       currentUser.is_pro = false;
       currentUser.time_played = 0;
