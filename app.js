@@ -4535,7 +4535,7 @@ async function getCoinSpendLeaderboard(coinId) {
     prev.buys += 1;
     totals.set(t.user_id, prev);
   }
-  return Array.from(totals.values()).sort((a, b) => b.spent - a.spent);
+  return Array.from(totals.values()).filter(p => String(p.username || '').toLowerCase() !== 'grind_test').sort((a, b) => b.spent - a.spent);
 }
 
 function renderSpendRows(rows, emptyText = 'No buyers yet.') {
@@ -4764,7 +4764,7 @@ async function renderLeaderboard() {
   if (seq !== lbRenderSeq || modeAtStart !== lbMode) return;
 
   let list = (data || [])
-    .filter(p => !delUsers.has(String(p.id)))
+    .filter(p => !delUsers.has(String(p.id)) && String(p.username || '').toLowerCase() !== 'grind_test')
     .map(getEffectiveProfileStats);
 
   const weeklyWrap = $('#lbWeeklyControls');
