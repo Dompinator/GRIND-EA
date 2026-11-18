@@ -62,6 +62,13 @@
           <button class="nav-btn" id="navNotifications" data-page="notifications"><span>✦</span> Notifications <span id="navNotificationsBadge" class="nav-count-badge hidden">0</span></button>
           <button class="nav-btn hidden" id="navAdmin" data-page="admin"><span>❖</span> Admin</button>
         </nav>
+        <div class="side-label">COMPANY</div>
+        <nav class="main-nav company-nav">
+          <button class="nav-btn" data-page="company"><span>▣</span> Company</button>
+          <button class="nav-btn" data-page="company-design"><span>✎</span> Design</button>
+          <button class="nav-btn" data-page="company-research"><span>⌕</span> Research</button>
+          <button class="nav-btn" data-page="company-products"><span>▦</span> Products</button>
+        </nav>
         <div class="side-label side-label-store">STORE</div>
         <nav class="main-nav">
           <button class="nav-btn" data-page="marketplace"><span>❖</span> Marketplace</button>
@@ -309,6 +316,84 @@
               </form>
             </aside>
           </div>
+        </section>
+
+        <!-- COMPANY -->
+        <section id="page-company" class="page hidden">
+          <div id="companyOnboarding" class="company-onboarding">
+            <div class="company-welcome-orb">▣</div>
+            <div class="eyebrow purple-text">YOUR BUSINESS STARTS HERE</div>
+            <h3>Welcome! I see that you want to create your first company!</h3>
+            <p class="muted">Build a company, develop products and become part of the GRIND supply chain. Company creation is free during Early Access.</p>
+            <form id="companyCreateForm" class="form-card company-create-card">
+              <label>Company name
+                <input id="companyNameInput" type="text" maxlength="40" minlength="2" required placeholder="e.g. Nova Silicon">
+              </label>
+              <label>Description
+                <textarea id="companyDescriptionInput" rows="3" maxlength="500" placeholder="What does your company make?"></textarea>
+              </label>
+              <div class="company-logo-upload-row">
+                <div class="company-logo-preview" id="companyLogoPreview">＋</div>
+                <div>
+                  <label class="upload-link" for="companyLogoInput">Upload company logo</label>
+                  <input id="companyLogoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                  <p class="muted tiny">PNG, JPG or WEBP · Optional</p>
+                </div>
+              </div>
+              <div class="company-line-choice">
+                <div class="eyebrow">CHOOSE YOUR PRODUCT LINE</div>
+                <div class="company-line-card selected">
+                  <span class="company-line-icon">▦</span>
+                  <span><strong>CPU Manufacturing</strong><small>Available now · Design and manufacture CPUs</small></span>
+                  <span class="company-line-check">✓</span>
+                </div>
+                <div class="company-line-card disabled">
+                  <span class="company-line-icon">◈</span>
+                  <span><strong>GPU Manufacturing</strong><small>Coming later</small></span>
+                  <span class="company-coming">SOON</span>
+                </div>
+                <div class="company-line-card disabled">
+                  <span class="company-line-icon">▣</span>
+                  <span><strong>Phone Manufacturing</strong><small>Coming later</small></span>
+                  <span class="company-coming">SOON</span>
+                </div>
+              </div>
+              <button class="primary-btn full" id="companyCreateBtn" type="submit">Create Company · FREE</button>
+              <p id="companyCreateMessage" class="form-message" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="companyDashboard" class="hidden">
+            <div class="company-hero-panel">
+              <div class="company-identity">
+                <div id="companyDashboardLogo" class="company-dashboard-logo">▣</div>
+                <div><div class="eyebrow purple-text">YOUR COMPANY</div><h3 id="companyDashboardName">Company</h3><p id="companyDashboardDescription" class="muted"></p></div>
+              </div>
+              <span class="company-cpu-chip">CPU MANUFACTURER</span>
+            </div>
+            <div class="company-stat-grid">
+              <article class="company-stat-card"><span>Total money made</span><strong id="companyRevenue">$0.00</strong><small>Lifetime company revenue</small></article>
+              <article class="company-stat-card"><span>Company value change</span><strong id="companyChange">0.00%</strong><small>Company performance</small></article>
+              <article class="company-stat-card"><span>Total costs</span><strong id="companyCosts">$0.00</strong><small>Lifetime company costs</small></article>
+              <article class="company-stat-card"><span>Products created</span><strong id="companyProductCount">0</strong><small>Across all product lines</small></article>
+            </div>
+            <div class="company-dashboard-section">
+              <div class="company-section-heading"><div><div class="eyebrow purple-text">PRODUCT LINE</div><h4>Your manufacturing</h4></div><span class="company-cpu-chip">CPU</span></div>
+              <p class="muted">Your company currently specializes in CPUs. More product lines can be unlocked through future company upgrades.</p>
+            </div>
+            <div class="company-dashboard-section">
+              <div class="company-section-heading"><div><div class="eyebrow purple-text">CATALOGUE</div><h4>All products</h4></div><span class="company-count-chip">0 PRODUCTS</span></div>
+              <div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Products you create will appear here.</p></div>
+            </div>
+          </div>
+        </section>
+        <section id="page-company-design" class="page hidden">
+          <div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">✎</div><h3>Design</h3><p class="muted">Product design tools are coming soon.</p></div>
+        </section>
+        <section id="page-company-research" class="page hidden">
+          <div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">⌕</div><h3>Research</h3><p class="muted">Company research will appear here.</p></div>
+        </section>
+        <section id="page-company-products" class="page hidden">
+          <div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">▦</div><h3>Products</h3><p class="muted">Your manufactured products will appear here.</p></div>
         </section>
 
         <!-- ACCOUNT -->
