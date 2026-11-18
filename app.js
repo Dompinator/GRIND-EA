@@ -21,6 +21,7 @@ let selectedAmount = 5;
 let customBuyActive = false;
 let customBuyValue = '';
 let feedMode = 'new';
+let feedType = 'coin';
 let lbMode = 'networth';
 let lbWeeklySort = 'up';
 let pendingCoinImage = null;
@@ -1740,6 +1741,7 @@ function showPage(page) {
     coin: 'Currency'
   };
   $('#pageTitle').textContent = titles[page] || 'GRIND';
+  $('#feedTypeSwitch')?.classList.toggle('hidden', page !== 'feed');
   if (page === 'feed') renderFeed();
   if (page === 'live') loadLiveFeed();
   if (page === 'money') renderMoney();
@@ -1783,7 +1785,13 @@ $('#navUploadBtn')?.addEventListener('click', () => {
   openPlayUploadChoiceModal();
 });
 $$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
-$$('.feed-tab').forEach(b => {
+$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
+  feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
+  $('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
+  $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
+  $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
+}));
+$('.feed-tab').forEach(b => {
   if (b.dataset.feed) {
     b.addEventListener('click', () => {
       feedMode = b.dataset.feed;
