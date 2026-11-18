@@ -22,6 +22,8 @@ let customBuyActive = false;
 let customBuyValue = '';
 let feedMode = 'new';
 let feedType = 'coin';
+const CURVE_K = 0.30;
+
 let lbMode = 'networth';
 let lbWeeklySort = 'up';
 let pendingCoinImage = null;
@@ -1791,7 +1793,7 @@ $$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
 }));
-$('.feed-tab').forEach(b => {
+$$('.feed-tab').forEach(b => {
   if (b.dataset.feed) {
     b.addEventListener('click', () => {
       feedMode = b.dataset.feed;
@@ -3728,7 +3730,6 @@ async function loadCoinComments(coin) {
 //   shares = ln(newPrice / oldPrice) / CURVE_K
 // Selling `shares` reverses along the exact same curve so you can never extract
 // more USD than you put in unless someone else buys in first.
-const CURVE_K = 0.30;
 
 function calcCurveBuy(price, amount) {
   const p = Math.max(Number(price) || 1, 0.01);
