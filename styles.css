@@ -6973,3 +6973,40 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .company-empty-page p { margin:0; }
 @media (max-width:900px) { .company-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .company-hero-panel { align-items:flex-start; flex-direction:column; } .company-identity { align-items:flex-start; } .company-dashboard-logo { width:60px; height:60px; flex-basis:60px; } .company-stat-card { padding:13px; } .company-stat-card strong { font-size:20px; } }
+
+/* Company dashboard tabs, settings and ownership controls */
+.company-dashboard-tabs { display:flex; gap:8px; padding:5px; margin:18px 0; background:var(--panel); border:1px solid var(--line); border-radius:13px; width:max-content; max-width:100%; }
+.company-dashboard-tab { border:0; color:var(--muted); background:transparent; border-radius:9px; padding:10px 20px; font-weight:750; cursor:pointer; }
+.company-dashboard-tab.active { background:#38234f; color:#ead7ff; }
+.company-dashboard-panel { display:block; }
+.company-settings-form { display:grid; gap:15px; max-width:680px; margin-top:18px; }
+.company-settings-form label { display:grid; gap:8px; font-weight:700; }
+.company-settings-form input, .company-settings-form textarea, .company-transfer-form input { width:100%; border:1px solid var(--line); border-radius:10px; background:#100c1b; color:var(--text); padding:12px 14px; }
+.company-settings-form input:focus, .company-settings-form textarea:focus, .company-transfer-form input:focus { outline:none; border-color:var(--purple); }
+.company-danger-zone { border:1px solid rgba(239,68,68,.55); background:rgba(127,29,29,.07); border-radius:16px; padding:20px; margin-top:20px; }
+.company-danger-zone h4 { margin:6px 0 18px; }
+.danger-text { color:#f87171; }
+.company-danger-action { padding:16px 0; border-top:1px solid rgba(239,68,68,.2); display:grid; gap:12px; }
+.company-danger-action strong { display:block; }
+.company-danger-action p { margin:5px 0 0; }
+.company-transfer-form { display:flex; gap:9px; max-width:580px; }
+.company-transfer-form input { flex:1; min-width:0; }
+.company-delete-btn { justify-self:start; border:1px solid #ef4444; color:#fecaca; background:rgba(127,29,29,.28); border-radius:10px; padding:10px 16px; font-weight:800; cursor:pointer; }
+.company-transfer-status { padding:11px 13px; border-radius:10px; background:rgba(168,85,247,.10); color:#e9d5ff; font-size:13px; }
+.company-incoming-transfers { max-width:850px; margin:0 auto 24px; }
+.company-invite-heading { margin-bottom:10px; }
+.company-invite-heading h4 { margin:4px 0; }
+.company-invite-card { display:flex; align-items:center; gap:13px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--panel); margin-bottom:9px; }
+.company-invite-logo { width:48px; height:48px; flex:0 0 48px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#291d3b; }
+.company-invite-logo img { width:100%; height:100%; object-fit:cover; }
+.company-invite-info { flex:1; min-width:0; }
+.company-invite-info p { margin:4px 0 0; }
+.company-invite-actions { display:flex; gap:7px; }
+.company-invite-actions button { padding:9px 12px; }
+@media(max-width:600px) {
+ .company-dashboard-tabs { width:100%; }
+ .company-dashboard-tab { flex:1; padding:10px 8px; }
+ .company-transfer-form { flex-direction:column; }
+ .company-invite-card { align-items:flex-start; flex-wrap:wrap; }
+ .company-invite-actions { width:100%; }
+}
