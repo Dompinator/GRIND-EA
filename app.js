@@ -1799,9 +1799,36 @@ $('#navUploadBtn')?.addEventListener('click', () => {
 });
 $('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
 
+
 let currentCompany = null;
 let companyLoaded = false;
 let pendingCompanyLogo = '';
+let pendingSettingsCompanyLogo = '';
+let incomingCompanyTransfers = [];
+
+function renderCompanyIncomingTransfers() {
+  const wrap = $('#companyIncomingTransfers');
+  if (!wrap) return;
+  if (!incomingCompanyTransfers.length) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = '<div class="company-invite-heading"><div><div class="eyebrow purple-text">OWNERSHIP INVITATIONS</div><h4>Company transfer requests</h4></div></div>' +
+    incomingCompanyTransfers.map(req => {
+      const company = req.product_companies || {};
+      return '<article class="company-invite-card"><div class="company-invite-logo">' +
+        (company.logo_data_url ? '<img src="' + escapeHtml(company.logo_data_url) + '" alt="">' : '▣') +
+        '</div><div class="company-invite-info"><strong>' + escapeHtml(company.company_name || 'Company') +
+        '</strong><p class="muted tiny">Someone wants to transfer this company to you. Accept to become its owner.</p></div>' +
+        '<div class="company-invite-actions"><button type="button" class="primary-btn" data-company-transfer-response="' + escapeHtml(req.id) + '" data-accept="true">Accept</button>' +
+        '<button type="button" class="zoom-btn" data-company-transfer-response="' + escapeHtml(req.id) + '" data-accept="false">Decline</button></div></article>';
+    }).join('');
+  wrap.querySelectorAll('[data-company-transfer-response]').forEach(btn => {
+    btn.addEventListener('click', () => respondToCompanyTransfer(btn.dataset.companyTransferResponse, btn.dataset.accept === 'true'));
+  });
+}
 
 function renderCompanyDashboard() {
   const onboarding = $('#companyOnboarding');
@@ -1816,11 +1843,8 @@ function renderCompanyDashboard() {
   $('#companyDashboardName').textContent = currentCompany.company_name || 'Company';
   $('#companyDashboardDescription').textContent = currentCompany.description || 'No company description yet.';
   const logo = $('#companyDashboardLogo');
-  if (logo) {
-    logo.innerHTML = currentCompany.logo_data_url
-      ? '<img src="' + escapeHtml(currentCompany.logo_data_url) + '" alt="Company logo">'
-      : '▣';
-  }
+  if (logo) logo.innerHTML = currentCompany.logo_data_url
+    ? '<img src="' + escapeHtml(currentCompany.logo_data_url) + '" alt="Company logo">' : '▣';
   $('#companyRevenue').textContent = money(Number(currentCompany.total_revenue || 0));
   $('#companyCosts').textContent = money(Number(currentCompany.total_costs || 0));
   const change = Number(currentCompany.change_pct || 0);
@@ -1831,12 +1855,40 @@ function renderCompanyDashboard() {
     changeEl.classList.toggle('negative', change < 0);
   }
   $('#companyProductCount').textContent = '0';
+  $('#companySettingsName').value = currentCompany.company_name || '';
+  $('#companySettingsDescription').value = currentCompany.description || '';
+  const settingsLogo = $('#companySettingsLogoPreview');
+  if (settingsLogo) settingsLogo.innerHTML = currentCompany.logo_data_url
+    ? '<img src="' + escapeHtml(currentCompany.logo_data_url) + '" alt="Company logo">' : '＋';
+  loadOutgoingCompanyTransfer();
+}
+
+function switchCompanyDashboardTab(tab) {
+  ['money','products','settings'].forEach(name => {
+    $('#companyPanel' + name[0].toUpperCase() + name.slice(1))?.classList.toggle('hidden', name !== tab);
+    document.querySelector('[data-company-tab="' + name + '"]')?.classList.toggle('active', name === tab);
+  });
+}
+
+async function loadOutgoingCompanyTransfer() {
+  if (!currentCompany || !currentUser || !sb) return;
+  const slot = $('#companyOutgoingTransfer');
+  if (!slot) return;
+  const { data, error } = await sb.from('product_company_transfers')
+    .select('id,status,created_at,profiles:product_company_transfers_recipient_id_fkey(username)')
+    .eq('company_id', currentCompany.id).eq('sender_id', currentUser.id)
+    .eq('status', 'pending').maybeSingle();
+  if (error) {
+    console.warn('Could not load company transfer status:', error);
+    return;
+  }
+  if (!data) { slot.classList.add('hidden'); slot.textContent = ''; return; }
+  slot.classList.remove('hidden');
+  slot.textContent = 'Transfer request sent to @' + (data.profiles?.username || 'user') + '. Waiting for them to accept or decline.';
 }
 
 async function loadCompanyDashboard() {
   if (!currentUser || !sb) return;
-  const onboarding = $('#companyOnboarding');
-  const dashboard = $('#companyDashboard');
   if (!companyLoaded) {
     const { data, error } = await sb.from('product_companies')
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
@@ -1845,14 +1897,47 @@ async function loadCompanyDashboard() {
       console.error('Company load error:', error);
       const msg = $('#companyCreateMessage');
       if (msg) msg.textContent = 'Could not load company: ' + error.message;
-      onboarding?.classList.remove('hidden');
-      dashboard?.classList.add('hidden');
       return;
     }
     currentCompany = data || null;
     companyLoaded = true;
   }
+  const { data: invites, error: inviteError } = await sb.from('product_company_transfers')
+    .select('id,company_id,sender_id,created_at,product_companies(company_name,logo_data_url)')
+    .eq('recipient_id', currentUser.id).eq('status', 'pending')
+    .order('created_at', { ascending: false }).limit(10);
+  if (inviteError) console.warn('Could not load incoming company transfers:', inviteError);
+  incomingCompanyTransfers = invites || [];
+  renderCompanyIncomingTransfers();
   renderCompanyDashboard();
+}
+
+async function respondToCompanyTransfer(requestId, accept) {
+  if (!currentUser || !sb) return;
+  const promptText = accept
+    ? 'Accept this company transfer? You will become the company owner.'
+    : 'Decline this company transfer? The current owner will keep the company.';
+  if (!window.confirm(promptText)) return;
+  if (accept && currentCompany) {
+    toast('You already own a company. You can only own one company at a time.');
+    return;
+  }
+  const { error } = await sb.from('product_company_transfers')
+    .update({ status: accept ? 'accepted' : 'declined' })
+    .eq('id', requestId).eq('recipient_id', currentUser.id).eq('status', 'pending');
+  if (error) {
+    console.error('Company transfer response error:', error);
+    toast(error.code === '23505' ? 'You already own a company.' : 'Could not respond: ' + error.message);
+    return;
+  }
+  if (accept) {
+    currentCompany = null;
+    companyLoaded = false;
+    toast('Company transfer accepted. You are now the owner!');
+  } else {
+    toast('Transfer declined. The sender keeps the company.');
+  }
+  await loadCompanyDashboard();
 }
 
 $('#companyLogoPreview')?.addEventListener('click', () => $('#companyLogoInput')?.click());
@@ -1860,9 +1945,7 @@ $('#companyLogoInput')?.addEventListener('change', e => {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
-    toast('Please choose a PNG, JPG or WEBP image.');
-    e.target.value = '';
-    return;
+    toast('Please choose a PNG, JPG or WEBP image.'); e.target.value = ''; return;
   }
   compressImg(file, dataUrl => {
     pendingCompanyLogo = dataUrl;
@@ -1874,41 +1957,120 @@ $('#companyLogoInput')?.addEventListener('change', e => {
 $('#companyCreateForm')?.addEventListener('submit', async e => {
   e.preventDefault();
   if (!currentUser || !sb || currentCompany) return;
-  const btn = $('#companyCreateBtn');
-  const msg = $('#companyCreateMessage');
+  const btn = $('#companyCreateBtn'), msg = $('#companyCreateMessage');
   const companyName = $('#companyNameInput')?.value.trim() || '';
   const description = $('#companyDescriptionInput')?.value.trim() || '';
-  if (companyName.length < 2) {
-    if (msg) msg.textContent = 'Company name must be at least 2 characters.';
-    return;
-  }
+  if (companyName.length < 2) { if (msg) msg.textContent = 'Company name must be at least 2 characters.'; return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Creating company...'; }
   if (msg) msg.textContent = '';
   const { data, error } = await sb.from('product_companies').insert({
-    owner_id: currentUser.id,
-    company_name: companyName,
-    logo_data_url: pendingCompanyLogo || null,
-    description,
-    product_lines: ['cpu']
+    owner_id: currentUser.id, company_name: companyName,
+    logo_data_url: pendingCompanyLogo || null, description, product_lines: ['cpu']
   }).select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at').single();
   if (error) {
     console.error('Company creation error:', error);
-    if (msg) msg.textContent = error.code === '23505'
-      ? 'You already have a company. Refresh this page.'
-      : 'Could not create company: ' + error.message;
+    if (msg) msg.textContent = error.code === '23505' ? 'You already have a company. Refresh this page.' : 'Could not create company: ' + error.message;
     if (btn) { btn.disabled = false; btn.textContent = 'Create Company · FREE'; }
     return;
   }
-  currentCompany = data;
-  companyLoaded = true;
-  pendingCompanyLogo = '';
+  currentCompany = data; companyLoaded = true; pendingCompanyLogo = '';
   $('#companyCreateForm')?.reset();
   if ($('#companyLogoPreview')) $('#companyLogoPreview').textContent = '＋';
-  playSound('upload');
-  toast('Your company has been created!');
+  playSound('upload'); toast('Your company has been created!');
   renderCompanyDashboard();
 });
 
+document.querySelectorAll('[data-company-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchCompanyDashboardTab(btn.dataset.companyTab));
+});
+
+$('#companySettingsLogoPreview')?.addEventListener('click', () => $('#companySettingsLogoInput')?.click());
+$('#companySettingsLogoInput')?.addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
+    toast('Please choose a PNG, JPG or WEBP image.'); e.target.value = ''; return;
+  }
+  compressImg(file, dataUrl => {
+    pendingSettingsCompanyLogo = dataUrl;
+    const preview = $('#companySettingsLogoPreview');
+    if (preview) preview.innerHTML = '<img src="' + escapeHtml(dataUrl) + '" alt="Company logo preview">';
+  });
+});
+
+$('#companySettingsForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!currentUser || !currentCompany || !sb) return;
+  const btn = $('#companySaveSettingsBtn'), msg = $('#companySettingsMessage');
+  const name = $('#companySettingsName')?.value.trim() || '';
+  const description = $('#companySettingsDescription')?.value.trim() || '';
+  if (name.length < 2) { if (msg) msg.textContent = 'Company name must be at least 2 characters.'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  const update = { company_name: name, description };
+  if (pendingSettingsCompanyLogo) update.logo_data_url = pendingSettingsCompanyLogo;
+  const { data, error } = await sb.from('product_companies').update(update)
+    .eq('id', currentCompany.id).eq('owner_id', currentUser.id)
+    .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at').single();
+  if (error) {
+    console.error('Company settings save error:', error);
+    if (msg) msg.textContent = 'Could not save changes: ' + error.message;
+  } else {
+    currentCompany = data; pendingSettingsCompanyLogo = '';
+    if (msg) msg.textContent = 'Company settings saved.';
+    renderCompanyDashboard(); switchCompanyDashboardTab('settings');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; }
+});
+
+$('#companyTransferForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!currentUser || !currentCompany || !sb) return;
+  const btn = $('#companyTransferBtn'), msg = $('#companyTransferMessage');
+  const username = $('#companyTransferUsername')?.value.trim().replace(/^@/, '') || '';
+  if (!username || username.toLowerCase() === String(currentUser.username || '').toLowerCase()) {
+    if (msg) msg.textContent = 'Enter another player’s username.'; return;
+  }
+  if (!window.confirm('Send a company ownership request to @' + username + '? You will keep ownership unless they accept.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  const { data: recipient, error: lookupError } = await sb.from('profiles')
+    .select('id,username').ilike('username', username).maybeSingle();
+  if (lookupError || !recipient) {
+    if (msg) msg.textContent = lookupError ? 'Could not find user: ' + lookupError.message : 'No player found with that username.';
+    if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } return;
+  }
+  const { data: existingCompany, error: companyCheckError } = await sb.from('product_companies')
+    .select('id').eq('owner_id', recipient.id).maybeSingle();
+  if (companyCheckError || existingCompany) {
+    if (msg) msg.textContent = existingCompany ? 'That player already owns a company.' : 'Could not verify that player: ' + companyCheckError.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } return;
+  }
+  const { error } = await sb.from('product_company_transfers').insert({
+    company_id: currentCompany.id, sender_id: currentUser.id, recipient_id: recipient.id
+  });
+  if (error) {
+    if (msg) msg.textContent = error.code === '23505' ? 'There is already a pending transfer request for this company.' : 'Could not send request: ' + error.message;
+  } else {
+    if (msg) msg.textContent = 'Request sent. You keep the company until they accept.';
+    $('#companyTransferUsername').value = '';
+    await loadOutgoingCompanyTransfer();
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Send request'; }
+});
+
+$('#companyDeleteBtn')?.addEventListener('click', async () => {
+  if (!currentUser || !currentCompany || !sb) return;
+  const confirmed = window.confirm('DANGER: Permanently delete "' + currentCompany.company_name + '" and all its company transfer requests? This cannot be undone.');
+  if (!confirmed) return;
+  const { error } = await sb.from('product_companies').delete()
+    .eq('id', currentCompany.id).eq('owner_id', currentUser.id);
+  if (error) {
+    toast('Could not delete company: ' + error.message);
+    return;
+  }
+  currentCompany = null; companyLoaded = true;
+  toast('Company deleted.');
+  renderCompanyDashboard();
+});
 $$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
   $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
