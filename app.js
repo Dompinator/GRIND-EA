@@ -33,6 +33,54 @@ let ambientStopTimer = null;
 let ambientDesired = false;
 let ambientPlaying = false;
 
+const GRIND_THEMES = [
+  {
+    id: 'default',
+    name: 'Default',
+    reqTier: 'member',
+    tierBadge: 'Default',
+    textureLabel: 'Classic Violet',
+    desc: 'Classic GRIND deep violet interface.',
+    colors: ['#0c0916', '#161222', '#c084fc', '#7c3aed']
+  },
+  {
+    id: 'gold-obsidian',
+    name: 'Gold & Obsidian',
+    reqTier: 'pro',
+    tierBadge: 'PRO',
+    textureLabel: 'Volcanic Obsidian',
+    desc: 'Matte volcanic obsidian stone with 24k gold veining.',
+    colors: ['#08080b', '#121218', '#fbbf24', '#d97706']
+  },
+  {
+    id: 'sapphire-obsidian',
+    name: 'Sapphire & Obsidian',
+    reqTier: 'premium',
+    tierBadge: 'PREMIUM',
+    textureLabel: 'Crystal Obsidian',
+    desc: 'Polished volcanic obsidian crystal with royal sapphire veins & smoked glass.',
+    colors: ['#050810', '#0e1523', '#38bdf8', '#2563eb']
+  },
+  {
+    id: 'gold-platinum',
+    name: 'Gold & Platinum',
+    reqTier: 'premium',
+    tierBadge: 'PREMIUM',
+    textureLabel: 'Platinum Scales',
+    desc: 'Sculpted metallic platinum scales background with 24k champagne gold gleam.',
+    colors: ['#0a0c11', '#212634', '#e2e8f0', '#f3c969']
+  },
+  {
+    id: 'rose-amethyst',
+    name: 'Rose & Amethyst',
+    reqTier: 'premium',
+    tierBadge: 'PREMIUM',
+    textureLabel: 'Amethyst Scales',
+    desc: 'Pink & crimson crystal accents over smooth faceted amethyst shards & scales.',
+    colors: ['#10050c', '#3b0a26', '#fb7185', '#c026d3']
+  }
+];
+
 let coins = [];
 let selectedCoin = null;
 let selectedAmount = 5;
@@ -1947,7 +1995,7 @@ function renderCpuResearchTree(){
  const base=tree.querySelector('[data-research-node="baseline_cpu"]');if(base)base.disabled=true;
 }
 async function unlockCpuResearch(k){
- if(!currentCompany||!currentUser||!sb||hasCpuResearch(k))return;const msg=$('#companyResearchMessage');$('#cpuResearchTree [data-research-node]').forEach(n=>n.disabled=true);if(msg)msg.textContent='Researching...';
+ if(!currentCompany||!currentUser||!sb||hasCpuResearch(k))return;const msg=$('#companyResearchMessage');$$('#cpuResearchTree [data-research-node]').forEach(n=>n.disabled=true);if(msg)msg.textContent='Researching...';
  const {data,error}=await sb.rpc('unlock_cpu_research',{p_company_id:currentCompany.id,p_research_key:k});
  if(error){if(msg)msg.textContent=error.message;renderCpuResearchTree();return;}
  const cost=Number(data?.cost||75);currentUser.cash=Math.max(0,Number(currentUser.cash||0)-cost);currentCompany.total_costs=Number(currentCompany.total_costs||0)+cost;
@@ -2021,8 +2069,8 @@ async function respondToCompanyTransfer(requestId, accept) {
   await loadCompanyDashboard();
 }
 
-$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.researchNode!=='baseline_cpu')unlockCpuResearch(n.dataset.researchNode);}));
-$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
+$$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.researchNode!=='baseline_cpu')unlockCpuResearch(n.dataset.researchNode);}));
+$$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
 document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads')cpuDesignThreads=!cpuDesignThreads;renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
 $('#finishCpuBtn')?.addEventListener('click',finishCpuDesign);
 const cpuStage=$('#cpuPreviewStage');if(cpuStage){let drag=false,x=0,y=0;cpuStage.addEventListener('pointerdown',e=>{drag=true;x=e.clientX;y=e.clientY;cpuStage.setPointerCapture(e.pointerId);});cpuStage.addEventListener('pointermove',e=>{if(!drag)return;cpuRotationY+=(e.clientX-x)*.8;cpuRotationX=Math.max(-80,Math.min(80,cpuRotationX-(e.clientY-y)*.55));x=e.clientX;y=e.clientY;const m=$('#cpuModel');if(m)m.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';});const stop=()=>drag=false;cpuStage.addEventListener('pointerup',stop);cpuStage.addEventListener('pointercancel',stop);}
@@ -2159,9 +2207,9 @@ $('#companyDeleteBtn')?.addEventListener('click', async () => {
   toast('Company deleted.');
   renderCompanyDashboard();
 });
-$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
+$$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
-  $('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
+  $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
   if(feedType==='product')loadPublishedProductFeed();
@@ -10477,53 +10525,7 @@ $('#profileImage')?.addEventListener('change', async (e) => {
 });
 
 // ---------- Theme Settings (Tier-locked visual themes) ----------
-const GRIND_THEMES = [
-  {
-    id: 'default',
-    name: 'Default',
-    reqTier: 'member',
-    tierBadge: 'Default',
-    textureLabel: 'Classic Violet',
-    desc: 'Classic GRIND deep violet interface.',
-    colors: ['#0c0916', '#161222', '#c084fc', '#7c3aed']
-  },
-  {
-    id: 'gold-obsidian',
-    name: 'Gold & Obsidian',
-    reqTier: 'pro',
-    tierBadge: 'PRO',
-    textureLabel: 'Volcanic Obsidian',
-    desc: 'Matte volcanic obsidian stone with 24k gold veining.',
-    colors: ['#08080b', '#121218', '#fbbf24', '#d97706']
-  },
-  {
-    id: 'sapphire-obsidian',
-    name: 'Sapphire & Obsidian',
-    reqTier: 'premium',
-    tierBadge: 'PREMIUM',
-    textureLabel: 'Crystal Obsidian',
-    desc: 'Polished volcanic obsidian crystal with royal sapphire veins & smoked glass.',
-    colors: ['#050810', '#0e1523', '#38bdf8', '#2563eb']
-  },
-  {
-    id: 'gold-platinum',
-    name: 'Gold & Platinum',
-    reqTier: 'premium',
-    tierBadge: 'PREMIUM',
-    textureLabel: 'Platinum Scales',
-    desc: 'Sculpted metallic platinum scales background with 24k champagne gold gleam.',
-    colors: ['#0a0c11', '#212634', '#e2e8f0', '#f3c969']
-  },
-  {
-    id: 'rose-amethyst',
-    name: 'Rose & Amethyst',
-    reqTier: 'premium',
-    tierBadge: 'PREMIUM',
-    textureLabel: 'Amethyst Scales',
-    desc: 'Pink & crimson crystal accents over smooth faceted amethyst shards & scales.',
-    colors: ['#10050c', '#3b0a26', '#fb7185', '#c026d3']
-  }
-];
+
 
 function isThemeUnlocked(themeId, tier) {
   if (themeId === 'default') return true;
