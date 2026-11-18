@@ -1933,6 +1933,13 @@ function renderCompanyDashboard() {
     changeEl.classList.toggle('positive', change > 0);
     changeEl.classList.toggle('negative', change < 0);
   }
+  const productsValue = companyProducts.reduce((sum, product) => {
+    const stock = Math.max(0, Number(product.stock || 0));
+    const unitValue = Math.max(0, Number(product.product_value ?? product.production_cost ?? 0));
+    return sum + stock * unitValue;
+  }, 0);
+  const productsValueEl = $('#companyProductsValue');
+  if (productsValueEl) productsValueEl.textContent = money(productsValue);
   $('#companyProductCount').textContent = String(companyProducts.length || 0);
   renderCpuResearchTree(); renderCpuDesigner(); renderCompanyProducts();
   $('#companySettingsName').value = currentCompany.company_name || '';
