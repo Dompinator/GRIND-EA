@@ -1973,7 +1973,7 @@ async function finishCpuDesign(){
 function renderCompanyProducts(){
  const list=$('#companyProductList');if(!list)return;if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
  list.innerHTML=companyProducts.map(p=>'<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon">CPU</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(p.status==='published'?'Published':'Draft')+' · '+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</small></span><strong>'+money(Number(p.listed_price||0))+'</strong></button>').join('');
- list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{selectedCompanyProductId=b.dataset.companyProduct;renderCompanyProducts();loadCompanyProductDetails(selectedCompanyProductId);}));
+ list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{selectedCompanyProductId=b.dataset.companyProduct;renderCompanyProducts();}));
  if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){const d=$('#companyProductDetails');if(d&&d.dataset.productId!==selectedCompanyProductId)loadCompanyProductDetails(selectedCompanyProductId);}
 }
 async function loadCompanyProductDetails(id){
