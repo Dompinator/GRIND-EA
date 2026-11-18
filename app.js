@@ -1998,7 +1998,7 @@ async function unlockCpuResearch(k){
  if(!currentCompany||!currentUser||!sb||hasCpuResearch(k))return;const msg=$('#companyResearchMessage');$$('#cpuResearchTree [data-research-node]').forEach(n=>n.disabled=true);if(msg)msg.textContent='Researching...';
  const {data,error}=await sb.rpc('unlock_cpu_research',{p_company_id:currentCompany.id,p_research_key:k});
  if(error){if(msg)msg.textContent=error.message;renderCpuResearchTree();return;}
- const cost=Number(data?.cost||75);currentUser.cash=Math.max(0,Number(currentUser.cash||0)-cost);currentCompany.total_costs=Number(currentCompany.total_costs||0)+cost;
+ if(data?.already_unlocked){await loadCompanyResearchAndProducts();renderCompanyDashboard();return;}const cost=Number(data?.cost||75);if(data?.cash_remaining!==undefined)currentUser.cash=data.cash_remaining;currentCompany.total_costs=Number(currentCompany.total_costs||0)+cost;
  await loadCompanyResearchAndProducts();renderCompanyDashboard();if(msg)msg.textContent='Research unlocked! This component is now available in Design.';if(typeof updateUIProfile==='function')updateUIProfile();playSound('upload');toast('Research unlocked!');
 }
 function switchCpuDesignMenu(m){cpuDesignMenu=m;['body','threads','cores'].forEach(x=>{$('#cpuMenu'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('hidden',x!==m);document.querySelector('[data-cpu-menu="'+x+'"]')?.classList.toggle('active',x===m);});}
