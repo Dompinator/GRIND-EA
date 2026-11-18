@@ -1426,7 +1426,7 @@ function renderUpdateModalContent(upd, isPreview = false) {
         : '';
     }
   };
-  $$$('#updateModalBoxes .update-box-input').forEach(inp => inp.addEventListener('change', syncBtn));
+  $$('#updateModalBoxes .update-box-input').forEach(inp => inp.addEventListener('change', syncBtn));
   syncBtn();
 
   $('#updateModal')?.classList.remove('hidden');
@@ -1563,7 +1563,7 @@ async function toggleWatchlist(coinId) {
   localStorage.setItem('grind_watchlist_' + currentUser.id, JSON.stringify(list));
   localStorage.setItem('grind_watchlist_ts_' + currentUser.id, String(Date.now()));
 
-  $$$(`.fav-btn[data-fav="${id}"]`).forEach(btn => {
+  $$(`.fav-btn[data-fav="${id}"]`).forEach(btn => {
     btn.classList.toggle('active', adding);
     btn.textContent = adding ? '★' : '☆';
     btn.title = adding ? 'Remove from watchlist' : 'Add to watchlist';
@@ -1745,10 +1745,10 @@ function showPage(page) {
   if (wasPlay && page !== 'play' && typeof cleanupPlay === 'function') cleanupPlay();
   currentPage = page;
   $('#appView')?.classList.toggle('play-fullscreen', page === 'play');
-  $$$('.page').forEach(p => p.classList.add('hidden'));
+  $$('.page').forEach(p => p.classList.add('hidden'));
   const target = $('#page-' + page);
   if (target) target.classList.remove('hidden');
-  $$$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   const titles = {
     feed: 'Discover currencies',
     live: 'Live market',
@@ -1807,7 +1807,7 @@ function showPage(page) {
   if (typeof syncPremiumAmbientMusic === 'function') syncPremiumAmbientMusic();
   if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
 }
-$$$('.nav-btn').forEach(b => b.addEventListener('click', () => {
+$$('.nav-btn').forEach(b => b.addEventListener('click', () => {
   if (!b.dataset.page) return;
   showPage(b.dataset.page);
 }));
@@ -1815,7 +1815,7 @@ $('#navUploadBtn')?.addEventListener('click', () => {
   if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
   openPlayUploadChoiceModal();
 });
-$$$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
+$$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
 
 
 let currentCompany = null;
@@ -2089,17 +2089,17 @@ $('#companyDeleteBtn')?.addEventListener('click', async () => {
   toast('Company deleted.');
   renderCompanyDashboard();
 });
-$$$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
+$$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
   feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
-  $$$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
+  $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
 }));
-$$$('.feed-tab').forEach(b => {
+$$('.feed-tab').forEach(b => {
   if (b.dataset.feed) {
     b.addEventListener('click', () => {
       feedMode = b.dataset.feed;
-      $$$('.feed-tab[data-feed]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-feed]').forEach(x => x.classList.toggle('active', x === b));
       renderFeed();
       if (feedMode === 'trending') loadCoins();
     });
@@ -2107,21 +2107,21 @@ $$$('.feed-tab').forEach(b => {
   if (b.dataset.lb) {
     b.addEventListener('click', () => {
       lbMode = b.dataset.lb;
-      $$$('.feed-tab[data-lb]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-lb]').forEach(x => x.classList.toggle('active', x === b));
       renderLeaderboard();
     });
   }
   if (b.dataset.lbWeekly) {
     b.addEventListener('click', () => {
       lbWeeklySort = b.dataset.lbWeekly === 'down' ? 'down' : 'up';
-      $$$('.feed-tab[data-lb-weekly]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-lb-weekly]').forEach(x => x.classList.toggle('active', x === b));
       renderLeaderboard();
     });
   }
   if (b.dataset.live) {
     b.addEventListener('click', () => {
       liveMode = b.dataset.live;
-      $$$('.feed-tab[data-live]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-live]').forEach(x => x.classList.toggle('active', x === b));
       renderLiveFeed();
     });
   }
@@ -2133,14 +2133,14 @@ $$$('.feed-tab').forEach(b => {
   if (b.dataset.repfilter) {
     b.addEventListener('click', () => {
       notifReportFilter = b.dataset.repfilter;
-      $$$('.feed-tab[data-repfilter]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-repfilter]').forEach(x => x.classList.toggle('active', x === b));
       renderReportsList();
     });
   }
   if (b.dataset.unotif) {
     b.addEventListener('click', () => {
       userNotifFilter = b.dataset.unotif;
-      $$$('.feed-tab[data-unotif]').forEach(x => x.classList.toggle('active', x === b));
+      $$('.feed-tab[data-unotif]').forEach(x => x.classList.toggle('active', x === b));
       renderUserNotifsList();
     });
   }
@@ -2267,10 +2267,10 @@ function renderFeaturedSection() {
     `;
   }).join('');
 
-  $$$('#featuredGrid [data-feat-coin]').forEach(el => {
+  $$('#featuredGrid [data-feat-coin]').forEach(el => {
     el.addEventListener('click', () => openCoin(el.dataset.featCoin));
   });
-  $$$('#featuredGrid [data-feat-profile]').forEach(btn => {
+  $$('#featuredGrid [data-feat-profile]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       openProfileModal(btn.dataset.featProfile);
@@ -2620,12 +2620,12 @@ function renderFeed() {
     emptyEl.classList.toggle('hidden', list.length > 0);
   }
   $('#feedGrid').classList.toggle('hidden', list.length === 0);
-  $$$('.coin-card').forEach(card => card.addEventListener('click', () => openCoin(card.dataset.coin)));
-  $$$('#feedGrid [data-fav]').forEach(btn => btn.addEventListener('click', e => {
+  $$('.coin-card').forEach(card => card.addEventListener('click', () => openCoin(card.dataset.coin)));
+  $$('#feedGrid [data-fav]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     toggleWatchlist(btn.dataset.fav);
   }));
-  $$$('#feedGrid [data-profile]').forEach(btn => btn.addEventListener('click', e => {
+  $$('#feedGrid [data-profile]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     openProfileModal(btn.dataset.profile);
   }));
@@ -2994,13 +2994,13 @@ async function renderCoinDetail() {
     </div>
   `;
 
-  $$$('#coinDetail [data-fav]').forEach(btn => btn.addEventListener('click', () => toggleWatchlist(btn.dataset.fav)));
-  $$$('#coinDetail [data-profile]').forEach(btn => btn.addEventListener('click', () => openProfileModal(btn.dataset.profile)));
+  $$('#coinDetail [data-fav]').forEach(btn => btn.addEventListener('click', () => toggleWatchlist(btn.dataset.fav)));
+  $$('#coinDetail [data-profile]').forEach(btn => btn.addEventListener('click', () => openProfileModal(btn.dataset.profile)));
   $('#openEditCoinBtn')?.addEventListener('click', () => openEditCoinModal(c));
-  $$$('[data-buy]').forEach(b => b.addEventListener('click', () => {
+  $$('[data-buy]').forEach(b => b.addEventListener('click', () => {
     customBuyActive = false;
     selectedAmount = Number(b.dataset.buy);
-    $$$('[data-buy]').forEach(x => x.classList.toggle('active', x === b));
+    $$('[data-buy]').forEach(x => x.classList.toggle('active', x === b));
     $('#customBuyWrap')?.classList.remove('active');
     $('#buyBtn').textContent = `Buy ${money(selectedAmount)}`;
   }));
@@ -3009,7 +3009,7 @@ async function renderCoinDetail() {
   const customInput = $('#customBuyInput');
   const activateCustomBuy = () => {
     customBuyActive = true;
-    $$$('[data-buy]').forEach(x => x.classList.remove('active'));
+    $$('[data-buy]').forEach(x => x.classList.remove('active'));
     customWrap?.classList.add('active');
     customBuyValue = customInput?.value ?? '';
     const val = Number(customBuyValue);
@@ -3038,7 +3038,7 @@ async function renderCoinDetail() {
     }
     buy(c, selectedAmount);
   });
-  $$$('[data-sell]').forEach(b => b.addEventListener('click', () => sell(c, shares * Number(b.dataset.sell))));
+  $$('[data-sell]').forEach(b => b.addEventListener('click', () => sell(c, shares * Number(b.dataset.sell))));
 
   // Zoom & Watch Cutscene Controls
   const updateChart = () => drawChartWithBubbles(c, trades.slice().reverse());
@@ -3267,7 +3267,7 @@ async function renderCoinDetail() {
     const el = $('#coinLeaderboardList');
     if (el && selectedCoin && selectedCoin.id === c.id) {
       el.innerHTML = renderSpendRows(rows, 'No one has bought this currency yet.');
-      $$$('#coinLeaderboardList [data-profile]').forEach(btn => btn.addEventListener('click', () => openProfileModal(btn.dataset.profile)));
+      $$('#coinLeaderboardList [data-profile]').forEach(btn => btn.addEventListener('click', () => openProfileModal(btn.dataset.profile)));
     }
   });
   loadCoinComments(c);
@@ -3968,28 +3968,28 @@ async function loadCoinComments(coin) {
     </div>`;
   }).join('');
 
-  $$$('#coinCommentsList [data-profile]').forEach(el => {
+  $$('#coinCommentsList [data-profile]').forEach(el => {
     el.addEventListener('click', () => openProfileModal(el.dataset.profile));
   });
-  $$$('#coinCommentsList [data-cmt-vote]').forEach(btn => {
+  $$('#coinCommentsList [data-cmt-vote]').forEach(btn => {
     btn.addEventListener('click', () => {
       btn.disabled = true;
       voteCoinComment(coin, btn.dataset.cid, btn.dataset.cur, btn.dataset.cmtVote);
     });
   });
-  $$$('#coinCommentsList [data-cmt-pin]').forEach(btn => {
+  $$('#coinCommentsList [data-cmt-pin]').forEach(btn => {
     btn.addEventListener('click', () => {
       btn.disabled = true;
       togglePinCoinComment(coin, btn.dataset.cmtPin, btn.dataset.pinned === '1');
     });
   });
-  $$$('#coinCommentsList [data-cmt-del]').forEach(btn => {
+  $$('#coinCommentsList [data-cmt-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       btn.disabled = true;
       deleteCoinComment(coin, btn.dataset.cmtDel);
     });
   });
-  $$$('#coinCommentsList [data-cmt-reply]').forEach(btn => {
+  $$('#coinCommentsList [data-cmt-reply]').forEach(btn => {
     btn.addEventListener('click', () => {
       const parentId = btn.dataset.cmtReply;
       activeReplyTarget = {
@@ -4003,20 +4003,20 @@ async function loadCoinComments(coin) {
       });
     });
   });
-  $$$('#coinCommentsList [data-reply-cancel]').forEach(btn => {
+  $$('#coinCommentsList [data-reply-cancel]').forEach(btn => {
     btn.addEventListener('click', () => {
       activeReplyTarget = null;
       loadCoinComments(coin);
     });
   });
-  $$$('#coinCommentsList [data-reply-send]').forEach(btn => {
+  $$('#coinCommentsList [data-reply-send]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (activeReplyTarget && activeReplyTarget.parentId === btn.dataset.replySend) {
         postCoinComment(coin, activeReplyTarget);
       }
     });
   });
-  $$$('#coinCommentsList [data-toggle-replies]').forEach(btn => {
+  $$('#coinCommentsList [data-toggle-replies]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pid = btn.dataset.toggleReplies;
       if (expandedCommentReplies.has(pid)) expandedCommentReplies.delete(pid);
@@ -4433,7 +4433,7 @@ async function renderMoney() {
 
   $('#holdingsList').innerHTML = createdHtml + holdsHtml;
   $('#emptyHoldings').classList.toggle('hidden', created.length > 0 || list.length > 0);
-  $$$('.holding').forEach(el => el.addEventListener('click', () => openCoin(el.dataset.coin)));
+  $$('.holding').forEach(el => el.addEventListener('click', () => openCoin(el.dataset.coin)));
 }
 
 // ---------- Currency & Global Leaderboards ----------
@@ -4727,7 +4727,7 @@ async function renderLeaderboard() {
       spotlightsEl.innerHTML = '';
     }
 
-    $$$('.feed-tab[data-lb-weekly]').forEach(x => {
+    $$('.feed-tab[data-lb-weekly]').forEach(x => {
       x.classList.toggle('active', x.dataset.lbWeekly === lbWeeklySort);
     });
 
@@ -4812,7 +4812,7 @@ async function renderLeaderboard() {
         <div class="lb-spotlight-stat down">${escapeHtml(formatSignedPct(worst.weeklyProfitPct))} <small>${escapeHtml(formatSignedMoney(worst.weeklyProfitUsd))}</small></div>
       </button>` : '';
     spotlightsEl.innerHTML = upCard + downCard;
-    $$$('#lbWeeklySpotlights [data-profile]').forEach(el => {
+    $$('#lbWeeklySpotlights [data-profile]').forEach(el => {
       el.addEventListener('click', () => openProfileModal(el.dataset.profile));
     });
   }
@@ -4954,7 +4954,7 @@ async function renderLeaderboard() {
   }).join('');
 
   $('#emptyLeaderboard').classList.toggle('hidden', list.length > 0);
-  $$$('#leaderboardList [data-profile]').forEach(el => el.addEventListener('click', () => openProfileModal(el.dataset.profile)));
+  $$('#leaderboardList [data-profile]').forEach(el => el.addEventListener('click', () => openProfileModal(el.dataset.profile)));
 
   try {
     localStorage.setItem(storageKey, JSON.stringify(currRanks));
@@ -5204,7 +5204,7 @@ async function openProfileModal(userId) {
     ` : ''}
   `;
 
-  $$$('#profileModalBody [data-follow-user]').forEach(btn => {
+  $$('#profileModalBody [data-follow-user]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (typeof toggleFollowUser === 'function') toggleFollowUser(btn.dataset.followUser);
     });
@@ -5215,18 +5215,18 @@ async function openProfileModal(userId) {
     if (typeof openDmModalWithUser === 'function') openDmModalWithUser(p);
   });
 
-  $$$('[data-modal-coin]').forEach(el => el.addEventListener('click', () => {
+  $$('[data-modal-coin]').forEach(el => el.addEventListener('click', () => {
     modal.classList.add('hidden');
     openCoin(el.dataset.modalCoin);
   }));
 
-  $$$('#profileModalBody [data-modal-play-vid]').forEach(el => el.addEventListener('click', () => {
+  $$('#profileModalBody [data-modal-play-vid]').forEach(el => el.addEventListener('click', () => {
     const vidId = el.dataset.modalPlayVid;
     modal.classList.add('hidden');
     if (typeof openPlayAtVideo === 'function') openPlayAtVideo(vidId);
   }));
 
-  $$$('#profileModalBody [data-modal-del-vid]').forEach(btn => btn.addEventListener('click', async e => {
+  $$('#profileModalBody [data-modal-del-vid]').forEach(btn => btn.addEventListener('click', async e => {
     e.stopPropagation();
     const vidId = btn.dataset.modalDelVid;
     if (btn.dataset.armed !== '1') {
@@ -6601,7 +6601,7 @@ function stopActivePlayMedia() {
     try { playState.activeVoiceAudio.pause(); } catch (e) {}
     playState.activeVoiceAudio = null;
   }
-  $$$('#playFeedTrack video').forEach(v => {
+  $$('#playFeedTrack video').forEach(v => {
     try { v.pause(); } catch (e) {}
   });
 }
@@ -6760,7 +6760,7 @@ function buildInitialPlayDeck(videos, adsList, focusVideoId = null, batchSize = 
 function syncPlayMuteUi() {
   const btn = $('#playMuteAllBtn');
   if (btn) btn.textContent = playState.muted ? '🔇 Muted' : '🔊 Sound On';
-  $$$('#playFeedTrack video').forEach(v => {
+  $$('#playFeedTrack video').forEach(v => {
     const forceMute = v.dataset.forceMute === '1';
     v.muted = forceMute || playState.muted;
   });
@@ -7141,7 +7141,7 @@ function renderPlayFeed(focusVideoId = null) {
   }
 
   track.innerHTML = playState.deck.map((item, idx) => createPlaySlideHtml(item, idx)).join('');
-  $$$('#playFeedTrack .play-slide').forEach(slideEl => wirePlaySlideInteractions(slideEl));
+  $$('#playFeedTrack .play-slide').forEach(slideEl => wirePlaySlideInteractions(slideEl));
 
   const slides = $$('#playFeedTrack .play-slide');
   if ('IntersectionObserver' in window) {
@@ -7187,9 +7187,9 @@ function openPlayAtVideo(videoId, openComments = false) {
   }
   currentPage = 'play';
   $('#appView')?.classList.add('play-fullscreen');
-  $$$('.page').forEach(p => p.classList.add('hidden'));
+  $$('.page').forEach(p => p.classList.add('hidden'));
   $('#page-play')?.classList.remove('hidden');
-  $$$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === 'play'));
+  $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === 'play'));
   $('#pageTitle').textContent = 'Play';
   if (typeof syncPremiumAmbientMusic === 'function') syncPremiumAmbientMusic();
   startPlayPage(videoId, openComments);
@@ -7358,13 +7358,13 @@ function renderAccountPlayVideos() {
       </div>`;
   }).join('');
 
-  $$$('#accountPlayVideosGrid [data-acc-watch-vid]').forEach(el => {
+  $$('#accountPlayVideosGrid [data-acc-watch-vid]').forEach(el => {
     el.addEventListener('click', () => openPlayAtVideo(el.dataset.accWatchVid));
   });
-  $$$('#accountPlayVideosGrid [data-acc-boost-vid]').forEach(btn => {
+  $$('#accountPlayVideosGrid [data-acc-boost-vid]').forEach(btn => {
     btn.addEventListener('click', () => openPlayBoostModal(btn.dataset.accBoostVid));
   });
-  $$$('#accountPlayVideosGrid [data-acc-del-vid]').forEach(btn => {
+  $$('#accountPlayVideosGrid [data-acc-del-vid]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const vidId = btn.dataset.accDelVid;
       if (btn.dataset.armed !== '1') {
@@ -7421,7 +7421,7 @@ $('#playBoostModal')?.addEventListener('click', e => {
   if (e.target === $('#playBoostModal')) closePlayBoostModal();
 });
 
-$$$('#playBoostModal [data-boost-days]').forEach(btn => {
+$$('#playBoostModal [data-boost-days]').forEach(btn => {
   btn.addEventListener('click', async () => {
     if (!sb || !currentUser?.id || !activeBoostVideoId || playBoostBusy) return;
     const days = Number(btn.dataset.boostDays || 1);
@@ -7429,7 +7429,7 @@ $$$('#playBoostModal [data-boost-days]').forEach(btn => {
     const msgEl = $('#playBoostMsg');
     if (msgEl) msgEl.textContent = '';
     playBoostBusy = true;
-    $$$('#playBoostModal [data-boost-days]').forEach(b => { b.disabled = true; });
+    $$('#playBoostModal [data-boost-days]').forEach(b => { b.disabled = true; });
 
     try {
       const chargeRes = await runPlayCashUpdate(async () => {
@@ -7484,7 +7484,7 @@ $$$('#playBoostModal [data-boost-days]').forEach(btn => {
       toast(`⚡ Video Boosted for ${days} day${days === 1 ? '' : 's'} (-${money(cost)})!`);
     } finally {
       playBoostBusy = false;
-      $$$('#playBoostModal [data-boost-days]').forEach(b => { b.disabled = false; });
+      $$('#playBoostModal [data-boost-days]').forEach(b => { b.disabled = false; });
     }
   });
 });
@@ -7545,7 +7545,7 @@ async function loadPlayCommentGifs(query = '') {
       <img src="${escapeHtml(g.previewUrl)}" alt="${escapeHtml(g.title)}" loading="lazy">
     </button>
   `).join('');
-  $$$('#playCommentGifGrid [data-play-cmt-gif-idx]').forEach(btn => {
+  $$('#playCommentGifGrid [data-play-cmt-gif-idx]').forEach(btn => {
     btn.addEventListener('click', () => {
       const picked = res.gifs[Number(btn.dataset.playCmtGifIdx)];
       if (!picked) return;
@@ -7799,18 +7799,18 @@ function renderPlayCommentsDrawerList() {
       </div>`;
   }).join('');
 
-  $$$('#playCommentsList [data-play-cmt-prof]').forEach(el => {
+  $$('#playCommentsList [data-play-cmt-prof]').forEach(el => {
     el.addEventListener('click', () => openProfileModal(el.dataset.playCmtProf));
   });
-  $$$('#playCommentsList [data-play-cmt-vote]').forEach(btn => {
+  $$('#playCommentsList [data-play-cmt-vote]').forEach(btn => {
     btn.addEventListener('click', () => {
       votePlayComment(vidId, btn.dataset.cid, btn.dataset.cur, btn.dataset.playCmtVote);
     });
   });
-  $$$('#playCommentsList [data-play-cmt-pin]').forEach(btn => {
+  $$('#playCommentsList [data-play-cmt-pin]').forEach(btn => {
     btn.addEventListener('click', () => togglePinPlayComment(vidId, btn.dataset.playCmtPin));
   });
-  $$$('#playCommentsList [data-play-cmt-del]').forEach(btn => {
+  $$('#playCommentsList [data-play-cmt-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!sb || !currentUser?.id) return;
       btn.disabled = true;
@@ -7824,7 +7824,7 @@ function renderPlayCommentsDrawerList() {
       renderPlayCommentsDrawerList();
     });
   });
-  $$$('#playCommentsList [data-play-cmt-reply]').forEach(btn => {
+  $$('#playCommentsList [data-play-cmt-reply]').forEach(btn => {
     btn.addEventListener('click', () => {
       const parentId = btn.dataset.playCmtReply;
       playState.activeCommentReplyTarget = {
@@ -7837,20 +7837,20 @@ function renderPlayCommentsDrawerList() {
       $(`#playReplyInput-${parentId}`)?.focus();
     });
   });
-  $$$('#playCommentsList [data-play-reply-cancel]').forEach(btn => {
+  $$('#playCommentsList [data-play-reply-cancel]').forEach(btn => {
     btn.addEventListener('click', () => {
       playState.activeCommentReplyTarget = null;
       renderPlayCommentsDrawerList();
     });
   });
-  $$$('#playCommentsList [data-play-reply-send]').forEach(btn => {
+  $$('#playCommentsList [data-play-reply-send]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (playState.activeCommentReplyTarget && playState.activeCommentReplyTarget.parentId === btn.dataset.playReplySend) {
         postPlayReplyComment(vidId, playState.activeCommentReplyTarget);
       }
     });
   });
-  $$$('#playCommentsList textarea[id^="playReplyInput-"]').forEach(ta => {
+  $$('#playCommentsList textarea[id^="playReplyInput-"]').forEach(ta => {
     ta.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -7860,7 +7860,7 @@ function renderPlayCommentsDrawerList() {
       }
     });
   });
-  $$$('#playCommentsList [data-play-toggle-replies]').forEach(btn => {
+  $$('#playCommentsList [data-play-toggle-replies]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pid = btn.dataset.playToggleReplies;
       if (playState.expandedCommentReplies.has(pid)) playState.expandedCommentReplies.delete(pid);
@@ -8011,7 +8011,7 @@ async function openPlayDonateModal(videoId, targetUserId) {
   if ($('#playDonateNoteInput')) $('#playDonateNoteInput').value = '';
   if ($('#playDonateMsg')) $('#playDonateMsg').textContent = '';
   if ($('#playDonateCashAvail')) $('#playDonateCashAvail').textContent = `Available cash: ${money(currentUser.cash || 0)}`;
-  $$$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b.dataset.donateAmt === '5'));
+  $$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b.dataset.donateAmt === '5'));
   const sendBtn = $('#confirmPlayDonateBtn');
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '＋ Send Donation'; }
   $('#playDonateModal')?.classList.remove('hidden');
@@ -8026,16 +8026,16 @@ $('#cancelPlayDonateBtn')?.addEventListener('click', closePlayDonateModal);
 $('#playDonateModal')?.addEventListener('click', e => {
   if (e.target === $('#playDonateModal')) closePlayDonateModal();
 });
-$$$('#playDonateQuickBtns .play-donate-chip').forEach(btn => {
+$$('#playDonateQuickBtns .play-donate-chip').forEach(btn => {
   btn.addEventListener('click', () => {
     const val = btn.dataset.donateAmt || '5';
     if ($('#playDonateAmountInput')) $('#playDonateAmountInput').value = val;
-    $$$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b === btn));
+    $$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b === btn));
   });
 });
 $('#playDonateAmountInput')?.addEventListener('input', e => {
   const v = String(e.target.value || '');
-  $$$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b.dataset.donateAmt === v));
+  $$('#playDonateQuickBtns .play-donate-chip').forEach(b => b.classList.toggle('active', b.dataset.donateAmt === v));
 });
 
 $('#confirmPlayDonateBtn')?.addEventListener('click', async () => {
@@ -8227,7 +8227,7 @@ function syncPlayEditorAspectUi() {
     stage.style.setProperty('--play-ar-num', arNum.toFixed(4));
     stage.style.aspectRatio = arNum.toFixed(4);
   }
-  $$$('#playAspectRatioGroup .play-aspect-btn').forEach(btn => {
+  $$('#playAspectRatioGroup .play-aspect-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.aspect === ratioKey);
   });
 }
@@ -8633,14 +8633,14 @@ function renderPlayEditorStage() {
 
   stage.innerHTML = (playEditorState.elements.length ? '' : '<div id="playEditorEmptyHint" class="play-editor-empty-hint">Press <strong>＋ Add Element</strong> to drop Images, GIFs, Text, or Stickers — drag to move &amp; resize!</div>') + itemsHtml;
 
-  $$$('#playEditorStage [data-edit-el]').forEach(domEl => {
+  $$('#playEditorStage [data-edit-el]').forEach(domEl => {
     domEl.addEventListener('pointerdown', e => {
       if (e.target.closest('[data-resize-el]')) return;
       e.preventDefault();
       e.stopPropagation();
       const elId = domEl.dataset.editEl;
       playEditorState.selectedId = elId;
-      $$$('#playEditorStage [data-edit-el]').forEach(n => n.classList.toggle('is-selected', n.dataset.editEl === elId));
+      $$('#playEditorStage [data-edit-el]').forEach(n => n.classList.toggle('is-selected', n.dataset.editEl === elId));
       renderEditorSelectionBar();
 
       const item = playEditorState.elements.find(it => it.id === elId);
@@ -8678,7 +8678,7 @@ function renderPlayEditorStage() {
     });
   });
 
-  $$$('#playEditorStage [data-resize-el]').forEach(handleEl => {
+  $$('#playEditorStage [data-resize-el]').forEach(handleEl => {
     handleEl.addEventListener('pointerdown', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -8688,7 +8688,7 @@ function renderPlayEditorStage() {
       if (!domEl || !item) return;
 
       playEditorState.selectedId = elId;
-      $$$('#playEditorStage [data-edit-el]').forEach(n => n.classList.toggle('is-selected', n.dataset.editEl === elId));
+      $$('#playEditorStage [data-edit-el]').forEach(n => n.classList.toggle('is-selected', n.dataset.editEl === elId));
       renderEditorSelectionBar();
 
       const r = domEl.getBoundingClientRect();
@@ -8752,7 +8752,7 @@ async function loadPlayEditorGifs(query = '') {
       <img src="${escapeHtml(g.previewUrl)}" alt="${escapeHtml(g.title)}" loading="lazy">
     </button>
   `).join('');
-  $$$('#playEditorGifGrid [data-editor-gif-idx]').forEach(btn => {
+  $$('#playEditorGifGrid [data-editor-gif-idx]').forEach(btn => {
     btn.addEventListener('click', () => {
       const picked = res.gifs[Number(btn.dataset.editorGifIdx)];
       if (!picked) return;
@@ -8852,7 +8852,7 @@ async function openPlayCreatorStudio(preloadedSong = null) {
     $('#playCreatorFinishBtn').disabled = false;
   }
   updatePlayUploadFeeUi();
-  $$$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.toggle('active', b.dataset.bg === '#161222'));
+  $$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.toggle('active', b.dataset.bg === '#161222'));
   $('#playEditorPlusMenu')?.classList.add('hidden');
   $('#playEditorTextPanel')?.classList.add('hidden');
   $('#playEditorStickerPanel')?.classList.add('hidden');
@@ -8885,7 +8885,7 @@ $('#playChooseCreateBtn')?.addEventListener('click', () => openPlayCreatorStudio
 $('#playCreatorCancelBtn')?.addEventListener('click', closePlayCreatorStudio);
 $('#playCreatorUndoBtn')?.addEventListener('click', undoPlayEditor);
 
-$$$('#playAspectRatioGroup .play-aspect-btn').forEach(btn => {
+$$('#playAspectRatioGroup .play-aspect-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     pushPlayEditorHistory();
     playEditorState.aspectRatio = btn.dataset.aspect || '9:16';
@@ -8893,21 +8893,21 @@ $$$('#playAspectRatioGroup .play-aspect-btn').forEach(btn => {
   });
 });
 
-$$$('#playBgSwatches .play-bg-swatch').forEach(btn => {
+$$('#playBgSwatches .play-bg-swatch').forEach(btn => {
   btn.addEventListener('click', () => {
     pushPlayEditorHistory();
     playEditorState.bgColor = btn.dataset.bg || '#161222';
     if ($('#playBgColorInput') && /^#[0-9a-fA-F]{6}$/.test(playEditorState.bgColor)) {
       $('#playBgColorInput').value = playEditorState.bgColor;
     }
-    $$$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.toggle('active', b === btn));
+    $$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.toggle('active', b === btn));
     if ($('#playEditorStage')) $('#playEditorStage').style.background = playEditorState.bgColor;
   });
 });
 $('#playBgColorInput')?.addEventListener('input', e => {
   pushPlayEditorHistory();
   playEditorState.bgColor = e.target.value || '#161222';
-  $$$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.remove('active'));
+  $$('#playBgSwatches .play-bg-swatch').forEach(b => b.classList.remove('active'));
   if ($('#playEditorStage')) $('#playEditorStage').style.background = playEditorState.bgColor;
 });
 
@@ -10538,7 +10538,7 @@ function renderThemeSettings() {
     `;
   }).join('');
 
-  $$$('#themeStripsList [data-theme-pick]').forEach(btn => {
+  $$('#themeStripsList [data-theme-pick]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pickedId = btn.dataset.themePick;
       const themeObj = GRIND_THEMES.find(t => t.id === pickedId);
@@ -11221,7 +11221,7 @@ let reportPlayersCache = [];
 
 function setReportType(type) {
   reportType = type === 'bug' ? 'bug' : 'player';
-  $$$('.feed-tab[data-report-type]').forEach(btn => {
+  $$('.feed-tab[data-report-type]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.reportType === reportType);
   });
   $('#reportPlayerWrap')?.classList.toggle('hidden', reportType !== 'player');
@@ -12159,8 +12159,8 @@ async function loadRequests() {
         if (el.dataset.profile) openProfileModal(el.dataset.profile);
       });
     });
-    $$$('.approve-btn').forEach(b => b.addEventListener('click', () => handleRequest(b.dataset.id, b.dataset.user, 'approved')));
-    $$$('.deny-btn').forEach(b => b.addEventListener('click', () => handleRequest(b.dataset.id, null, 'denied')));
+    $$('.approve-btn').forEach(b => b.addEventListener('click', () => handleRequest(b.dataset.id, b.dataset.user, 'approved')));
+    $$('.deny-btn').forEach(b => b.addEventListener('click', () => handleRequest(b.dataset.id, null, 'denied')));
   }
 
   updateNotificationsBadge();
@@ -12198,7 +12198,7 @@ function renderUpdateLivePreview() {
     : '<span class="muted">Your update message will appear here as you type...</span>';
 
   const prevChecked = new Map();
-  $$$('#updatePreviewBoxes .update-preview-box-input').forEach(inp => {
+  $$('#updatePreviewBoxes .update-preview-box-input').forEach(inp => {
     prevChecked.set(inp.dataset.idx, inp.checked);
   });
 
@@ -12225,7 +12225,7 @@ function renderUpdateLivePreview() {
         : '';
     }
   };
-  $$$('#updatePreviewBoxes .update-preview-box-input').forEach(inp => inp.addEventListener('change', syncPreviewBtn));
+  $$('#updatePreviewBoxes .update-preview-box-input').forEach(inp => inp.addEventListener('change', syncPreviewBtn));
   syncPreviewBtn();
 }
 
@@ -12267,14 +12267,14 @@ function renderUpdateCheckboxesBuilder() {
     </div>
   `).join('');
 
-  $$$('#updateCheckboxesBuilder .box-text-input').forEach(inp => {
+  $$('#updateCheckboxesBuilder .box-text-input').forEach(inp => {
     inp.addEventListener('input', e => {
       const idx = Number(inp.dataset.idx);
       if (draftUpdateBoxes[idx]) draftUpdateBoxes[idx].text = e.target.value;
       renderUpdateLivePreview();
     });
   });
-  $$$('#updateCheckboxesBuilder .box-req-input').forEach(chk => {
+  $$('#updateCheckboxesBuilder .box-req-input').forEach(chk => {
     chk.addEventListener('change', () => {
       const idx = Number(chk.dataset.idx);
       if (draftUpdateBoxes[idx]) {
@@ -12285,7 +12285,7 @@ function renderUpdateCheckboxesBuilder() {
       renderUpdateLivePreview();
     });
   });
-  $$$('#updateCheckboxesBuilder .box-remove-btn').forEach(btn => {
+  $$('#updateCheckboxesBuilder .box-remove-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = Number(btn.dataset.idx);
       draftUpdateBoxes.splice(idx, 1);
@@ -12382,7 +12382,7 @@ async function loadAdminUpdatesList() {
     </div>`;
   }).join('');
 
-  $$$('#adminUpdatesList [data-del-upd]').forEach(btn => {
+  $$('#adminUpdatesList [data-del-upd]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!isDompinator() || !currentUser || !sb) return;
       const updId = btn.dataset.delUpd;
@@ -12608,20 +12608,20 @@ function renderAdminAccounts() {
     </div>`;
   }).join('');
 
-  $$$('#adminAccountsList [data-profile], #adminAccountsList [data-acc-manage]').forEach(el => {
+  $$('#adminAccountsList [data-profile], #adminAccountsList [data-acc-manage]').forEach(el => {
     el.addEventListener('click', () => {
       const id = el.dataset.profile || el.dataset.accManage;
       openProfileModal(id);
     });
   });
 
-  $$$('#adminAccountsList [data-acc-remprem]').forEach(btn => {
+  $$('#adminAccountsList [data-acc-remprem]').forEach(btn => {
     btn.addEventListener('click', () => {
       removePremiumFromUser(btn.dataset.accRemprem, btn.dataset.accName || 'user');
     });
   });
 
-  $$$('#adminAccountsList [data-acc-reset]').forEach(btn => {
+  $$('#adminAccountsList [data-acc-reset]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (btn.dataset.armed !== '1') {
         btn.dataset.armed = '1';
@@ -12642,7 +12642,7 @@ function renderAdminAccounts() {
     });
   });
 
-  $$$('#adminAccountsList [data-acc-ban]').forEach(btn => {
+  $$('#adminAccountsList [data-acc-ban]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const currentlyBanned = btn.dataset.accBanned === '1';
       if (!currentlyBanned) {
@@ -12657,7 +12657,7 @@ function renderAdminAccounts() {
     });
   });
 
-  $$$('#adminAccountsList [data-acc-del]').forEach(btn => {
+  $$('#adminAccountsList [data-acc-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       openDeleteAccountModal(btn.dataset.accDel, btn.dataset.accName || 'user', false);
     });
@@ -13544,7 +13544,7 @@ function renderPassPage(scrollToActive = false) {
     `;
   }).join('');
 
-  $$$('#passTiersTrack [data-pass-claim]').forEach(btn => {
+  $$('#passTiersTrack [data-pass-claim]').forEach(btn => {
     btn.addEventListener('click', () => claimPassReward(Number(btn.dataset.passClaim), btn.dataset.passTrack || 'free'));
   });
 
@@ -14465,7 +14465,7 @@ $('#grindBotForm')?.addEventListener('submit', e => {
   sendGrindBotPrompt($('#grindBotInput')?.value || '');
 });
 
-$$$('#grindBotQuickPrompts [data-gb-prompt]').forEach(btn => {
+$$('#grindBotQuickPrompts [data-gb-prompt]').forEach(btn => {
   btn.addEventListener('click', () => {
     sendGrindBotPrompt(btn.dataset.gbPrompt || '');
   });
@@ -14484,7 +14484,7 @@ let proUpgradeCloseTimer = null;
 
 function setProUpgradePlan(plan) {
   selectedProUpgradePlan = plan === 'yearly' ? 'yearly' : 'monthly';
-  $$$('#proPlanGrid [data-pro-plan]').forEach(card => {
+  $$('#proPlanGrid [data-pro-plan]').forEach(card => {
     card.classList.toggle('selected', card.dataset.proPlan === selectedProUpgradePlan);
   });
   const cta = $('#proUpgradePayBtn');
@@ -14522,7 +14522,7 @@ function closeProUpgradeModal() {
   }, 320);
 }
 
-$$$('#proPlanGrid [data-pro-plan]').forEach(btn => {
+$$('#proPlanGrid [data-pro-plan]').forEach(btn => {
   btn.addEventListener('click', () => setProUpgradePlan(btn.dataset.proPlan));
 });
 $('#proUpgradePayBtn')?.addEventListener('click', e => {
@@ -15746,7 +15746,7 @@ async function openCoinWatchModal(coin) {
   watchState.points = rawPoints;
   watchState.durationMs = Math.min(18500, Math.max(6500, 5200 + sortedTrades.length * 420));
   watchState.speed = 1;
-  $$$('[data-watch-speed]').forEach(b => b.classList.toggle('active', b.dataset.watchSpeed === '1'));
+  $$('[data-watch-speed]').forEach(b => b.classList.toggle('active', b.dataset.watchSpeed === '1'));
 
   startWatchPlayback(0);
 }
@@ -16006,11 +16006,11 @@ $('#watchProgressRange')?.addEventListener('input', e => {
   watchState.shownBubbleIndices.clear();
   renderWatchFrame(val);
 });
-$$$('[data-watch-speed]').forEach(btn => {
+$$('[data-watch-speed]').forEach(btn => {
   btn.addEventListener('click', () => {
     const spd = Number(btn.dataset.watchSpeed || 1);
     watchState.speed = spd;
-    $$$('[data-watch-speed]').forEach(b => b.classList.toggle('active', b === btn));
+    $$('[data-watch-speed]').forEach(b => b.classList.toggle('active', b === btn));
   });
 });
 
@@ -16568,7 +16568,7 @@ function renderDmSidebar() {
   }
 
   listEl.innerHTML = rowsHtml;
-  $$$('#dmSidebarList [data-dm-partner]').forEach(btn => {
+  $$('#dmSidebarList [data-dm-partner]').forEach(btn => {
     btn.addEventListener('click', () => selectDmPartner(btn.dataset.dmPartner));
   });
 }
@@ -16636,7 +16636,7 @@ function renderDmCoinPicker() {
       </button>`;
   }).join('');
 
-  $$$('#dmCoinPickerList [data-dm-pick-coin]').forEach(btn => {
+  $$('#dmCoinPickerList [data-dm-pick-coin]').forEach(btn => {
     btn.addEventListener('click', () => {
       sendDmCoinCard(btn.dataset.dmPickCoin);
     });
@@ -16869,7 +16869,7 @@ function renderDmThread() {
           ${metaFooter}
         </div>`;
     }).join('');
-    $$$('#dmMessagesList [data-dm-check-coin]').forEach(btn => {
+    $$('#dmMessagesList [data-dm-check-coin]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const cid = btn.dataset.dmCheckCoin;
         if (!cid) return;
@@ -17363,7 +17363,7 @@ function renderAccountIdentityAndTitles() {
           </button>
         `).join('')}
       `;
-      $$$('#accountTitlesGrid [data-acc-title]').forEach(btn => {
+      $$('#accountTitlesGrid [data-acc-title]').forEach(btn => {
         btn.addEventListener('click', () => {
           const val = btn.dataset.accTitle || null;
           equipUserTitle(val);
@@ -17545,20 +17545,20 @@ function renderMarketplacePage() {
       `;
     }).join('');
 
-    $$$('#marketplaceCratesGrid [data-inspect-crate]').forEach(btn => {
+    $$('#marketplaceCratesGrid [data-inspect-crate]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         titleSystemState.selectedCrateId = btn.dataset.inspectCrate;
         renderMarketplacePage();
       });
     });
-    $$$('#marketplaceCratesGrid [data-select-crate]').forEach(card => {
+    $$('#marketplaceCratesGrid [data-select-crate]').forEach(card => {
       card.addEventListener('click', () => {
         titleSystemState.selectedCrateId = card.dataset.selectCrate;
         renderMarketplacePage();
       });
     });
-    $$$('#marketplaceCratesGrid [data-open-crate]').forEach(btn => {
+    $$('#marketplaceCratesGrid [data-open-crate]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         openCrateWithAnimation(btn.dataset.openCrate);
@@ -17638,7 +17638,7 @@ function renderMarketplacePage() {
       `;
     }).join('');
 
-    $$$('#mktLockerGrid [data-equip-title]').forEach(btn => {
+    $$('#mktLockerGrid [data-equip-title]').forEach(btn => {
       btn.addEventListener('click', () => {
         equipUserTitle(btn.dataset.equipTitle || null);
       });
@@ -18345,7 +18345,7 @@ async function openTraderBattleChallengeModal(opponentProfile) {
   if ($('#tbStakeInput')) $('#tbStakeInput').value = '';
   setTbPrizeMode('fixed');
 
-  $$$('#tbLengthPresets .tb-preset-chip').forEach(btn => {
+  $$('#tbLengthPresets .tb-preset-chip').forEach(btn => {
     btn.classList.toggle('active', Number(btn.dataset.tbMins) === tbState.selectedMins);
   });
 
@@ -18354,7 +18354,7 @@ async function openTraderBattleChallengeModal(opponentProfile) {
 
 function setTbPrizeMode(mode) {
   tbState.selectedMode = mode === 'classic' ? 'classic' : 'fixed';
-  $$$('#tbPriceModeTabs .tb-mode-tab').forEach(btn => {
+  $$('#tbPriceModeTabs .tb-mode-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tbMode === tbState.selectedMode);
   });
   $('#tbFixedStakePanel')?.classList.toggle('hidden', tbState.selectedMode === 'classic');
@@ -18430,7 +18430,7 @@ async function proceedToTraderBattlePriceStep() {
       stakeInput.value = maxAllowed >= 1 ? String(suggested >= 1 ? suggested : maxAllowed) : '';
     }
 
-    $$$('#tbPricePresets .tb-preset-chip').forEach(btn => {
+    $$('#tbPricePresets .tb-preset-chip').forEach(btn => {
       const raw = btn.dataset.tbStake;
       if (raw === 'max') {
         btn.disabled = maxAllowed < 1;
@@ -19494,29 +19494,29 @@ async function handleTraderBattleRealtimeEvent(payload) {
 }
 
 // Trader Battle Modal Listeners
-$$$('#tbLengthPresets .tb-preset-chip').forEach(btn => {
+$$('#tbLengthPresets .tb-preset-chip').forEach(btn => {
   btn.addEventListener('click', () => {
     const mins = Number(btn.dataset.tbMins || 120);
     if (!TB_ALLOWED_MINS.includes(mins)) return;
     tbState.selectedMins = mins;
-    $$$('#tbLengthPresets .tb-preset-chip').forEach(x => x.classList.toggle('active', x === btn));
+    $$('#tbLengthPresets .tb-preset-chip').forEach(x => x.classList.toggle('active', x === btn));
   });
 });
 
-$$$('#tbPriceModeTabs .tb-mode-tab').forEach(btn => {
+$$('#tbPriceModeTabs .tb-mode-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     setTbPrizeMode(btn.dataset.tbMode === 'classic' ? 'classic' : 'fixed');
   });
 });
 
-$$$('#tbPricePresets .tb-preset-chip').forEach(btn => {
+$$('#tbPricePresets .tb-preset-chip').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.disabled) return;
     const raw = btn.dataset.tbStake;
     const val = raw === 'max' ? tbState.maxStakeAllowed : Number(raw);
     if (!Number.isFinite(val) || val < 1) return;
     if ($('#tbStakeInput')) $('#tbStakeInput').value = String(floor2(val));
-    $$$('#tbPricePresets .tb-preset-chip').forEach(x => x.classList.toggle('active', x === btn));
+    $$('#tbPricePresets .tb-preset-chip').forEach(x => x.classList.toggle('active', x === btn));
   });
 });
 
