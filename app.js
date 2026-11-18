@@ -2073,6 +2073,24 @@ $$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.datas
 $$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
 document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads')cpuDesignThreads=!cpuDesignThreads;renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
 $('#finishCpuBtn')?.addEventListener('click',finishCpuDesign);
+const researchTree=$('#cpuResearchTree'),researchWorld=$('#cpuResearchWorld');
+if(researchTree&&researchWorld&&!researchTree.dataset.navigationReady){
+ researchTree.dataset.navigationReady='1';
+ let panX=0,panY=0,zoom=1,dragging=false,moved=false,startX=0,startY=0,originX=0,originY=0;
+ const paintResearchWorld=()=>{researchWorld.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')';};
+ const resetResearchView=()=>{panX=0;panY=0;zoom=1;paintResearchWorld();};
+ researchTree.addEventListener('pointerdown',e=>{
+  if(e.button!==0||e.target.closest('.research-node,.research-tree-controls'))return;
+  dragging=true;moved=false;startX=e.clientX;startY=e.clientY;originX=panX;originY=panY;
+  researchTree.classList.add('is-panning');researchTree.setPointerCapture(e.pointerId);
+ });
+ researchTree.addEventListener('pointermove',e=>{if(!dragging)return;const dx=e.clientX-startX,dy=e.clientY-startY;if(Math.abs(dx)+Math.abs(dy)>3)moved=true;panX=originX+dx;panY=originY+dy;paintResearchWorld();});
+ const stopResearchPan=()=>{dragging=false;researchTree.classList.remove('is-panning');};
+ researchTree.addEventListener('pointerup',stopResearchPan);researchTree.addEventListener('pointercancel',stopResearchPan);
+ researchTree.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.55,Math.min(2.2,zoom*(e.deltaY<0?1.12:.89)));paintResearchWorld();},{passive:false});
+ researchTree.addEventListener('click',e=>{if(moved){e.preventDefault();e.stopPropagation();moved=false;}},true);
+ researchTree.querySelectorAll('[data-research-zoom]').forEach(btn=>btn.addEventListener('click',()=>{const action=btn.dataset.researchZoom;if(action==='reset')resetResearchView();else zoom=Math.max(.55,Math.min(2.2,zoom*(action==='in'?1.2:.83)));paintResearchWorld();}));
+}
 const cpuStage=$('#cpuPreviewStage');if(cpuStage){let drag=false,x=0,y=0;cpuStage.addEventListener('pointerdown',e=>{drag=true;x=e.clientX;y=e.clientY;cpuStage.setPointerCapture(e.pointerId);});cpuStage.addEventListener('pointermove',e=>{if(!drag)return;cpuRotationY+=(e.clientX-x)*.8;cpuRotationX=Math.max(-80,Math.min(80,cpuRotationX-(e.clientY-y)*.55));x=e.clientX;y=e.clientY;const m=$('#cpuModel');if(m)m.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';});const stop=()=>drag=false;cpuStage.addEventListener('pointerup',stop);cpuStage.addEventListener('pointercancel',stop);}
 $('#companyLogoPreview')?.addEventListener('click', () => $('#companyLogoInput')?.click());
 $('#companyLogoInput')?.addEventListener('change', e => {
