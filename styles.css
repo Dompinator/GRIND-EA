@@ -6925,3 +6925,51 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .product-feed-placeholder h3 { margin: 12px 0 6px; }
 .product-feed-placeholder p { margin: 0; }
 @media (max-width: 620px) { .feed-type-switch { margin-left: 0; } .feed-type-btn { padding: 6px 9px; font-size: 12px; } }
+
+/* Company workspace */
+.company-nav { margin-bottom: 12px; }
+.company-onboarding { max-width: 760px; margin: 28px auto 60px; text-align: center; }
+.company-welcome-orb { width: 76px; height: 76px; margin: 0 auto 20px; border-radius: 24px; display:flex; align-items:center; justify-content:center; font-size:34px; color:#ead7ff; background:linear-gradient(135deg,#8b5cf6,#4c1d95); box-shadow:0 14px 38px rgba(139,92,246,.24); }
+.company-onboarding h3 { font-size:clamp(23px,3vw,32px); margin:10px 0; letter-spacing:-.5px; }
+.company-onboarding > p { max-width:580px; margin:0 auto 24px; line-height:1.6; }
+.company-create-card { text-align:left; display:grid; gap:16px; }
+.company-create-card label { display:grid; gap:8px; color:var(--text); font-weight:700; }
+.company-create-card input, .company-create-card textarea { width:100%; background:#100c1b; color:var(--text); border:1px solid var(--line); border-radius:11px; padding:12px 14px; outline:none; }
+.company-create-card input:focus, .company-create-card textarea:focus { border-color:var(--purple); }
+.company-logo-upload-row { display:flex; align-items:center; gap:14px; }
+.company-logo-preview { width:76px; height:76px; border-radius:18px; border:1px dashed #70558e; background:#211832; display:flex; align-items:center; justify-content:center; font-size:26px; cursor:pointer; overflow:hidden; flex-shrink:0; }
+.company-logo-preview img, .company-dashboard-logo img { width:100%; height:100%; object-fit:cover; }
+.company-line-choice { display:grid; gap:9px; }
+.company-line-choice > .eyebrow { margin-bottom:2px; }
+.company-line-card { display:flex; align-items:center; gap:13px; padding:13px 14px; border:1px solid var(--line); border-radius:13px; background:#171222; }
+.company-line-card.selected { border-color:#a855f7; background:rgba(168,85,247,.10); }
+.company-line-card.disabled { opacity:.48; }
+.company-line-card > span:nth-child(2) { display:grid; gap:4px; flex:1; }
+.company-line-card small { color:var(--muted); font-size:12px; font-weight:500; }
+.company-line-icon { font-size:22px; width:30px; text-align:center; }
+.company-line-check { color:#c084fc; font-weight:800; }
+.company-coming, .company-cpu-chip, .company-count-chip { font-size:10px; letter-spacing:1px; font-weight:800; padding:6px 9px; border-radius:999px; background:rgba(168,85,247,.13); color:#d8b4fe; }
+.company-hero-panel, .company-dashboard-section { background:linear-gradient(135deg,#1b1429,#14101f); border:1px solid var(--line); border-radius:18px; padding:22px; margin-bottom:18px; }
+.company-hero-panel { display:flex; justify-content:space-between; align-items:center; gap:18px; }
+.company-identity { display:flex; align-items:center; gap:16px; min-width:0; }
+.company-dashboard-logo { width:76px; height:76px; flex:0 0 76px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:18px; background:#291d3b; font-size:30px; }
+.company-identity h3 { margin:4px 0; font-size:25px; overflow-wrap:anywhere; }
+.company-identity p { margin:0; overflow-wrap:anywhere; }
+.company-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+.company-stat-card { padding:18px; background:var(--panel); border:1px solid var(--line); border-radius:15px; display:grid; gap:8px; min-width:0; }
+.company-stat-card span { color:var(--muted); font-size:12px; }
+.company-stat-card strong { font-size:24px; overflow-wrap:anywhere; }
+.company-stat-card small { color:var(--muted); font-size:11px; }
+.company-stat-card .positive { color:var(--green); }
+.company-stat-card .negative { color:var(--red); }
+.company-section-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.company-section-heading h4 { margin:5px 0 0; font-size:18px; }
+.company-dashboard-section > p { line-height:1.55; }
+.company-empty-products, .company-empty-page { border:1px dashed #49375f; background:rgba(28,20,42,.55); border-radius:16px; padding:32px; text-align:center; display:grid; justify-items:center; gap:8px; }
+.company-empty-products > span, .company-empty-icon { font-size:34px; color:#c084fc; }
+.company-empty-products p { margin:0; }
+.company-empty-page { max-width:640px; margin:50px auto; padding:55px 24px; }
+.company-empty-page h3 { margin:0; font-size:26px; }
+.company-empty-page p { margin:0; }
+@media (max-width:900px) { .company-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:560px) { .company-hero-panel { align-items:flex-start; flex-direction:column; } .company-identity { align-items:flex-start; } .company-dashboard-logo { width:60px; height:60px; flex-basis:60px; } .company-stat-card { padding:13px; } .company-stat-card strong { font-size:20px; } }
