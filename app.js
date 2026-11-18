@@ -15,6 +15,24 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 let currentUser = null;
+// Initialize ambient-audio state before asynchronous session/profile callbacks can run.
+const PREMIUM_MUSIC_TRACKS = {
+  'sapphire-obsidian': { file: 'premium-ambient', title: 'Obsidian Lounge — Soothing Ambient' },
+  'gold-platinum': { file: 'premium-ambient', title: 'Obsidian Lounge — Soothing Ambient' },
+  'rose-amethyst': { file: 'rose-amethyst-ambient', title: 'Velvet Crystal — Rose & Amethyst' }
+};
+const AMBIENT_TARGET_GAIN = 0.22;
+const ambientBuffers = new Map();
+const ambientLoadingTasks = new Map();
+let ambientCurrentTrackFile = null;
+let ambientSourceNode = null;
+let ambientGainNode = null;
+let ambientFallbackAudio = null;
+let ambientFadeTimer = null;
+let ambientStopTimer = null;
+let ambientDesired = false;
+let ambientPlaying = false;
+
 let coins = [];
 let selectedCoin = null;
 let selectedAmount = 5;
@@ -1797,7 +1815,7 @@ $('#navUploadBtn')?.addEventListener('click', () => {
   if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
   openPlayUploadChoiceModal();
 });
-$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
+$$('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
 
 
 let currentCompany = null;
@@ -15139,22 +15157,7 @@ document.addEventListener('pointerdown', e => {
 // ============================================================
 // ---------- PREMIUM THEME AMBIENT MUSIC ENGINE --------------
 // ============================================================
-const PREMIUM_MUSIC_TRACKS = {
-  'sapphire-obsidian': { file: 'premium-ambient', title: 'Obsidian Lounge — Soothing Ambient' },
-  'gold-platinum': { file: 'premium-ambient', title: 'Obsidian Lounge — Soothing Ambient' },
-  'rose-amethyst': { file: 'rose-amethyst-ambient', title: 'Velvet Crystal — Rose & Amethyst' }
-};
-const AMBIENT_TARGET_GAIN = 0.22;
-const ambientBuffers = new Map();
-const ambientLoadingTasks = new Map();
-let ambientCurrentTrackFile = null;
-let ambientSourceNode = null;
-let ambientGainNode = null;
-let ambientFallbackAudio = null;
-let ambientFadeTimer = null;
-let ambientStopTimer = null;
-let ambientDesired = false;
-let ambientPlaying = false;
+
 
 function getPremiumMusicTrackForTheme(themeId) {
   return PREMIUM_MUSIC_TRACKS[themeId] || null;
