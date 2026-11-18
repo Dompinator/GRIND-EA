@@ -12765,6 +12765,45 @@ $('#cancelDeleteAccountBtn')?.addEventListener('click', closeDeleteAccountModal)
 $('#deleteAccountModal')?.addEventListener('click', e => {
   if (e.target === $('#deleteAccountModal')) closeDeleteAccountModal();
 });
+let resetOwnProgressBusy = false;
+function openResetOwnProgressModal(){
+  if(!currentUser||!sb)return;
+  const msg=$('#resetOwnProgressMessage');if(msg)msg.textContent='';
+  const btn=$('#confirmResetOwnProgressBtn');if(btn){btn.disabled=false;btn.textContent='Yes, Reset My Progress';}
+  $('#resetOwnProgressModal')?.classList.remove('hidden');
+}
+function closeResetOwnProgressModal(){
+  if(resetOwnProgressBusy)return;
+  $('#resetOwnProgressModal')?.classList.add('hidden');
+}
+$('#resetOwnProgressBtn')?.addEventListener('click',openResetOwnProgressModal);
+$('#closeResetOwnProgressBtn')?.addEventListener('click',closeResetOwnProgressModal);
+$('#cancelResetOwnProgressBtn')?.addEventListener('click',closeResetOwnProgressModal);
+$('#resetOwnProgressModal')?.addEventListener('click',e=>{if(e.target===$('#resetOwnProgressModal'))closeResetOwnProgressModal();});
+$('#confirmResetOwnProgressBtn')?.addEventListener('click',async()=>{
+  if(resetOwnProgressBusy||!currentUser||!sb)return;
+  resetOwnProgressBusy=true;
+  const btn=$('#confirmResetOwnProgressBtn'),msg=$('#resetOwnProgressMessage');
+  if(btn){btn.disabled=true;btn.textContent='Resetting...';}
+  if(msg)msg.textContent='Resetting your gameplay data...';
+  try{
+    const {error}=await sb.rpc('reset_my_grind_progress');
+    if(error)throw error;
+    const uid=currentUser.id;
+    ['grind_pro_','grind_daily_','grind_watchlist_','grind_watchlist_ts_','grind_titles_owned_','grind_title_equipped_'].forEach(prefix=>{try{localStorage.removeItem(prefix+uid);}catch(e){}});
+    watchlistIds=new Set();
+    if(currentUser){currentUser.cash=15;currentUser.net_worth=15;currentUser.is_premium=false;currentUser.time_played=0;}
+    $('#resetOwnProgressModal')?.classList.add('hidden');
+    toast('Your Grind progress has been reset. You have $15!');
+    window.location.reload();
+  }catch(error){
+    console.error('Self reset failed:',error);
+    if(msg)msg.textContent=error?.message||'Could not reset your progress. Please try again.';
+    if(btn){btn.disabled=false;btn.textContent='Yes, Reset My Progress';}
+    resetOwnProgressBusy=false;
+  }
+});
+
 $('#deleteOwnAccountBtn')?.addEventListener('click', () => {
   if (!currentUser) return;
   openDeleteAccountModal(currentUser.id, currentUser.username || 'your account', true);
