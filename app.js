@@ -1040,22 +1040,26 @@ async function applyAdminActionsForCurrentUser() {
     } catch (e) {}
 
     if (latestResetTs > appliedResetTs) {
+      const isGrindTestAccount = String(currentUser.username || '').toLowerCase() === 'grind_test';
+      const resetCash = isGrindTestAccount ? '9999999999999999' : 15;
       const keepAdminPremium = isDompinator();
-      try {
-        await sb.from('holdings').delete().eq('user_id', uid);
-      } catch (e) {}
-      try {
-        await sb.from('profiles').update({
-          cash: 15,
-          net_worth: 15,
-          is_premium: keepAdminPremium,
-          time_played: 0
-        }).eq('id', uid);
-      } catch (e) {}
+      if (!isGrindTestAccount) {
+        try {
+          await sb.from('holdings').delete().eq('user_id', uid);
+        } catch (e) {}
+        try {
+          await sb.from('profiles').update({
+            cash: resetCash,
+            net_worth: resetCash,
+            is_premium: keepAdminPremium,
+            time_played: 0
+          }).eq('id', uid);
+        } catch (e) {}
+      }
 
-      currentUser.cash = 15;
-      currentUser.net_worth = 15;
-      currentUser.is_premium = keepAdminPremium;
+      currentUser.cash = resetCash;
+      currentUser.net_worth = resetCash;
+      currentUser.is_premium = isGrindTestAccount ? false : keepAdminPremium;
       currentUser.is_pro = false;
       currentUser.time_played = 0;
       proUserIds.delete(uid);
@@ -1079,9 +1083,11 @@ async function applyAdminActionsForCurrentUser() {
       if (currentPage === 'money') renderMoney();
       if (currentPage === 'coin') renderCoinDetail();
       if (currentPage === 'feed') renderFeed();
-      toast(appliesServerReset && latestResetTs === serverResetTs
-        ? 'Servers were reset by an administrator. All coins cleared & accounts reset to $15.'
-        : 'Your account was reset by an administrator.');
+      toast(isGrindTestAccount
+        ? 'Grind_Test gameplay reset. Starting cash restored!'
+        : (appliesServerReset && latestResetTs === serverResetTs
+          ? 'Servers were reset by an administrator. All coins cleared & accounts reset to $15.'
+          : 'Your account was reset by an administrator.'));
     }
   }
 
@@ -1998,7 +2004,7 @@ async function unlockCpuResearch(k){
  await loadCompanyResearchAndProducts();renderCompanyDashboard();if(msg)msg.textContent='Research unlocked! This component is now available in Design.';if(typeof updateUIProfile==='function')updateUIProfile();playSound('upload');toast('Research unlocked!');
 }
 function switchCpuDesignMenu(m){cpuDesignMenu=m;['body','threads','cores'].forEach(x=>{$('#cpuMenu'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('hidden',x!==m);document.querySelector('[data-cpu-menu="'+x+'"]')?.classList.toggle('active',x===m);});}
-function renderCpuDesigner(){const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;const opts=[['core','simple_1_core',cpuDesignCore,'Simple 1 Core','4 Score · $45/unit'],['threads','simple_4_threads',cpuDesignThreads,'Simple 4 Threads','4 Score · $25/unit'],['silicon','silicon_body',cpuDesignSilicon,'Silicon Body','$350/unit'],['six_threads','six_threads',cpuDesignSixThreads,'6 Threads','6 Score · $150/unit'],['two_cores','two_cores',cpuDesignTwoCores,'2 Cores','8 Score · $175/unit']];opts.forEach(([id,key,on,name,desc])=>{const el=$('#cpuOption_'+id);if(!el)return;const ok=hasCpuResearch(key);el.classList.toggle('locked',!ok);el.classList.toggle('selected',on);el.innerHTML='<span class="cpu-component-icon">◈</span><span><strong>'+name+'</strong><small>'+(ok?desc:'Research required')+'</small></span><button class="zoom-btn" type="button" '+(ok?'data-cpu-toggle="'+id+'"':'data-research-goto')+'>'+(ok?(on?'Selected':'Add'):'Research')+'</button>';});const cost=(cpuDesignCore?45:0)+(cpuDesignThreads?25:0)+(cpuDesignSilicon?350:0)+(cpuDesignSixThreads?150:0)+(cpuDesignTwoCores?175:0),score=(cpuDesignCore?4:0)+(cpuDesignThreads?4:0)+(cpuDesignSilicon?6:0)+(cpuDesignSixThreads?6:0)+(cpuDesignTwoCores?8:0),tier=score>=200?'U':score>=150?'X':score>=125?'S++':score>=100?'S+':score>=75?'S':score>=50?'A':score>=36?'B':score>=24?'C':score>=10?'D':score>=6?'E':'F',qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1)));$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#cpuDesignScore').textContent=score+' · '+tier;$('#finishCpuBtn').textContent='Manufacture '+qty+' · '+money(cost*qty);$('#finishCpuBtn').disabled=false;const model=$('#cpuModel');if(model)model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';}
+function renderCpuDesigner(){const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;const opts=[['core','simple_1_core',cpuDesignCore,'1 Core','4 Score · $45/unit'],['threads','simple_4_threads',cpuDesignThreads,'4 Threads','4 Score · $40/unit'],['silicon','silicon_body',cpuDesignSilicon,'Silicon Body','$150/unit'],['six_threads','six_threads',cpuDesignSixThreads,'6 Threads','6 Score · $60/unit'],['two_cores','two_cores',cpuDesignTwoCores,'2 Cores','8 Score · $190/unit']];opts.forEach(([id,key,on,name,desc])=>{const el=$('#cpuOption_'+id);if(!el)return;const ok=hasCpuResearch(key);el.classList.toggle('locked',!ok);el.classList.toggle('selected',on);el.innerHTML='<span class="cpu-component-icon">◈</span><span><strong>'+name+'</strong><small>'+(ok?desc:'Research required')+'</small></span><button class="zoom-btn" type="button" '+(ok?'data-cpu-toggle="'+id+'"':'data-research-goto')+'>'+(ok?(on?'Selected':'Add'):'Research')+'</button>';});const cost=(cpuDesignTwoCores?190:(cpuDesignCore?45:0))+(cpuDesignSixThreads?60:(cpuDesignThreads?40:0))+(cpuDesignSilicon?150:0),score=(cpuDesignCore?4:0)+(cpuDesignThreads?4:0)+(cpuDesignSilicon?6:0)+(cpuDesignSixThreads?6:0)+(cpuDesignTwoCores?8:0),tier=score>=200?'U':score>=150?'X':score>=125?'S++':score>=100?'S+':score>=75?'S':score>=50?'A':score>=36?'B':score>=24?'C':score>=10?'D':score>=6?'E':'F',qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1)));$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#cpuDesignScore').textContent=score+' · '+tier;$('#finishCpuBtn').textContent='Manufacture '+qty+' · '+money(cost*qty);$('#finishCpuBtn').disabled=false;const model=$('#cpuModel');if(model)model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';}
 async function finishCpuDesign(){if(!currentCompany||!currentUser||!sb)return;const name=($('#cpuProductName')?.value||'').trim(),price=Number($('#cpuProductPrice')?.value||0),qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1))),msg=$('#cpuDesignMessage'),btn=$('#finishCpuBtn');if(name.length<2||name.length>48){if(msg)msg.textContent='Name must be 2–48 characters.';return;}if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}if(btn){btn.disabled=true;btn.textContent='Manufacturing...';}const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty});if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}selectedCompanyProductId=data.id;cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=false;await loadCompanyResearchAndProducts();renderCompanyDashboard();switchCompanyDashboardTab('products');renderCompanyProducts();if(typeof loadProfile==='function')await loadProfile();toast(qty+' CPUs manufactured and added to stock!');if(btn)btn.disabled=false;}
 function renderCompanyProducts(){
  const list=$('#companyProductList');if(!list)return;if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
@@ -5163,6 +5169,16 @@ async function sendAdminCommand(action, targetUserId, msg = '') {
     return false;
   }
   const ts = Date.now();
+  let isGrindTestTarget = false;
+  if (action === 'reset') {
+    const { data: targetProfile, error: targetLookupError } = await sb.from('profiles').select('username').eq('id', targetUserId).maybeSingle();
+    if (targetLookupError) { toast('Could not verify target account: ' + targetLookupError.message); return false; }
+    isGrindTestTarget = String(targetProfile?.username || '').toLowerCase() === 'grind_test';
+    if (isGrindTestTarget) {
+      const { error: resetError } = await sb.rpc('reset_grind_test_account');
+      if (resetError) { toast('Grind_Test reset failed: ' + resetError.message); return false; }
+    }
+  }
   const payload = { action, target: targetUserId, ts, msg: String(msg || '').trim() };
   const { error } = await sb.from('premium_requests').insert({
     user_id: currentUser.id,
@@ -5174,7 +5190,7 @@ async function sendAdminCommand(action, targetUserId, msg = '') {
     return false;
   }
 
-  if (action === 'reset') {
+  if (action === 'reset' && !isGrindTestTarget) {
     try {
       await sb.from('premium_requests')
         .update({ status: 'denied' })
