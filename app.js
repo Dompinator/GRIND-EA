@@ -2060,6 +2060,7 @@ $('#companyCreateForm')?.addEventListener('submit', async e => {
     return;
   }
   currentCompany = data; companyLoaded = true; pendingCompanyLogo = '';
+  companyResearchRows = []; companyProducts = []; selectedCompanyProductId = null;
   $('#companyCreateForm')?.reset();
   if ($('#companyLogoPreview')) $('#companyLogoPreview').textContent = '＋';
   playSound('upload'); toast('Your company has been created!');
@@ -2154,6 +2155,7 @@ $('#companyDeleteBtn')?.addEventListener('click', async () => {
     return;
   }
   currentCompany = null; companyLoaded = true;
+  companyResearchRows = []; companyProducts = []; selectedCompanyProductId = null;
   toast('Company deleted.');
   renderCompanyDashboard();
 });
