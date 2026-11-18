@@ -6955,7 +6955,7 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .company-dashboard-logo { width:76px; height:76px; flex:0 0 76px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:18px; background:#291d3b; font-size:30px; }
 .company-identity h3 { margin:4px 0; font-size:25px; overflow-wrap:anywhere; }
 .company-identity p { margin:0; overflow-wrap:anywhere; }
-.company-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+.company-stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px; }
 .company-stat-card { padding:18px; background:var(--panel); border:1px solid var(--line); border-radius:15px; display:grid; gap:8px; min-width:0; }
 .company-stat-card span { color:var(--muted); font-size:12px; }
 .company-stat-card strong { font-size:24px; overflow-wrap:anywhere; }
