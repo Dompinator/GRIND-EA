@@ -320,6 +320,7 @@
 
         <!-- COMPANY -->
         <section id="page-company" class="page hidden">
+          <div id="companyIncomingTransfers" class="company-incoming-transfers hidden"></div>
           <div id="companyOnboarding" class="company-onboarding">
             <div class="company-welcome-orb">▣</div>
             <div class="eyebrow purple-text">YOUR BUSINESS STARTS HERE</div>
@@ -370,19 +371,56 @@
               </div>
               <span class="company-cpu-chip">CPU MANUFACTURER</span>
             </div>
-            <div class="company-stat-grid">
-              <article class="company-stat-card"><span>Total money made</span><strong id="companyRevenue">$0.00</strong><small>Lifetime company revenue</small></article>
-              <article class="company-stat-card"><span>Company value change</span><strong id="companyChange">0.00%</strong><small>Company performance</small></article>
-              <article class="company-stat-card"><span>Total costs</span><strong id="companyCosts">$0.00</strong><small>Lifetime company costs</small></article>
-              <article class="company-stat-card"><span>Products created</span><strong id="companyProductCount">0</strong><small>Across all product lines</small></article>
+            <div class="company-dashboard-tabs">
+              <button type="button" class="company-dashboard-tab active" data-company-tab="money">Money</button>
+              <button type="button" class="company-dashboard-tab" data-company-tab="products">Products</button>
+              <button type="button" class="company-dashboard-tab" data-company-tab="settings">Settings</button>
             </div>
-            <div class="company-dashboard-section">
-              <div class="company-section-heading"><div><div class="eyebrow purple-text">PRODUCT LINE</div><h4>Your manufacturing</h4></div><span class="company-cpu-chip">CPU</span></div>
-              <p class="muted">Your company currently specializes in CPUs. More product lines can be unlocked through future company upgrades.</p>
+            <div class="company-dashboard-panel" id="companyPanelMoney">
+              <div class="company-stat-grid">
+                <article class="company-stat-card"><span>Total money made</span><strong id="companyRevenue">$0.00</strong><small>Lifetime company revenue</small></article>
+                <article class="company-stat-card"><span>Company value change</span><strong id="companyChange">0.00%</strong><small>Company performance</small></article>
+                <article class="company-stat-card"><span>Total costs</span><strong id="companyCosts">$0.00</strong><small>Lifetime company costs</small></article>
+                <article class="company-stat-card"><span>Products created</span><strong id="companyProductCount">0</strong><small>Across all product lines</small></article>
+              </div>
+              <div class="company-dashboard-section">
+                <div class="company-section-heading"><div><div class="eyebrow purple-text">FINANCIAL OVERVIEW</div><h4>Company money</h4></div></div>
+                <p class="muted">Your company's revenue, costs and performance will be tracked here as products are designed and sold.</p>
+              </div>
             </div>
-            <div class="company-dashboard-section">
-              <div class="company-section-heading"><div><div class="eyebrow purple-text">CATALOGUE</div><h4>All products</h4></div><span class="company-count-chip">0 PRODUCTS</span></div>
-              <div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Products you create will appear here.</p></div>
+            <div class="company-dashboard-panel hidden" id="companyPanelProducts">
+              <div class="company-dashboard-section">
+                <div class="company-section-heading"><div><div class="eyebrow purple-text">CATALOGUE</div><h4>All products</h4></div><span class="company-count-chip">0 PRODUCTS</span></div>
+                <div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Products you create will appear here.</p></div>
+              </div>
+            </div>
+            <div class="company-dashboard-panel hidden" id="companyPanelSettings">
+              <div class="company-dashboard-section">
+                <div class="eyebrow purple-text">COMPANY PROFILE</div><h4>Settings</h4>
+                <form id="companySettingsForm" class="company-settings-form">
+                  <label>Company name<input id="companySettingsName" maxlength="40" minlength="2" required></label>
+                  <label>Description<textarea id="companySettingsDescription" rows="3" maxlength="500"></textarea></label>
+                  <div class="company-logo-upload-row">
+                    <div class="company-logo-preview" id="companySettingsLogoPreview">＋</div>
+                    <div><label class="upload-link" for="companySettingsLogoInput">Change company logo</label><input id="companySettingsLogoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden><p class="muted tiny">PNG, JPG or WEBP</p></div>
+                  </div>
+                  <button type="submit" class="primary-btn" id="companySaveSettingsBtn">Save changes</button>
+                  <p id="companySettingsMessage" class="form-message" aria-live="polite"></p>
+                </form>
+              </div>
+              <div class="company-danger-zone">
+                <div class="eyebrow danger-text">DANGER ZONE</div><h4>Company ownership & deletion</h4>
+                <div class="company-danger-action">
+                  <div><strong>Transfer company</strong><p class="muted tiny">Send ownership to another GRIND user. They must accept before ownership changes.</p></div>
+                  <form id="companyTransferForm" class="company-transfer-form"><input id="companyTransferUsername" type="text" maxlength="32" required placeholder="Recipient username"><button class="zoom-btn" id="companyTransferBtn" type="submit">Send request</button></form>
+                  <p id="companyTransferMessage" class="form-message" aria-live="polite"></p>
+                  <div id="companyOutgoingTransfer" class="company-transfer-status hidden"></div>
+                </div>
+                <div class="company-danger-action company-delete-action">
+                  <div><strong>Delete company</strong><p class="muted tiny">Permanently delete this company. This cannot be undone.</p></div>
+                  <button type="button" class="company-delete-btn" id="companyDeleteBtn">Delete company</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
