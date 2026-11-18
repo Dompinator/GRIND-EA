@@ -6914,3 +6914,14 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 
 
 
+
+
+/* Feed type switch: Coin / Product */
+.feed-type-switch { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2, #1e1830); flex-shrink: 0; }
+.feed-type-btn { border: 0; border-radius: 8px; padding: 7px 13px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.feed-type-btn:hover { color: var(--text); }
+.feed-type-btn.active { background: var(--purple); color: #fff; }
+.product-feed-placeholder { min-height: 220px; padding: 48px 20px; border: 1px dashed var(--line); border-radius: 18px; text-align: center; background: var(--panel); }
+.product-feed-placeholder h3 { margin: 12px 0 6px; }
+.product-feed-placeholder p { margin: 0; }
+@media (max-width: 620px) { .feed-type-switch { margin-left: 0; } .feed-type-btn { padding: 6px 9px; font-size: 12px; } }
