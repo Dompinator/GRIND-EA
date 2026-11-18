@@ -1042,7 +1042,7 @@ async function applyAdminActionsForCurrentUser() {
     if (latestResetTs > appliedResetTs) {
       const isGrindTestAccount = String(currentUser.username || '').toLowerCase() === 'grind_test';
       // Grind_Test keeps its existing balance during resets; normal accounts restart at $15.
-      const resetCash = isGrindTestAccount ? currentUser.cash : 15;
+      const resetCash = isGrindTestAccount ? '9999999999999999' : 15;
       const keepAdminPremium = isDompinator();
       if (!isGrindTestAccount) {
         try {
