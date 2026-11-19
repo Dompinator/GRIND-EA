@@ -10,10 +10,11 @@
   const DOCK_ID = 'cpuViewportDock';
 
   const DEFAULT_STATE = {
-    body: 'gray', // 'gray' | 'silicon' | 'carbon'
-    cores: 0,     // 0 | 1 | 2 | 4
-    threads: 0,   // 0 | 4 | 6 | 8
-    cooling: 0,   // 0 | 1 | 2
+    body: 'gray', // gray | silicon | carbon | titanium
+    cores: 0,     // 0 | 1 | 2 | 4 | 8 | 16 | 32
+    threads: 0,   // 0 | 4 | 6 | 8 | 12 | 18
+    cooling: 0,   // 0 | 1 | 2 | 3
+    graphics: '',
     name: '',
     companyName: '',
     score: 0,
@@ -187,6 +188,12 @@
       traceColor = 'rgba(229, 184, 92, 0.48)';
       goldColor = '#f2c864';
       padRing = 'rgba(242, 200, 100, 0.85)';
+    } else if (bodyType === 'titanium') {
+      bgA = '#555d6b';
+      bgB = '#252c38';
+      traceColor = 'rgba(160, 210, 255, 0.58)';
+      goldColor = '#e6edf5';
+      padRing = 'rgba(195, 220, 245, 0.88)';
     }
 
     const grad = ctx.createLinearGradient(0, 0, size, size);
@@ -373,6 +380,12 @@
       inkPrimary = '#f3e8ff';
       inkMuted = 'rgba(242, 200, 100, 0.82)';
       accent = '#eab308';
+    } else if (body === 'titanium') {
+      baseTop = '#d9e0e8';
+      baseBot = '#778596';
+      inkPrimary = '#17212e';
+      inkMuted = 'rgba(23, 33, 46, 0.72)';
+      accent = '#38bdf8';
     }
 
     const grad = ctx.createLinearGradient(0, 0, size, size);
@@ -483,6 +496,21 @@
     ctx.font = '700 26px "JetBrains Mono", monospace';
     ctx.fillText(specTxt, size / 2, 842);
 
+    if (state.graphics) {
+      ctx.save();
+      ctx.fillStyle = '#111827';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.roundRect(720, 72, 238, 72, 16);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.textAlign = 'center';
+      ctx.font = '800 26px "JetBrains Mono", monospace';
+      ctx.fillText('INTEGRATED GRAPHICS', 839, 118);
+      ctx.restore();
+    }
+
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
@@ -558,7 +586,15 @@
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '700 16px "JetBrains Mono", monospace';
-    ctx.fillText(state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
+    ctx.fillText(state.cooling >= 3 ? 'VAPOR CHAMBER' : state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
+    if (state.graphics) {
+      ctx.fillStyle = '#082f49';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect(322, 22, 168, 32, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe'; ctx.font = '700 13px "JetBrains Mono", monospace';
+      ctx.fillText('INTEGRATED GRAPHICS', 406, 43);
+    }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -757,6 +793,7 @@
     textures.pcbGray = createPcbTextures('gray');
     textures.pcbSilicon = createPcbTextures('silicon');
     textures.pcbCarbon = createPcbTextures('carbon');
+    textures.pcbTitanium = createPcbTextures('titanium');
     textures.siliconDie = createSiliconDieTexture();
     textures.ihs = createIhsEtchTexture(activeState);
     textures.coolingLogo = createCoolingCapLogoTexture(activeState);
@@ -1055,15 +1092,13 @@
   function rebuildSiliconCores(coreCount) {
     clearGroupDynamic(diesGroup);
 
-    // Central I/O Controller Die (always anchors the architecture)
-    const iodGeom = createRoundedRectGeometry(0.46, 0.38, 0.045, 0.03, 0.008);
+    const iodGeom = createRoundedRectGeometry(0.38, 0.30, 0.04, 0.025, 0.006);
     const iodMesh = new THREE.Mesh(iodGeom, mats.iodSilicon);
     iodMesh.castShadow = !isSoftwareGl;
-    iodMesh.position.set(0, 0.025, 0.24);
+    iodMesh.position.set(0, 0.025, coreCount >= 32 ? 0.78 : 0.48);
     diesGroup.add(iodMesh);
 
-    if (coreCount === 0) {
-      // Minimal baseline diagnostic bridge chiplet
+    if (coreCount <= 0) {
       const miniGeom = createRoundedRectGeometry(0.34, 0.24, 0.036, 0.02, 0.006);
       const miniMesh = new THREE.Mesh(miniGeom, mats.dieSilicon);
       miniMesh.position.set(0, 0.02, -0.22);
@@ -1071,41 +1106,29 @@
       return;
     }
 
-    let chipletCoords = [];
-    let dieW = 0.54;
-    let dieH = 0.36;
-    if (coreCount === 1) {
-      chipletCoords = [[0, -0.24]];
-      dieW = 0.72;
-      dieH = 0.42;
-    } else if (coreCount === 2) {
-      chipletCoords = [[-0.36, -0.25], [0.36, -0.25]];
-      dieW = 0.56;
-      dieH = 0.38;
-    } else {
-      chipletCoords = [
-        [-0.38, -0.38], [0.38, -0.38],
-        [-0.38, 0.02], [0.38, 0.02]
-      ];
-      dieW = 0.48;
-      dieH = 0.30;
-      iodMesh.position.set(0, 0.025, 0.44);
-    }
+    const cols = coreCount <= 1 ? 1 : coreCount <= 4 ? 2 : coreCount <= 8 ? 4 : 8;
+    const rows = Math.ceil(coreCount / cols);
+    const spacingX = coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.72 / Math.max(1, cols - 1);
+    const spacingZ = coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.40;
+    const dieW = coreCount >= 32 ? 0.15 : coreCount >= 16 ? 0.19 : coreCount >= 8 ? 0.25 : coreCount >= 4 ? 0.42 : coreCount === 2 ? 0.54 : 0.68;
+    const dieH = coreCount >= 32 ? 0.14 : coreCount >= 16 ? 0.17 : coreCount >= 8 ? 0.22 : coreCount >= 4 ? 0.28 : coreCount === 2 ? 0.34 : 0.40;
 
-    const chipGeom = createRoundedRectGeometry(dieW, dieH, 0.055, 0.025, 0.008);
-    const frameGeom = createRoundedRectGeometry(dieW + 0.05, dieH + 0.05, 0.015, 0.03, 0.004);
-
-    chipletCoords.forEach(([cx, cz]) => {
+    const chipGeom = createRoundedRectGeometry(dieW, dieH, 0.035, 0.02, 0.005);
+    const frameGeom = createRoundedRectGeometry(dieW + 0.035, dieH + 0.035, 0.012, 0.025, 0.003);
+    for (let i = 0; i < coreCount; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = (col - (Math.min(cols, coreCount) - 1) / 2) * spacingX;
+      const cz = -0.34 + row * spacingZ;
       const collar = new THREE.Mesh(frameGeom, mats.copper);
       collar.position.set(cx, 0.008, cz);
       diesGroup.add(collar);
-
       const chip = new THREE.Mesh(chipGeom, mats.dieSilicon);
       chip.castShadow = !isSoftwareGl;
       chip.receiveShadow = true;
       chip.position.set(cx, 0.034, cz);
       diesGroup.add(chip);
-    });
+    }
   }
 
   function rebuildThreadInterconnects(threadCount, coreCount) {
@@ -1113,7 +1136,7 @@
     threadPipeMaterials.length = 0;
     if (threadCount <= 0) return;
 
-    const lanes = Math.min(8, Math.max(4, threadCount));
+    const lanes = Math.min(18, Math.max(4, threadCount));
     const zIod = coreCount >= 4 ? 0.32 : 0.14;
     const zTarget = coreCount >= 4 ? -0.34 : -0.18;
 
@@ -1157,6 +1180,7 @@
     if (coolingLevel <= 0) return;
 
     const isGreat = coolingLevel >= 2;
+    const isVapor = coolingLevel >= 3;
 
     // 1. Machined retention bracket & 4 corner hex screws
     const bracketGeom = createRoundedRectGeometry(1.78, 1.78, 0.022, 0.09, 0.006);
@@ -1179,7 +1203,7 @@
     coolingGroup.add(bolts);
 
     // 2. Copper Vapor Coldplate Collar
-    const blockGeom = createRoundedRectGeometry(isGreat ? 1.18 : 0.96, isGreat ? 1.18 : 0.96, isGreat ? 0.11 : 0.055, 0.06, 0.010);
+    const blockGeom = createRoundedRectGeometry(isVapor ? 1.38 : isGreat ? 1.18 : 0.96, isVapor ? 1.38 : isGreat ? 1.18 : 0.96, isVapor ? 0.14 : isGreat ? 0.11 : 0.055, 0.06, 0.010);
     const blockMesh = new THREE.Mesh(blockGeom, mats.copper);
     blockMesh.castShadow = !isSoftwareGl;
     blockMesh.position.y = isGreat ? 0.065 : 0.038;
@@ -1358,17 +1382,13 @@
   function applyBodyMaterialFinish(bodyType) {
     if (!mats.pcb || !mats.ihsTop || !mats.ihsFlange || !mats.pinsGold) return;
 
-    const texSet = bodyType === 'carbon'
-      ? textures.pcbCarbon
-      : bodyType === 'silicon'
-        ? textures.pcbSilicon
-        : textures.pcbGray;
+    const texSet = bodyType === 'titanium' ? textures.pcbTitanium : bodyType === 'carbon' ? textures.pcbCarbon : bodyType === 'silicon' ? textures.pcbSilicon : textures.pcbGray;
 
     mats.pcb.map = texSet.map;
     mats.pcb.bumpMap = texSet.bumpMap;
-    mats.pcb.roughness = bodyType === 'silicon' ? 0.22 : bodyType === 'carbon' ? 0.34 : 0.60;
-    mats.pcb.metalness = bodyType === 'silicon' ? 0.55 : bodyType === 'carbon' ? 0.25 : 0.10;
-    mats.pcb.clearcoat = bodyType === 'silicon' ? 0.85 : bodyType === 'carbon' ? 0.42 : 0.08;
+    mats.pcb.roughness = bodyType === 'titanium' ? 0.24 : bodyType === 'silicon' ? 0.22 : bodyType === 'carbon' ? 0.34 : 0.60;
+    mats.pcb.metalness = bodyType === 'titanium' ? 0.88 : bodyType === 'silicon' ? 0.55 : bodyType === 'carbon' ? 0.25 : 0.10;
+    mats.pcb.clearcoat = bodyType === 'titanium' ? 0.72 : bodyType === 'silicon' ? 0.85 : bodyType === 'carbon' ? 0.42 : 0.08;
     mats.pcb.needsUpdate = true;
 
     if (bodyType === 'silicon') {
@@ -1380,6 +1400,15 @@
       mats.ihsFlange.color.setHex(0x9fc2de);
       mats.ihsFlange.metalness = 0.92;
       mats.ihsFlange.roughness = 0.18;
+    } else if (bodyType === 'titanium') {
+      mats.pinsGold.color.setHex(0xe6edf5);
+      mats.pinsGold.roughness = 0.12;
+      mats.ihsTop.metalness = 0.92;
+      mats.ihsTop.roughness = 0.14;
+      mats.ihsTop.clearcoat = 0.92;
+      mats.ihsFlange.color.setHex(0x8998aa);
+      mats.ihsFlange.metalness = 0.96;
+      mats.ihsFlange.roughness = 0.14;
     } else if (bodyType === 'carbon') {
       mats.pinsGold.color.setHex(0xf2c864);
       mats.pinsGold.roughness = 0.15;
@@ -1851,6 +1880,7 @@
       cores: Number(nextState.cores || 0),
       threads: Number(nextState.threads || 0),
       cooling: Number(nextState.cooling || 0),
+      graphics: String(nextState.graphics || ''),
       name: String(nextState.name ?? ''),
       companyName: String(nextState.companyName ?? ''),
       score: Number(nextState.score || 0),
@@ -1872,6 +1902,7 @@
       prev.companyName !== activeState.companyName ||
       prev.score !== activeState.score ||
       prev.tier !== activeState.tier ||
+      prev.graphics !== activeState.graphics ||
       prev.logoUrl !== activeState.logoUrl;
 
     const syncLid = (open) => {
@@ -1921,6 +1952,7 @@
           cores: Number(stateOverride.cores || 0),
           threads: Number(stateOverride.threads || 0),
           cooling: Number(stateOverride.cooling || 0),
+          graphics: String(stateOverride.graphics || ''),
           name: String(stateOverride.name ?? ''),
           companyName: String(stateOverride.companyName ?? ''),
           score: Number(stateOverride.score || 0),
@@ -1941,6 +1973,7 @@
       prevState.cores !== snapState.cores ||
       prevState.threads !== snapState.threads ||
       prevState.cooling !== snapState.cooling ||
+      prevState.graphics !== snapState.graphics ||
       prevState.name !== snapState.name ||
       prevState.companyName !== snapState.companyName ||
       prevState.score !== snapState.score ||
