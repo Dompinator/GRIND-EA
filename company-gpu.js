@@ -185,7 +185,7 @@ window.loadCompanyDashboard=async function(){
  if(currentCompany){await loadCompanyResearchAndProducts();if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();if(isGpu())mountGpuWorkspace();}
 };
 const oldRender=window.renderCompanyDashboard;
-window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
+window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){const badge=$('.company-cpu-chip');if(badge)badge.textContent=isGpu()?'GPU MANUFACTURER':'CPU MANUFACTURER';addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
 const oldShow=window.showPage;
 window.showPage=function(page){
  if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
