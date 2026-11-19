@@ -559,23 +559,21 @@
     ctx.roundRect(18, 18, S - 36, S - 36, 14);
     ctx.stroke();
 
-    // Draw the custom logo stamped Apple-style center-top on the CPU
+    // Draw the custom logo stamped Apple-style center & biggest on the CPU
     renderCompositeTo(offCtx, ART_SIZE);
-    const logoSize = S * 0.44;
+    const logoSize = S * 0.56;
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0,0,0,0.38)';
+    ctx.shadowBlur = 6;
     ctx.shadowOffsetY = 2;
-    ctx.drawImage(offscreen, (S - logoSize) / 2, S * 0.16, logoSize, logoSize);
+    ctx.drawImage(offscreen, (S - logoSize) / 2, S * 0.14, logoSize, logoSize);
     ctx.restore();
 
     // Crisp CPU etching underneath logo
-    ctx.fillStyle = previewCpuTone === 'carbon' ? 'rgba(248,250,252,0.86)' : 'rgba(18,24,38,0.82)';
-    ctx.font = '800 13px "Plus Jakarta Sans", system-ui, sans-serif';
+    ctx.fillStyle = previewCpuTone === 'carbon' ? 'rgba(248,250,252,0.88)' : 'rgba(18,24,38,0.84)';
+    ctx.font = '800 12px "Plus Jakarta Sans", system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('PROCESSOR SERIES', S / 2, S * 0.72);
-    ctx.font = '700 10px "JetBrains Mono", monospace';
-    ctx.fillText('PRINTED TOP EDITION', S / 2, S * 0.82);
+    ctx.fillText((currentCompanyMeta?.company_name || 'YOUR CPU NAME').slice(0, 18), S / 2, S * 0.80);
   }
 
   function syncInspectorControls() {

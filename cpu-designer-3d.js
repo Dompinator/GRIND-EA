@@ -14,7 +14,8 @@
     cores: 0,     // 0 | 1 | 2 | 4
     threads: 0,   // 0 | 4 | 6 | 8
     cooling: 0,   // 0 | 1 | 2
-    name: 'Baseline CPU',
+    name: '',
+    companyName: '',
     score: 0,
     tier: 'F',
     logoUrl: ''
@@ -419,7 +420,7 @@
       ctx.stroke();
     });
 
-    // Laser-etched markings + Apple-style Company Logo printed prominently on CPU top
+    // Logo centered in the middle & biggest, with the CPU name cleanly underneath
     const hasCustomLogo = Boolean(
       loadedLogoImg &&
       loadedLogoUrl === (state.logoUrl || '') &&
@@ -427,73 +428,60 @@
       loadedLogoImg.naturalWidth > 0
     );
 
+    const rawName = String(state.name || '').trim();
+    const rawCompany = String(state.companyName || '').trim();
+    const displayName = (rawName || rawCompany || 'CPU').slice(0, 24);
+    const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
+    const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
+    const specTxt = `${coreTxt}  ·  ${threadTxt}  ·  TIER ${state.tier || 'F'}`;
+
     ctx.textAlign = 'center';
     if (hasCustomLogo) {
-      const logoSize = 276;
+      const logoSize = 520;
       const lx = (size - logoSize) / 2;
-      const ly = 148;
+      const ly = 158;
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.shadowColor = body === 'carbon' ? 'rgba(0,0,0,0.65)' : 'rgba(15,23,42,0.28)';
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
+      ctx.shadowColor = body === 'carbon' ? 'rgba(0,0,0,0.7)' : 'rgba(15,23,42,0.32)';
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 5;
       ctx.drawImage(loadedLogoImg, lx, ly, logoSize, logoSize);
       ctx.restore();
-
-      const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 24);
-      ctx.fillStyle = inkPrimary;
-      const fontSize = safeName.length > 16 ? 58 : safeName.length > 11 ? 72 : 84;
-      ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
-      ctx.fillText(safeName, size / 2, 540);
-
-      const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
-      const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
-      ctx.fillStyle = inkMuted;
-      ctx.font = '700 34px "JetBrains Mono", monospace';
-      ctx.fillText(`${coreTxt}  ·  ${threadTxt}`, size / 2, 628);
-
-      const tierTxt = `TIER ${state.tier || 'F'}  ·  SCORE ${Number(state.score || 0)}`;
-      ctx.fillStyle = accent;
-      ctx.font = '800 32px "JetBrains Mono", monospace';
-      ctx.fillText(tierTxt, size / 2, 742);
-
-      ctx.fillStyle = inkMuted;
-      ctx.font = '600 22px "JetBrains Mono", monospace';
-      ctx.fillText('GRIND SEMICONDUCTOR · FAB EA-01', size / 2, 845);
     } else {
-      ctx.fillStyle = inkMuted;
-      ctx.font = '800 38px "Plus Jakarta Sans", system-ui, sans-serif';
-      ctx.fillText(
-        body === 'carbon' ? 'GRIND // CARBON EDITION' : body === 'silicon' ? 'GRIND // SILICON SERIES' : 'GRIND // ARCHITECTURE',
-        size / 2,
-        250
-      );
+      const mono = (rawCompany || displayName).replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '◈';
+      const cx = size / 2;
+      const cy = 414;
+      const r = 196;
+      ctx.save();
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
 
-      const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 24);
+      ctx.strokeStyle = inkMuted;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 22, 0, Math.PI * 2);
+      ctx.stroke();
+
       ctx.fillStyle = inkPrimary;
-      const fontSize = safeName.length > 16 ? 68 : safeName.length > 11 ? 84 : 98;
-      ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
-      ctx.fillText(safeName, size / 2, 470);
-
-      // Spec line
-      const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
-      const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
-      ctx.fillStyle = inkMuted;
-      ctx.font = '700 36px "JetBrains Mono", monospace';
-      ctx.fillText(`${coreTxt}  ·  ${threadTxt}`, size / 2, 575);
-
-      // Tier stamp box
-      const tierTxt = `TIER ${state.tier || 'F'}  ·  SCORE ${Number(state.score || 0)}`;
-      ctx.fillStyle = accent;
-      ctx.font = '800 34px "JetBrains Mono", monospace';
-      ctx.fillText(tierTxt, size / 2, 720);
-
-      // Bottom wafer serial micro-code
-      ctx.fillStyle = inkMuted;
-      ctx.font = '600 24px "JetBrains Mono", monospace';
-      ctx.fillText('GRIND SEMICONDUCTOR · FAB EA-01', size / 2, 845);
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 176px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.fillText(mono, cx, cy + 6);
+      ctx.restore();
+      ctx.textBaseline = 'alphabetic';
     }
+
+    ctx.fillStyle = inkPrimary;
+    const fontSize = displayName.length > 18 ? 42 : displayName.length > 13 ? 50 : 58;
+    ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
+    ctx.fillText(displayName, size / 2, 774);
+
+    ctx.fillStyle = inkMuted;
+    ctx.font = '700 26px "JetBrains Mono", monospace';
+    ctx.fillText(specTxt, size / 2, 842);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -532,31 +520,45 @@
       loadedLogoImg.naturalWidth > 0
     );
 
+    const rawName = String(state.name || '').trim();
+    const rawCompany = String(state.companyName || '').trim();
+    const displayName = (rawName || rawCompany || 'CPU').slice(0, 22);
+
     if (hasCustomLogo) {
-      const ls = 240;
+      const ls = 312;
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.shadowColor = 'rgba(0,0,0,0.55)';
-      ctx.shadowBlur = 10;
-      ctx.drawImage(loadedLogoImg, (size - ls) / 2, 74, ls, ls);
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 12;
+      ctx.drawImage(loadedLogoImg, (size - ls) / 2, 52, ls, ls);
       ctx.restore();
     } else {
-      ctx.fillStyle = 'rgba(226,232,240,0.82)';
-      ctx.font = '900 44px "Plus Jakarta Sans", system-ui, sans-serif';
+      const mono = (rawCompany || displayName).replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '◈';
+      ctx.save();
+      ctx.strokeStyle = 'rgba(168,85,247,0.8)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(size / 2, 204, 108, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#f8fafc';
       ctx.textAlign = 'center';
-      ctx.fillText('GRIND', size / 2, 225);
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 102px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.fillText(mono, size / 2, 208);
+      ctx.restore();
     }
 
-    const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 20);
     ctx.fillStyle = '#e2e8f0';
     ctx.textAlign = 'center';
-    ctx.font = '800 34px "Plus Jakarta Sans", system-ui, sans-serif';
-    ctx.fillText(safeName, size / 2, 395);
+    ctx.textBaseline = 'alphabetic';
+    const nameSize = displayName.length > 15 ? 24 : 28;
+    ctx.font = `800 ${nameSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
+    ctx.fillText(displayName, size / 2, 422);
 
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '700 20px "JetBrains Mono", monospace';
-    ctx.fillText(state.cooling >= 2 ? 'GREAT COOLING // CRYO LOOP' : 'BUILT-IN COOLING', size / 2, 442);
+    ctx.font = '700 16px "JetBrains Mono", monospace';
+    ctx.fillText(state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -1849,7 +1851,8 @@
       cores: Number(nextState.cores || 0),
       threads: Number(nextState.threads || 0),
       cooling: Number(nextState.cooling || 0),
-      name: String(nextState.name || 'Baseline CPU'),
+      name: String(nextState.name ?? ''),
+      companyName: String(nextState.companyName ?? ''),
       score: Number(nextState.score || 0),
       tier: String(nextState.tier || 'F'),
       logoUrl: String(nextState.logoUrl || '')
@@ -1866,6 +1869,7 @@
     const bodyOrLabelChanged =
       prev.body !== activeState.body ||
       prev.name !== activeState.name ||
+      prev.companyName !== activeState.companyName ||
       prev.score !== activeState.score ||
       prev.tier !== activeState.tier ||
       prev.logoUrl !== activeState.logoUrl;
@@ -1917,7 +1921,8 @@
           cores: Number(stateOverride.cores || 0),
           threads: Number(stateOverride.threads || 0),
           cooling: Number(stateOverride.cooling || 0),
-          name: String(stateOverride.name || 'Baseline CPU'),
+          name: String(stateOverride.name ?? ''),
+          companyName: String(stateOverride.companyName ?? ''),
           score: Number(stateOverride.score || 0),
           tier: String(stateOverride.tier || 'F'),
           logoUrl: String(stateOverride.logoUrl || '')
@@ -1937,6 +1942,7 @@
       prevState.threads !== snapState.threads ||
       prevState.cooling !== snapState.cooling ||
       prevState.name !== snapState.name ||
+      prevState.companyName !== snapState.companyName ||
       prevState.score !== snapState.score ||
       prevState.tier !== snapState.tier ||
       prevState.logoUrl !== snapState.logoUrl;
