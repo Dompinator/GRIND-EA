@@ -105,7 +105,8 @@ function mountGpuResearch(){
   wrap.innerHTML='<div class="ea-research-subtabs"><button type="button" data-ea-research="GPU" class="active">GPU</button><button type="button" data-ea-research="CHIP">CHIP</button></div><div id="eaGpuResearchTree" class="research-tree"><div id="eaGpuResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div><div id="eaChipResearchTree" class="research-tree hidden"><div id="eaChipResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div><p id="eaResearchMessage" class="form-message"></p>';
   const tree=$('#cpuResearchTree');section.insertBefore(wrap,tree||null);
   wrap.querySelectorAll('[data-ea-research]').forEach(b=>b.addEventListener('click',()=>setResearchGroup(b.dataset.eaResearch)));
-  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));\n  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));
+  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));
+  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));
  }
  wrap.classList.toggle('hidden',!isGpu());
  if(isGpu()){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');const description=section.querySelector('.company-section-heading p');if(eyebrow)eyebrow.textContent='GPU DEVELOPMENT';if(heading)heading.textContent='Research';if(description)description.textContent='Choose GPU or CHIP research, just like the CPU research section.';if(chip)chip.textContent='GPU / CHIP';renderResearchLists();}
@@ -148,10 +149,10 @@ function renderResearchLists(){
  const build=(group,worldId)=>{
   const world=$('#'+worldId);if(!world)return;
   const defs=GPU_RESEARCH.filter(r=>r.group===group);
-  const coords=group==='GPU'?[[560,130],[250,410],[560,410],[870,410],[410,720],[710,720]]:[[560,130],[300,390],[300,650],[300,910],[300,1170],[300,1430],[820,390],[820,650],[820,910],[820,1170]];
+  const coords=group==='GPU'?[[560,130],[280,410],[280,700],[560,410],[840,410],[840,700],[840,990]]:[[560,130],[300,390],[300,650],[300,910],[300,1170],[300,1430],[300,1690],[820,390],[820,650],[820,910],[820,1170]];
   const icons=group==='GPU'?['GPU','MB','CF','RGB','SF','MF']:['CHIP','1×','2×','3×','4×','6×','P1','P2','P3','P4'];
-  const width=1120,height=group==='GPU'?900:1650;
-  const edges=group==='GPU'?[[0,1],[0,2],[0,3],[0,4],[4,5]]:[[0,1],[1,2],[2,3],[3,4],[4,5],[0,6],[6,7],[7,8],[8,9]];
+  const width=1120,height=group==='GPU'?1250:1900;
+  const edges=group==='GPU'?[[0,1],[1,2],[0,3],[0,4],[4,5],[5,6]]:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[0,7],[7,8],[8,9],[9,10]];
   const paths=edges.map(([a,b])=>{const A=coords[a],B=coords[b],mid=(A[1]+B[1])/2;return '<path d="M'+A[0]+' '+(A[1]+65)+' L'+A[0]+' '+mid+' L'+B[0]+' '+mid+' L'+B[0]+' '+(B[1]-65)+'"/>';}).join('');
   world.style.width=width+'px';world.style.height=height+'px';
   world.innerHTML='<svg class="research-tree-lines" viewBox="0 0 '+width+' '+height+'">'+paths+'</svg>'+researchNodeMarkup({name:group==='GPU'?'Baseline GPU':'Baseline CHIP',cost:0,score:0,key:'baseline_'+group.toLowerCase()},560,130,group==='GPU'?'GPU':'CHIP',true,false)+defs.map((r,i)=>{const xy=coords[i+1],yes=researched(r.key),locked=!!(r.pre&&!researched(r.pre));return researchNodeMarkup(r,xy[0],xy[1],icons[i+1]||'UP',yes,locked);}).join('');
