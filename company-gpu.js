@@ -109,7 +109,7 @@ function mountGpuResearch(){
   wrap.querySelectorAll('[data-ea-research]').forEach(b=>b.addEventListener('click',()=>setResearchGroup(b.dataset.eaResearch)));
  }
  wrap.classList.toggle('hidden',!isGpu());
- if(isGpu()){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');if(eyebrow)eyebrow.textContent='GPU DEVELOPMENT';if(heading)heading.textContent='Research tree';if(chip)chip.textContent='GPU / CHIP RESEARCH';renderResearchLists();}
+ if(isGpu()){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');const description=section.querySelector('.company-section-heading p');if(eyebrow)eyebrow.textContent='GPU DEVELOPMENT';if(heading)heading.textContent='Research';if(description)description.textContent='Choose GPU or CHIP research, just like the CPU research section.';if(chip)chip.textContent='GPU / CHIP';renderResearchLists();}
 }
 function setResearchGroup(group){
  $('#eaGpuResearchList')?.classList.toggle('hidden',group!=='GPU');
@@ -129,7 +129,7 @@ function hideGpuWorkspace(){
  $('#eaGpuPanel')?.classList.add('hidden');
  $('#eaCompanyResearch')?.classList.add('hidden');
  $('#cpuResearchTree')?.classList.remove('hidden');
- const section=$('#companyPanelResearch .research-section');if(section){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');if(eyebrow)eyebrow.textContent='CPU DEVELOPMENT';if(heading)heading.textContent='Research tree';if(chip)chip.textContent='CPU RESEARCH';}
+ const section=$('#companyPanelResearch .research-section');if(section){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');if(eyebrow)eyebrow.textContent='CPU DEVELOPMENT';if(heading)heading.textContent='Research tree';const description=section.querySelector('.company-section-heading p');if(description)description.textContent='Unlock components before using them in your designs.';if(chip)chip.textContent='CPU RESEARCH';}
  $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
  restoreCpuProductsPage();
 }
@@ -260,7 +260,7 @@ window.showPage=function(page){
  oldShow?.(page);
  if(page==='company')renderChooser();
  if(page==='company-design'&&isGpu()){
-  mountGpuWorkspace();showGpuMain();setGpuTab(activeGpuView);
+  mountGpuWorkspace();showGpuMain();
  }
  if(page==='company-products'&&isGpu()){
   mountGpuProductsPage();renderGpuProducts();
