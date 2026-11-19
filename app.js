@@ -2079,6 +2079,7 @@ function buildCpuThumbSig(spec) {
     Number(spec?.cores || 0),
     Number(spec?.threads || 0),
     Number(spec?.cooling || 0),
+    String(spec?.graphics || ''),
     String(spec?.name || ''),
     String(spec?.companyName || ''),
     Number(spec?.score || 0),
@@ -2341,7 +2342,7 @@ async function loadPublishedProductFeed(){
  const grid=$('#publishedProductFeed');if(!grid||!sb)return;grid.innerHTML='<div class="muted">Loading products...</div>';
  let res=await sb.from('product_company_products').select('*,product_companies(company_name,logo_data_url)').eq('status','published').order('created_at',{ascending:false}).limit(100);
  if(res.error){
-  res=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,cpu_score,cpu_tier,stock,thread_count,core_count,product_companies(company_name,logo_data_url)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+  res=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,cpu_score,cpu_tier,stock,thread_count,core_count,body_type,cooling_type,graphics_type,carbon_fiber_body,silicon_body,product_value,production_cost,product_companies(company_name,logo_data_url)').eq('status','published').order('created_at',{ascending:false}).limit(100);
  }
  const {data,error}=res;
  if(error){grid.innerHTML='<div class="empty-state"><h3>Could not load products</h3><p class="muted">'+escapeHtml(error.message)+'</p></div>';return;}
