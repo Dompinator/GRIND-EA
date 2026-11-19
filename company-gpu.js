@@ -55,7 +55,7 @@ async function selectCompany(id){
  await loadCompanyResearchAndProducts();
  if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();
  renderChooser();
- if(isGpu()){mountGpuWorkspace();mountGpuResearch();renderGpuProducts();}else{hideGpuWorkspace();}
+ if(isGpu()){mountGpuWorkspace();mountGpuResearch();renderGpuProducts();showGpuMain();}else{hideGpuWorkspace();}
 
 }
 async function createCompany(e){
@@ -74,12 +74,12 @@ function addBackButton(){
  dash.prepend(b);
 }
 function mountGpuWorkspace(){
- if(!isGpu())return;
+ if(!isGpu())return;$('#page-company-design #cpuDesigner')?.classList.add('hidden');$('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
  const dash=$('#page-company-design');if(!dash)return;
  let panel=$('#eaGpuPanel');
  if(!panel){
   panel=document.createElement('section');panel.id='eaGpuPanel';panel.className='company-dashboard-section ea-gpu-panel';
-  panel.innerHTML='<div class="ea-gpu-tabs"><button data-gpu-tab="design" class="active">GPU</button><button data-gpu-tab="chips">CHIP</button></div><div id="eaGpuDesign" class="ea-gpu-view"><div class="ea-gpu-layout"><div class="ea-gpu-preview"><div class="ea-gpu-label">LIVE GRAPHICS CARD PREVIEW <small>Drag fans to reposition</small></div><canvas id="eaGpuCanvas" width="900" height="480"></canvas><div id="eaGpuCost" class="ea-gpu-cost"></div></div><div class="ea-gpu-controls"><label>GPU name<input id="eaGpuName" maxlength="48" value="New Graphics Card"></label><label>Saved chip<select id="eaGpuChipSelect"><option value="">Loading chips...</option></select></label><label>Length <input id="eaGpuLength" type="range" min="180" max="420" value="300"></label><label>Width <input id="eaGpuWidth" type="range" min="90" max="180" value="125"></label><label>Fan type<select id="eaGpuFanType"><option value="gpu_small_fans">Small Fans</option><option value="gpu_medium_fans">Medium Fans</option><option value="gpu_smart_fans">Smart Fans</option></select></label><div class="ea-fan-row"><span>Fans: <b id="eaGpuFanCount">2</b></span><button id="eaGpuRemoveFan" type="button">−</button><button id="eaGpuAddFan" type="button">＋ Add fan</button></div><label>Body type<select id="eaGpuBody"><option value="plastic">Plastic · Free</option><option value="metallic">Metallic</option><option value="carbon">Carbon</option></select></label><label>Shroud shape<select id="eaGpuShroud"><option value="rounded">Rounded</option><option value="angular">Angular</option><option value="compact">Compact</option></select></label><label class="ea-check"><input type="checkbox" id="eaGpuBackplate" checked> Backplate</label><label>Branding text<input id="eaGpuBrand" maxlength="20" value="GRIND"></label><label>Brand logo<input type="file" id="eaGpuLogo" accept="image/png,image/jpeg,image/webp"></label><label class="ea-check"><input type="checkbox" id="eaGpuRgb"> RGB lighting</label><label>Listing price<input id="eaGpuPrice" type="number" min="1" value="1200"></label><button class="primary-btn" id="eaGpuSave" type="button">Save as draft</button><p id="eaGpuMessage" class="form-message"></p></div></div></div><div id="eaGpuChips" class="ea-gpu-view hidden"><div class="ea-chip-layout"><div><h4>GPU Chip Designer</h4><p class="muted">Simple silver package. Only the chip name changes visually.</p><div class="ea-chip-preview"><span id="eaChipPreviewName">NOVA</span></div></div><div class="ea-gpu-controls"><label>Chip name<input id="eaChipName" maxlength="40" value="Nova GPU Chip"></label><label>Speed<select id="eaChipSpeed"></select></label><label>Power<select id="eaChipPower"></select></label><div class="ea-vram"><b>VRAM</b><small>Reserved section. Research upgrades will be added later.</small></div><button class="primary-btn" id="eaSaveChip" type="button">Save chip</button><p id="eaChipMessage" class="form-message"></p></div></div><div id="eaSavedChips" class="ea-saved-chips"></div></div>';
+  panel.innerHTML='<div class="ea-gpu-tabs"><button data-gpu-tab="design" class="active">GPU</button><button data-gpu-tab="chips">CHIP</button></div><div id="eaGpuDesign" class="ea-gpu-view"><div class="ea-gpu-layout"><div class="ea-gpu-preview"><div class="ea-gpu-label">LIVE GRAPHICS CARD PREVIEW <small>Drag fans to reposition</small></div><div id="eaGpu3DStage" class="ea-gpu-3d-stage"><div class="gpu-3d-loading">Loading realistic 3D GPU editor…</div></div><div id="eaGpuCost" class="ea-gpu-cost"></div></div><div class="ea-gpu-controls"><label>GPU name<input id="eaGpuName" maxlength="48" value="New Graphics Card"></label><label>Saved chip<select id="eaGpuChipSelect"><option value="">Loading chips...</option></select></label><label>Length <input id="eaGpuLength" type="range" min="180" max="420" value="300"></label><label>Width <input id="eaGpuWidth" type="range" min="90" max="180" value="125"></label><label>Fan type<select id="eaGpuFanType"><option value="gpu_small_fans">Small Fans</option><option value="gpu_medium_fans">Medium Fans</option><option value="gpu_smart_fans">Smart Fans</option></select></label><div class="ea-fan-row"><span>Fans: <b id="eaGpuFanCount">2</b></span><button id="eaGpuRemoveFan" type="button">−</button><button id="eaGpuAddFan" type="button">＋ Add fan</button></div><label>Body type<select id="eaGpuBody"><option value="plastic">Plastic · Free</option><option value="metallic">Metallic</option><option value="carbon">Carbon</option></select></label><label>Shroud shape<select id="eaGpuShroud"><option value="rounded">Rounded</option><option value="angular">Angular</option><option value="compact">Compact</option></select></label><label class="ea-check"><input type="checkbox" id="eaGpuBackplate" checked> Backplate</label><label>Branding text<input id="eaGpuBrand" maxlength="20" value="GRIND"></label><label>Brand logo<input type="file" id="eaGpuLogo" accept="image/png,image/jpeg,image/webp"></label><label class="ea-check"><input type="checkbox" id="eaGpuRgb"> RGB lighting</label><label>Listing price<input id="eaGpuPrice" type="number" min="1" value="1200"></label><button class="primary-btn" id="eaGpuSave" type="button">Save as draft</button><p id="eaGpuMessage" class="form-message"></p></div></div></div><div id="eaGpuChips" class="ea-gpu-view hidden"><div class="ea-chip-layout"><div><h4>GPU Chip Designer</h4><p class="muted">Simple silver package. Only the chip name changes visually.</p><div class="ea-chip-preview"><span id="eaChipPreviewName">NOVA</span></div></div><div class="ea-gpu-controls"><label>Chip name<input id="eaChipName" maxlength="40" value="Nova GPU Chip"></label><label>Speed<select id="eaChipSpeed"></select></label><label>Power<select id="eaChipPower"></select></label><div class="ea-vram"><b>VRAM</b><small>Reserved section. Research upgrades will be added later.</small></div><button class="primary-btn" id="eaSaveChip" type="button">Save chip</button><p id="eaChipMessage" class="form-message"></p></div></div><div id="eaSavedChips" class="ea-saved-chips"></div></div>';
   dash.appendChild(panel);
   panel.querySelectorAll('[data-gpu-tab]').forEach(b=>b.addEventListener('click',()=>setGpuTab(b.dataset.gpuTab)));
   document.querySelectorAll('[data-company-tab]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.companyTab!=='gpu')$('#eaGpuPanel')?.classList.add('hidden');}));
@@ -90,12 +90,10 @@ function mountGpuWorkspace(){
   $('#eaGpuFanType')?.addEventListener('change',()=>{});
   $('#eaChipName')?.addEventListener('input',()=>$('#eaChipPreviewName').textContent=$('#eaChipName').value.slice(0,14).toUpperCase());
   $('#eaSaveChip')?.addEventListener('click',saveChip);$('#eaGpuSave')?.addEventListener('click',saveGpu);
-  const canvas=$('#eaGpuCanvas');
-  canvas?.addEventListener('pointerdown',e=>{const p=canvasPoint(e);dragFan=nearestFan(p.x,p.y);canvas.setPointerCapture(e.pointerId);});
-  canvas?.addEventListener('pointermove',e=>{if(dragFan<0)return;const p=canvasPoint(e);gpuFans[dragFan].position=Math.max(.08,Math.min(.92,(p.x-140)/620));drawGpu();});
-  canvas?.addEventListener('pointerup',()=>dragFan=-1);canvas?.addEventListener('pointercancel',()=>dragFan=-1);
+  window.GpuDesigner3D?.mount($('#eaGpu3DStage'));
+
  }
- addBackButton();renderResearchLists();loadChips();drawGpu();
+ addBackButton();renderResearchLists();loadChips();window.GpuDesigner3D?.mount($('#eaGpu3DStage'));drawGpu();
  
 }
 function mountGpuResearch(){
@@ -104,16 +102,16 @@ function mountGpuResearch(){
  let wrap=$('#eaCompanyResearch');
  if(!wrap){
   wrap=document.createElement('div');wrap.id='eaCompanyResearch';wrap.className='ea-company-research';
-  wrap.innerHTML='<div class="ea-research-subtabs"><button type="button" data-ea-research="GPU" class="active">GPU</button><button type="button" data-ea-research="CHIP">CHIP</button></div><div id="eaGpuResearchList" class="ea-research-list"></div><div id="eaChipResearchList" class="ea-research-list hidden"></div>';
+  wrap.innerHTML='<div class="ea-research-subtabs"><button type="button" data-ea-research="GPU" class="active">GPU</button><button type="button" data-ea-research="CHIP">CHIP</button></div><div id="eaGpuResearchTree" class="research-tree"><div id="eaGpuResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div><div id="eaChipResearchTree" class="research-tree hidden"><div id="eaChipResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div><p id="eaResearchMessage" class="form-message"></p>';
   const tree=$('#cpuResearchTree');section.insertBefore(wrap,tree||null);
-  wrap.querySelectorAll('[data-ea-research]').forEach(b=>b.addEventListener('click',()=>setResearchGroup(b.dataset.eaResearch)));
+  wrap.querySelectorAll('[data-ea-research]').forEach(b=>b.addEventListener('click',()=>setResearchGroup(b.dataset.eaResearch)));\n  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));\n  setupResearchTreeNavigation($('#eaGpuResearchTree'));setupResearchTreeNavigation($('#eaChipResearchTree'));
  }
  wrap.classList.toggle('hidden',!isGpu());
  if(isGpu()){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');const description=section.querySelector('.company-section-heading p');if(eyebrow)eyebrow.textContent='GPU DEVELOPMENT';if(heading)heading.textContent='Research';if(description)description.textContent='Choose GPU or CHIP research, just like the CPU research section.';if(chip)chip.textContent='GPU / CHIP';renderResearchLists();}
 }
 function setResearchGroup(group){
- $('#eaGpuResearchList')?.classList.toggle('hidden',group!=='GPU');
- $('#eaChipResearchList')?.classList.toggle('hidden',group!=='CHIP');
+ $('#eaGpuResearchTree')?.classList.toggle('hidden',group!=='GPU');
+ $('#eaChipResearchTree')?.classList.toggle('hidden',group!=='CHIP');
  document.querySelectorAll('[data-ea-research]').forEach(b=>b.classList.toggle('active',b.dataset.eaResearch===group));
  renderResearchLists();
 }
@@ -131,18 +129,46 @@ function hideGpuWorkspace(){
  $('#cpuResearchTree')?.classList.remove('hidden');
  const section=$('#companyPanelResearch .research-section');if(section){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');if(eyebrow)eyebrow.textContent='CPU DEVELOPMENT';if(heading)heading.textContent='Research tree';const description=section.querySelector('.company-section-heading p');if(description)description.textContent='Unlock components before using them in your designs.';if(chip)chip.textContent='CPU RESEARCH';}
  $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
+ $('#page-company-design #companyDesignNoCompany')?.classList.toggle('hidden',!!currentCompany);
  restoreCpuProductsPage();
 }
-function showGpuMain(){if(!isGpu())return;$('#page-company-design #cpuDesigner')?.classList.add('hidden');$('#eaGpuPanel')?.classList.remove('hidden');setGpuTab(activeGpuView);loadChips();drawGpu();}
+function showGpuMain(){if(!isGpu())return;$('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');$('#page-company-design #cpuDesigner')?.classList.add('hidden');$('#eaGpuPanel')?.classList.remove('hidden');setGpuTab(activeGpuView);window.GpuDesigner3D?.mount($('#eaGpu3DStage'));loadChips();drawGpu();}
 function setGpuTab(tab){
  document.querySelectorAll('[data-gpu-tab]').forEach(b=>b.classList.toggle('active',b.dataset.gpuTab===tab));
  activeGpuView=tab==='chips'?'chips':'design';
  const views={design:'#eaGpuDesign',chips:'#eaGpuChips'};Object.entries(views).forEach(([key,selector])=>$(selector)?.classList.toggle('hidden',key!==activeGpuView));
  if(activeGpuView==='chips')loadChips();
 }
+function researchNodeMarkup(r,x,y,icon,yes,locked){
+ const status=yes?'UNLOCKED':locked?'LOCKED':'UNLOCK · $'+r.cost.toLocaleString();
+ return '<button type="button" class="research-node '+(yes?'researched':locked?'prerequisite-locked':'available')+'" data-research-key="'+r.key+'" style="--node-x:'+x+'px;--node-y:'+y+'px" '+(yes||locked?'disabled':'')+'><span class="research-hex"><b>'+icon+'</b></span><strong>'+r.name+'</strong><small>$'+r.cost.toLocaleString()+' research · '+r.score+' Score</small><em class="research-node-status">'+status+'</em></button>';
+}
 function renderResearchLists(){
- const render=(target,group)=>{const el=$(target);if(!el)return;el.innerHTML=GPU_RESEARCH.filter(r=>r.group===group).map(r=>{const yes=researched(r.key),locked=r.pre&&!researched(r.pre);return '<article class="ea-research-card"><div><b>'+r.name+'</b><small>Research $'+r.cost.toLocaleString()+' · Value $'+r.value.toLocaleString()+' · '+r.score+' Score'+(locked?' · Requires '+GPU_RESEARCH.find(x=>x.key===r.pre).name:'')+'</small></div><button data-research-key="'+r.key+'" '+(yes||locked?'disabled':'')+'>'+(yes?'Unlocked':locked?'Locked':'Research')+'</button></article>';}).join('');el.querySelectorAll('[data-research-key]').forEach(b=>b.addEventListener('click',()=>unlockResearch(b.dataset.researchKey,group)));};
- render('#eaGpuResearchList','GPU');render('#eaChipResearchList','CHIP');
+ const build=(group,worldId)=>{
+  const world=$('#'+worldId);if(!world)return;
+  const defs=GPU_RESEARCH.filter(r=>r.group===group);
+  const coords=group==='GPU'?[[560,130],[250,410],[560,410],[870,410],[410,720],[710,720]]:[[560,130],[300,390],[300,650],[300,910],[300,1170],[300,1430],[820,390],[820,650],[820,910],[820,1170]];
+  const icons=group==='GPU'?['GPU','MB','CF','RGB','SF','MF']:['CHIP','1×','2×','3×','4×','6×','P1','P2','P3','P4'];
+  const width=1120,height=group==='GPU'?900:1650;
+  const edges=group==='GPU'?[[0,1],[0,2],[0,3],[0,4],[4,5]]:[[0,1],[1,2],[2,3],[3,4],[4,5],[0,6],[6,7],[7,8],[8,9]];
+  const paths=edges.map(([a,b])=>{const A=coords[a],B=coords[b],mid=(A[1]+B[1])/2;return '<path d="M'+A[0]+' '+(A[1]+65)+' L'+A[0]+' '+mid+' L'+B[0]+' '+mid+' L'+B[0]+' '+(B[1]-65)+'"/>';}).join('');
+  world.style.width=width+'px';world.style.height=height+'px';
+  world.innerHTML='<svg class="research-tree-lines" viewBox="0 0 '+width+' '+height+'">'+paths+'</svg>'+researchNodeMarkup({name:group==='GPU'?'Baseline GPU':'Baseline CHIP',cost:0,score:0,key:'baseline_'+group.toLowerCase()},560,130,group==='GPU'?'GPU':'CHIP',true,false)+defs.map((r,i)=>{const xy=coords[i+1],yes=researched(r.key),locked=!!(r.pre&&!researched(r.pre));return researchNodeMarkup(r,xy[0],xy[1],icons[i+1]||'UP',yes,locked);}).join('');
+  world.querySelectorAll('[data-research-key]').forEach(b=>b.addEventListener('click',()=>unlockResearch(b.dataset.researchKey,group)));
+ };
+ build('GPU','eaGpuResearchWorld');build('CHIP','eaChipResearchWorld');
+}
+function setupResearchTreeNavigation(tree){
+ if(!tree||tree.dataset.navigationReady)return;tree.dataset.navigationReady='1';
+ const world=tree.querySelector('.research-tree-world');if(!world)return;
+ let zoom=.72,panX=tree.clientWidth/2-560*zoom,panY=12,dragging=false,sx=0,sy=0,bx=0,by=0;
+ const paint=()=>{world.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')';};
+ tree.addEventListener('pointerdown',e=>{if(e.target.closest('button[data-research-key],.research-tree-controls'))return;dragging=true;sx=e.clientX;sy=e.clientY;bx=panX;by=panY;tree.classList.add('dragging');tree.setPointerCapture(e.pointerId);});
+ tree.addEventListener('pointermove',e=>{if(!dragging)return;panX=bx+e.clientX-sx;panY=by+e.clientY-sy;paint();});
+ const stop=()=>{dragging=false;tree.classList.remove('dragging');};tree.addEventListener('pointerup',stop);tree.addEventListener('pointercancel',stop);
+ tree.querySelectorAll('[data-ea-zoom]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.eaZoom;if(a==='reset'){zoom=.72;panX=tree.clientWidth/2-560*zoom;panY=12;}else{const next=Math.max(.42,Math.min(1.35,zoom*(a==='in'?1.15:.87)));panX=panX*next/zoom;panY=panY*next/zoom;zoom=next;}paint();}));
+ tree.addEventListener('wheel',e=>{if(!e.ctrlKey&&Math.abs(e.deltaY)<Math.abs(e.deltaX))return;e.preventDefault();const next=Math.max(.42,Math.min(1.35,zoom*(e.deltaY<0?1.08:.92)));panX=panX*next/zoom;panY=panY*next/zoom;zoom=next;paint();},{passive:false});
+ paint();
 }
 async function unlockResearch(key,group){
  const {data,error}=await sb.rpc('unlock_company_research',{p_company_id:currentCompany.id,p_research_key:key});
@@ -174,16 +200,13 @@ function canvasPoint(e){const r=$('#eaGpuCanvas').getBoundingClientRect();return
 function fanCoords(){const c=$('#eaGpuCanvas');const len=Number($('#eaGpuLength')?.value||300),w=Number($('#eaGpuWidth')?.value||125),scale=Math.min(1.6,Math.min(650/len,300/w)),gw=len*scale,gh=w*scale,x=(900-gw)/2,y=(480-gh)/2;return gpuFans.map(f=>({x:x+gw*f.position,y:y+gh/2,r:Math.min(gh*.34,gw/gpuFans.length*.34),type:f.type}));}
 function nearestFan(x,y){const arr=fanCoords();let best=-1,dist=1e9;arr.forEach((p,i)=>{const d=Math.hypot(p.x-x,p.y-y);if(d<p.r*1.7&&d<dist){best=i;dist=d;}});return best;}
 function drawGpu(){
- const c=$('#eaGpuCanvas');if(!c)return;
- const ctx=c.getContext('2d');ctx.clearRect(0,0,900,480);ctx.fillStyle='#0b0b13';ctx.fillRect(0,0,900,480);
- const len=Number($('#eaGpuLength')?.value||300),wid=Number($('#eaGpuWidth')?.value||125),body=$('#eaGpuBody')?.value||'plastic',rgb=$('#eaGpuRgb')?.checked||false;
- const scale=Math.min(1.6,Math.min(650/len,300/wid)),w=len*scale,h=wid*scale,x=(900-w)/2,y=(480-h)/2;
- const shroud=$('#eaGpuShroud')?.value||'rounded',backplate=$('#eaGpuBackplate')?.checked!==false;ctx.fillStyle=body==='carbon'?'#20242b':body==='metallic'?'#8993a2':'#36323f';ctx.strokeStyle=rgb?'#bd70ff':'#8d75aa';ctx.lineWidth=5;ctx.beginPath();if(shroud==='angular'){ctx.moveTo(x+18,y);ctx.lineTo(x+w-18,y);ctx.lineTo(x+w,y+18);ctx.lineTo(x+w,y+h-18);ctx.lineTo(x+w-18,y+h);ctx.lineTo(x+18,y+h);ctx.lineTo(x,y+h-18);ctx.lineTo(x,y+18);ctx.closePath();}else if(shroud==='compact'){ctx.roundRect(x,y,w,h,5);}else{ctx.roundRect(x,y,w,h,Math.min(24,h*.15));}ctx.fill();ctx.stroke();if(backplate){ctx.fillStyle='#ffffff18';ctx.fillRect(x+10,y+h-17,w-20,7);}
- fanCoords().forEach(f=>{ctx.fillStyle='#15151e';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgb?'#bd70ff':'#737b8a';ctx.lineWidth=5;ctx.stroke();for(let j=0;j<7;j++){const angle=j*Math.PI*2/7;ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(angle)*f.r*.8,f.y+Math.sin(angle)*f.r*.8);ctx.strokeStyle='#b7bfca';ctx.lineWidth=8;ctx.stroke();}ctx.fillStyle='#929aa7';ctx.beginPath();ctx.arc(f.x,f.y,f.r*.17,0,Math.PI*2);ctx.fill();});
- const brand=$('#eaGpuBrand')?.value||'GRIND';ctx.fillStyle='#eee8f8';ctx.font='bold 20px Arial';ctx.fillText(brand.slice(0,20),x+12,y+24);if(gpuBrandLogo){const logo=new Image();logo.onload=()=>{ctx.drawImage(logo,x+w-52,y+8,38,38);};logo.src=gpuBrandLogo;}
+ const body=$('#eaGpuBody')?.value||'plastic',rgb=$('#eaGpuRgb')?.checked||false;
+ const len=Number($('#eaGpuLength')?.value||300),wid=Number($('#eaGpuWidth')?.value||125);
+ const fans=gpuFans.map(f=>({position:f.position,type:f.type}));
+ window.GpuDesigner3D?.update({length:len,width:wid,body,rgb,shroud:$('#eaGpuShroud')?.value||'rounded',backplate:$('#eaGpuBackplate')?.checked!==false,fans,brand:$('#eaGpuBrand')?.value||'GRIND'});
  $('#eaGpuFanCount').textContent=String(gpuFans.length);
  const bodyValue=body==='carbon'?4000:body==='metallic'?1200:0;
- const fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:f.type==='gpu_small_fans'?80:0),0);
+ const fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:80),0);
  const rgbValue=rgb?480:0,total=bodyValue+fanValue+rgbValue;
  $('#eaGpuCost').textContent='Estimated product value: $'+total.toLocaleString()+' · Body $'+bodyValue.toLocaleString()+' · Fans $'+fanValue.toLocaleString()+' · RGB $'+rgbValue.toLocaleString();
 }
