@@ -99,7 +99,7 @@ function mountGpuWorkspace(){
 function showGpuMain(){document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));$('#eaGpuTab')?.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel')?.classList.remove('hidden');renderGpuWorkspace();}
 function setGpuTab(tab){
  document.querySelectorAll('[data-gpu-tab]').forEach(b=>b.classList.toggle('active',b.dataset.gpuTab===tab));
- ['design','chips','gpuResearch','chipResearch','products'].forEach(k=>$('#eaGpu'+k[0].toUpperCase()+k.slice(1))?.classList.toggle('hidden',k!==tab));
+ const views={design:'#eaGpuDesign',chips:'#eaGpuChips',gpuResearch:'#eaGpuResearch',chipResearch:'#eaChipResearch',products:'#eaGpuProducts'};Object.entries(views).forEach(([key,selector])=>$(selector)?.classList.toggle('hidden',key!==tab));
  if(tab==='chips')loadChips();if(tab==='gpuResearch'||tab==='chipResearch')renderResearchLists();if(tab==='products')renderGpuProducts();
 }
 function renderResearchLists(){
