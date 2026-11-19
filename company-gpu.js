@@ -141,7 +141,7 @@ function drawGpu(){
  ctx.fillStyle='#eee8f8';ctx.font='bold 20px Arial';ctx.fillText('GRIND',x+12,y+24);
  $('#eaGpuFanCount').textContent=String(gpuFans.length);
  const bodyValue=body==='carbon'?4000:body==='metallic'?1200:0,fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:f.type==='gpu_small_fans'?80:0),0),rgbValue=rgb?480:0,total=bodyValue+fanValue+rgbValue;
- $('#eaGpuCost').textContent='Estimated product value: $'+total.toLocaleString()+' · Body $'+bodyValue.toLocaleString()+' · Fans +rgbValue.toLocaleString();
+ $('#eaGpuCost').textContent='Estimated product value: 
 }
 async function saveGpu(){
  const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
@@ -174,72 +174,4 @@ window.showPage=function(page){
 };
 document.addEventListener('DOMContentLoaded',()=>{refreshCompanies();});
 if(sb?.auth?.onAuthStateChange)sb.auth.onAuthStateChange(()=>{setTimeout(()=>refreshCompanies(),0);});
-})();
-+fanValue.toLocaleString()+' · RGB +rgbValue.toLocaleString();
-}
-async function saveGpu(){
- const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
- if(name.length<2||!chipId){$('#eaGpuMessage').textContent='Enter a name and choose a saved chip.';return;}
- if(body==='metallic'&&!researched('gpu_metallic_body')||body==='carbon'&&!researched('gpu_carbon_body')||rgb&&!researched('gpu_rgb')){toast('Research the selected GPU component first.');return;}
- const chip=chips.find(x=>x.id===chipId);if(!chip){await loadChips();$('#eaGpuMessage').textContent='Selected chip not found. Choose it again.';return;}
- const len=Number($('#eaGpuLength').value),wid=Number($('#eaGpuWidth').value),fanValue=gpuFans.length*80,bodyValue=body==='carbon'?4000:body==='metallic'?1200:0,sizeValue=Math.max(0,Math.round((len-180)*1.5+(wid-90)*.8)),rgbValue=rgb?480:0,total=fanValue+bodyValue+sizeValue+rgbValue;
- const {error}=await sb.from('product_company_products').insert({company_id:currentCompany.id,owner_id:currentUser.id,product_line:'gpu',product_name:name,body_type:body,production_cost:total,product_value:total,listed_price:Math.max(1,Number($('#eaGpuPrice').value)||1),status:'draft',design_data:{chip_id:chip.id,chip_name:chip.chip_name,length:len,width:wid,fan_positions:gpuFans,fan_count:gpuFans.length,body,rgb}});
- $('#eaGpuMessage').textContent=error?'Could not save GPU draft: '+error.message:'GPU saved as a draft. You can publish it later from Products.';
- if(!error){toast('GPU draft saved.');await loadCompanyResearchAndProducts();}
-}
-const originalLoad=window.loadCompanyDashboard;
-window.loadCompanyDashboard=async function(){
- if(!currentUser||!sb)return;
- await refreshCompanies();
- const {data:invites}=await sb.from('product_company_transfers').select('id,company_id,sender_id,created_at,product_companies(company_name,logo_data_url)').eq('recipient_id',currentUser.id).eq('status','pending').order('created_at',{ascending:false}).limit(10);
- incomingCompanyTransfers=invites||[];renderCompanyIncomingTransfers?.();
- renderChooser();
- if(currentCompany){await loadCompanyResearchAndProducts();if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();if(isGpu())mountGpuWorkspace();}
-};
-const oldRender=window.renderCompanyDashboard;
-window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
-const oldShow=window.showPage;
-window.showPage=function(page){
- if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
- if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('design');return;}
- if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('chips');return;}
- oldShow?.(page);
- if(page==='company')renderChooser();
-};
-document.addEventListener('DOMContentLoaded',()=>{refreshCompanies();});
-if(sb?.auth?.onAuthStateChange)sb.auth.onAuthStateChange(()=>{setTimeout(()=>refreshCompanies(),0);});
-})();
-+rgbValue.toLocaleString();
-}
-async function saveGpu(){
- const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
- if(name.length<2||!chipId){$('#eaGpuMessage').textContent='Enter a name and choose a saved chip.';return;}
- if(body==='metallic'&&!researched('gpu_metallic_body')||body==='carbon'&&!researched('gpu_carbon_body')||rgb&&!researched('gpu_rgb')){toast('Research the selected GPU component first.');return;}
- const chip=chips.find(x=>x.id===chipId);if(!chip){await loadChips();$('#eaGpuMessage').textContent='Selected chip not found. Choose it again.';return;}
- const len=Number($('#eaGpuLength').value),wid=Number($('#eaGpuWidth').value),fanValue=gpuFans.length*80,bodyValue=body==='carbon'?4000:body==='metallic'?1200:0,sizeValue=Math.max(0,Math.round((len-180)*1.5+(wid-90)*.8)),rgbValue=rgb?480:0,total=fanValue+bodyValue+sizeValue+rgbValue;
- const {error}=await sb.from('product_company_products').insert({company_id:currentCompany.id,owner_id:currentUser.id,product_line:'gpu',product_name:name,body_type:body,production_cost:total,product_value:total,listed_price:Math.max(1,Number($('#eaGpuPrice').value)||1),status:'draft',design_data:{chip_id:chip.id,chip_name:chip.chip_name,length:len,width:wid,fan_positions:gpuFans,fan_count:gpuFans.length,body,rgb}});
- $('#eaGpuMessage').textContent=error?'Could not save GPU draft: '+error.message:'GPU saved as a draft. You can publish it later from Products.';
- if(!error){toast('GPU draft saved.');await loadCompanyResearchAndProducts();}
-}
-const originalLoad=window.loadCompanyDashboard;
-window.loadCompanyDashboard=async function(){
- if(!currentUser||!sb)return;
- await refreshCompanies();
- const {data:invites}=await sb.from('product_company_transfers').select('id,company_id,sender_id,created_at,product_companies(company_name,logo_data_url)').eq('recipient_id',currentUser.id).eq('status','pending').order('created_at',{ascending:false}).limit(10);
- incomingCompanyTransfers=invites||[];renderCompanyIncomingTransfers?.();
- renderChooser();
- if(currentCompany){await loadCompanyResearchAndProducts();if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();if(isGpu())mountGpuWorkspace();}
-};
-const oldRender=window.renderCompanyDashboard;
-window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
-const oldShow=window.showPage;
-window.showPage=function(page){
- if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
- if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('design');return;}
- if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('chips');return;}
- oldShow?.(page);
- if(page==='company')renderChooser();
-};
-document.addEventListener('DOMContentLoaded',()=>{refreshCompanies();});
-if(sb?.auth?.onAuthStateChange)sb.auth.onAuthStateChange(()=>{setTimeout(()=>refreshCompanies(),0);});
-})();
+})()
