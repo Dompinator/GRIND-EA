@@ -13,7 +13,7 @@
     body: 'gray', // gray | silicon | carbon | titanium
     cores: 0,     // 0 | 1 | 2 | 4 | 8 | 16 | 32
     threads: 0,   // 0 | 4 | 6 | 8 | 12 | 18
-    cooling: 0,   // 0 | 1 | 2 | 3
+    cooling: 0,   // 0 | 1 | 2 | 3 | 4
     graphics: '',
     name: '',
     companyName: '',
@@ -1179,8 +1179,9 @@
     fanRotorGroup = null;
     if (coolingLevel <= 0) return;
 
-    const isGreat = coolingLevel >= 2;
-    const isVapor = coolingLevel >= 3;
+    const isUltra = coolingLevel >= 4;
+    const isGreat = coolingLevel >= 2 && !isUltra;
+    const isVapor = coolingLevel === 3;
 
     // 1. Machined retention bracket & 4 corner hex screws
     const bracketGeom = createRoundedRectGeometry(1.78, 1.78, 0.022, 0.09, 0.006);
@@ -1220,7 +1221,7 @@
 
     const collarGeom = new THREE.CylinderGeometry(collarOuterR, collarOuterR * 1.1, collarHeight, 16);
 
-    if (!isGreat) {
+    if (!isGreat && !isUltra) {
       // Built-In Cooling: 4 sleek small copper heatpipes arching out of compact fin core and diving into CPU socket ports
       const pipeOffsetsZ = [-0.42, -0.16, 0.16, 0.42];
       pipeOffsetsZ.forEach((oz) => {
@@ -1268,6 +1269,56 @@
       capMesh.castShadow = !isSoftwareGl;
       capMesh.position.y = finStackTopY + 0.024;
       coolingGroup.add(capMesh);
+    } else if (isUltra) {
+      // Ultra Cooling keeps the compact Built-In Cooling footprint but upgrades its
+      // low-profile fin plates and top plate to solid copper.
+      const pipeOffsetsZ = [-0.42, -0.16, 0.16, 0.42];
+      pipeOffsetsZ.forEach((oz) => {
+        const pipeCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.62, pipeEntryDepthY, oz),
+          new THREE.Vector3(-0.62, 0.045, oz),
+          new THREE.Vector3(-0.48, 0.19, oz),
+          new THREE.Vector3(0.0, 0.22, oz),
+          new THREE.Vector3(0.48, 0.19, oz),
+          new THREE.Vector3(0.62, 0.045, oz),
+          new THREE.Vector3(0.62, pipeEntryDepthY, oz)
+        ]);
+        const pGeom = new THREE.TubeGeometry(pipeCurve, 32, pipeRadius, 12, false);
+        const pMesh = new THREE.Mesh(pGeom, mats.copper);
+        pMesh.castShadow = !isSoftwareGl;
+        coolingGroup.add(pMesh);
+        [-0.62, 0.62].forEach((cx) => {
+          const cMesh = new THREE.Mesh(collarGeom, mats.darkAnodized);
+          cMesh.position.set(cx, -0.005, oz);
+          coolingGroup.add(cMesh);
+        });
+      });
+
+      // Ten tightly spaced copper plates, matching the Built-In stack's low profile.
+      const ultraFinCount = 10;
+      const ultraFinGeom = new THREE.BoxGeometry(1.18, 0.018, 1.14);
+      const ultraFins = new THREE.InstancedMesh(ultraFinGeom, mats.copper, ultraFinCount);
+      ultraFins.castShadow = !isSoftwareGl;
+      ultraFins.receiveShadow = true;
+      for (let i = 0; i < ultraFinCount; i++) {
+        const fy = 0.095 + (i / (ultraFinCount - 1)) * 0.185;
+        _dummy.position.set(0, fy, 0);
+        _dummy.rotation.set(0, 0, 0);
+        _dummy.scale.set(1, 1, 1);
+        _dummy.updateMatrix();
+        ultraFins.setMatrixAt(i, _dummy.matrix);
+      }
+      ultraFins.instanceMatrix.needsUpdate = true;
+      ultraFins.computeBoundingSphere();
+      coolingGroup.add(ultraFins);
+
+      const copperTopPlate = new THREE.Mesh(
+        createRoundedRectGeometry(1.22, 1.18, 0.035, 0.05, 0.008),
+        mats.copper
+      );
+      copperTopPlate.castShadow = !isSoftwareGl;
+      copperTopPlate.position.y = 0.315;
+      coolingGroup.add(copperTopPlate);
     } else if (isVapor) {
       // Vapor Chamber Cooling: a broad sealed copper chamber feeds one dense fin tower.
       // This is intentionally a different architecture from Great Cooling's twin towers.
