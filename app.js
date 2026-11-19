@@ -1970,6 +1970,7 @@ window.saveCompanyDesignedLogo = async function (dataUrl) {
   currentCompany = data;
   renderCompanyDashboard();
   if (typeof renderCpuDesigner === 'function') renderCpuDesigner();
+  if (typeof renderCompanyProducts === 'function') renderCompanyProducts();
   if (typeof toast === 'function') toast('Company logo saved & printed on your CPUs!');
   return data;
 };
@@ -2035,24 +2036,298 @@ async function unlockCpuResearch(k){
 }
 function switchCpuDesignMenu(m){cpuDesignMenu=m;['body','threads','cores','cooling'].forEach(x=>{$('#cpuMenu'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('hidden',x!==m);document.querySelector('[data-cpu-menu="'+x+'"]')?.classList.toggle('active',x===m);});}
 function renderCpuDesigner(){const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;const opts=[['core','cpuCoresOption','simple_1_core',cpuDesignCore,'1 Core','4 Score · $45/unit'],['threads','cpuThreadsOption','simple_4_threads',cpuDesignThreads,'4 Threads','4 Score · $40/unit'],['silicon','cpuOption_silicon','silicon_body',cpuDesignSilicon,'Silicon Body','6 Score · $150/unit'],['carbon_fiber','cpuOption_carbon_fiber','carbon_fiber_body',cpuDesignCarbonFiber,'Carbon Fiber Body','18 Score · $800/unit'],['six_threads','cpuOption_six_threads','six_threads',cpuDesignSixThreads,'6 Threads','6 Score · $60/unit'],['eight_threads','cpuOption_eight_threads','eight_threads',cpuDesignEightThreads,'8 Threads','8 Score · $80/unit'],['two_cores','cpuOption_two_cores','two_cores',cpuDesignTwoCores,'2 Cores','8 Score · $90/unit'],['four_cores','cpuOption_four_cores','four_cores',cpuDesignFourCores,'4 Cores','18 Score · $180/unit'],['built_in_cooling','cpuOption_built_in_cooling','built_in_cooling',cpuDesignBuiltInCooling,'Built-In Cooling','10 Score · $200/unit'],['great_cooling','cpuOption_great_cooling','great_cooling',cpuDesignGreatCooling,'Great Cooling','18 Score · $400/unit']];opts.forEach(([id,elementId,key,on,name,desc])=>{const el=$('#'+elementId);if(!el)return;const ok=hasCpuResearch(key);el.classList.toggle('locked',!ok);el.classList.toggle('selected',on);el.innerHTML='<span class="cpu-component-icon">◈</span><span><strong>'+name+'</strong><small>'+(ok?desc:'Research required')+'</small></span><button class="zoom-btn" type="button" '+(ok?'data-cpu-toggle="'+id+'"':'data-research-goto')+'>'+(ok?(on?'Selected':'Add'):'Research')+'</button>';});const graySelected=!cpuDesignSilicon&&!cpuDesignCarbonFiber;$('#cpuGrayBodyOption')?.classList.toggle('selected',graySelected);const grayBtn=$('#cpuGrayBodyOption button');if(grayBtn)grayBtn.textContent=graySelected?'Selected':'Select';const cost=(cpuDesignFourCores?180:(cpuDesignTwoCores?90:(cpuDesignCore?45:0)))+(cpuDesignEightThreads?80:(cpuDesignSixThreads?60:(cpuDesignThreads?40:0)))+(cpuDesignCarbonFiber?800:(cpuDesignSilicon?150:0))+(cpuDesignGreatCooling?400:(cpuDesignBuiltInCooling?200:0)),score=(cpuDesignFourCores?18:(cpuDesignTwoCores?8:(cpuDesignCore?4:0)))+(cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0)))+(cpuDesignCarbonFiber?18:(cpuDesignSilicon?6:0))+(cpuDesignGreatCooling?18:(cpuDesignBuiltInCooling?10:0)),tier=score>=200?'U':score>=150?'X':score>=125?'S++':score>=100?'S+':score>=75?'S':score>=50?'A':score>=36?'B':score>=24?'C':score>=10?'D':score>=6?'E':'F',qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1)));$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#cpuDesignScore').textContent=score+' · '+tier;$('#finishCpuBtn').textContent='Manufacture '+qty+' · '+money(cost*qty);$('#finishCpuBtn').disabled=false;const model=$('#cpuModel');if(model){model.classList.toggle('silicon-body',cpuDesignSilicon||cpuDesignCarbonFiber);model.classList.toggle('carbon-fiber-body',cpuDesignCarbonFiber);model.classList.toggle('built-in-cooling',cpuDesignBuiltInCooling||cpuDesignGreatCooling);model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';}const caption=$('.cpu-preview-caption');if(caption)caption.textContent=cpuDesignCarbonFiber?'Carbon Fiber Body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):cpuDesignSilicon?'Silicon CPU body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'Simple gray plastic CPU body');if(typeof window.updateCpuDesigner3D==='function'){const activeCores=cpuDesignFourCores?4:(cpuDesignTwoCores?2:(cpuDesignCore?1:0));const activeThreads=cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0));window.updateCpuDesigner3D({body:cpuDesignCarbonFiber?'carbon':(cpuDesignSilicon?'silicon':'gray'),cores:activeCores,threads:activeThreads,cooling:cpuDesignGreatCooling?2:(cpuDesignBuiltInCooling?1:0),name:($('#cpuProductName')?.value||'').trim()||'Baseline CPU',score,tier,logoUrl:currentCompany?.logo_data_url||''});}}
-async function finishCpuDesign(){if(!currentCompany||!currentUser||!sb)return;const name=($('#cpuProductName')?.value||'').trim(),price=Number($('#cpuProductPrice')?.value||0),qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1))),msg=$('#cpuDesignMessage'),btn=$('#finishCpuBtn');if(name.length<2||name.length>48){if(msg)msg.textContent='Name must be 2–48 characters.';return;}if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}if(btn){btn.disabled=true;btn.textContent='Manufacturing...';}const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty,p_include_8_threads:cpuDesignEightThreads,p_include_4_cores:cpuDesignFourCores,p_include_carbon_fiber:cpuDesignCarbonFiber,p_include_built_in_cooling:cpuDesignBuiltInCooling,p_include_great_cooling:cpuDesignGreatCooling});if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}selectedCompanyProductId=data.id;cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=cpuDesignEightThreads=cpuDesignFourCores=cpuDesignCarbonFiber=cpuDesignBuiltInCooling=cpuDesignGreatCooling=false;await loadCompanyResearchAndProducts();renderCompanyDashboard();switchCompanyDashboardTab('products');renderCompanyProducts();if(typeof loadProfile==='function')await loadProfile();toast(qty+' CPUs manufactured and added to stock!');if(btn)btn.disabled=false;}
+const CPU_THUMBS_LS_KEY = 'grind_cpu_thumbs_v1';
+let cpuThumbsCache = null;
+
+function getCpuThumbsMap() {
+  if (cpuThumbsCache && typeof cpuThumbsCache === 'object') return cpuThumbsCache;
+  try {
+    const raw = localStorage.getItem(CPU_THUMBS_LS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    cpuThumbsCache = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (_) {
+    cpuThumbsCache = {};
+  }
+  return cpuThumbsCache;
+}
+
+function persistCpuThumbsMap() {
+  const map = getCpuThumbsMap();
+  const entries = Object.entries(map).sort((a, b) => Number(b[1]?.ts || 0) - Number(a[1]?.ts || 0));
+  if (entries.length > 60) {
+    cpuThumbsCache = Object.fromEntries(entries.slice(0, 60));
+  }
+  try {
+    localStorage.setItem(CPU_THUMBS_LS_KEY, JSON.stringify(cpuThumbsCache));
+  } catch (_) {
+    try {
+      const smaller = entries.slice(0, Math.max(10, Math.floor(entries.length / 2)));
+      cpuThumbsCache = Object.fromEntries(smaller);
+      localStorage.setItem(CPU_THUMBS_LS_KEY, JSON.stringify(cpuThumbsCache));
+    } catch (_) {}
+  }
+}
+
+function buildCpuThumbSig(spec) {
+  const logo = String(spec?.logoUrl || '');
+  const logoKey = logo ? (logo.length + ':' + logo.slice(0, 24) + ':' + logo.slice(-24)) : '';
+  return [
+    spec?.body || 'gray',
+    Number(spec?.cores || 0),
+    Number(spec?.threads || 0),
+    Number(spec?.cooling || 0),
+    String(spec?.name || ''),
+    Number(spec?.score || 0),
+    String(spec?.tier || 'F'),
+    logoKey
+  ].join('|');
+}
+
+function resolveCpuProductSpec(p) {
+  const cached = p?.id ? getCpuThumbsMap()[p.id]?.spec : null;
+
+  let cores = 0;
+  if (Number.isFinite(Number(p?.core_count)) && Number(p.core_count) > 0) {
+    cores = Number(p.core_count);
+  } else if (p?.has_four_cores || p?.include_4_cores) {
+    cores = 4;
+  } else if (p?.has_two_cores || p?.include_2_cores) {
+    cores = 2;
+  } else if (p?.has_simple_core || p?.include_core) {
+    cores = 1;
+  } else if (cached && Number.isFinite(Number(cached.cores))) {
+    cores = Number(cached.cores);
+  }
+
+  let threads = 0;
+  if (Number.isFinite(Number(p?.thread_count)) && Number(p.thread_count) > 0) {
+    threads = Number(p.thread_count);
+  } else if (p?.has_eight_threads || p?.include_8_threads) {
+    threads = 8;
+  } else if (p?.has_six_threads || p?.include_6_threads) {
+    threads = 6;
+  } else if (p?.has_simple_threads || p?.include_threads) {
+    threads = 4;
+  } else if (cached && Number.isFinite(Number(cached.threads))) {
+    threads = Number(cached.threads);
+  }
+
+  const rawBody = String(p?.body_type || p?.cpu_body || '').toLowerCase();
+  let body = '';
+  if (rawBody.includes('carbon') || p?.has_carbon_fiber || p?.has_carbon_fiber_body || p?.carbon_fiber_body || p?.include_carbon_fiber) {
+    body = 'carbon';
+  } else if (rawBody.includes('silicon') || p?.has_silicon || p?.has_silicon_body || p?.silicon_body || p?.include_silicon) {
+    body = 'silicon';
+  } else if (rawBody.includes('gray') || rawBody.includes('plastic')) {
+    body = 'gray';
+  } else if (cached?.body) {
+    body = cached.body;
+  } else {
+    body = 'gray';
+  }
+
+  const rawCooling = String(p?.cooling_type || p?.cooling || '').toLowerCase();
+  let cooling = null;
+  if (rawCooling.includes('great') || p?.has_great_cooling || p?.great_cooling || p?.include_great_cooling) {
+    cooling = 2;
+  } else if (rawCooling.includes('built') || p?.has_built_in_cooling || p?.built_in_cooling || p?.include_built_in_cooling) {
+    cooling = 1;
+  } else if (Number.isFinite(Number(p?.cooling_level))) {
+    cooling = Number(p.cooling_level);
+  } else if (cached && Number.isFinite(Number(cached.cooling))) {
+    cooling = Number(cached.cooling);
+  } else {
+    cooling = 0;
+  }
+
+  const logoUrl = String(
+    p?.product_companies?.logo_data_url ||
+    (p?.company_id && currentCompany && p.company_id === currentCompany.id ? currentCompany.logo_data_url : '') ||
+    cached?.logoUrl ||
+    ''
+  );
+
+  return {
+    body,
+    cores,
+    threads,
+    cooling,
+    name: String(p?.product_name || cached?.name || 'CPU'),
+    score: Number(p?.cpu_score ?? cached?.score ?? 0),
+    tier: String(p?.cpu_tier || cached?.tier || 'F'),
+    logoUrl
+  };
+}
+
+function getCachedCpuThumbUrl(id, spec) {
+  if (!id) return '';
+  const entry = getCpuThumbsMap()[id];
+  if (!entry || !entry.dataUrl) return '';
+  if (entry.sig && spec && entry.sig !== buildCpuThumbSig(spec)) return '';
+  return entry.dataUrl;
+}
+
+function saveCpuProductThumb(id, spec, dataUrl) {
+  if (!id || !dataUrl) return;
+  const map = getCpuThumbsMap();
+  map[id] = {
+    sig: buildCpuThumbSig(spec),
+    spec: { ...spec },
+    dataUrl,
+    ts: Date.now()
+  };
+  persistCpuThumbsMap();
+}
+
+function renderCpuThumbHtml(p, spec) {
+  const url = getCachedCpuThumbUrl(p?.id, spec);
+  const alt = escapeHtml((p?.product_name || 'CPU') + ' 3D preview');
+  if (url) {
+    return '<img class="cpu-thumb-img" src="' + escapeHtml(url) + '" alt="' + alt + '">';
+  }
+  return '<div class="cpu-thumb-loading" aria-label="Rendering 3D CPU preview"></div>';
+}
+
+function applyCpuThumbToDom(id, name, dataUrl) {
+  if (!id || !dataUrl) return;
+  document.querySelectorAll('[data-cpu-thumb-id]').forEach(el => {
+    if (el.dataset.cpuThumbId !== String(id)) return;
+    const alt = escapeHtml((name || 'CPU') + ' 3D preview');
+    el.innerHTML = '<img class="cpu-thumb-img" src="' + escapeHtml(dataUrl) + '" alt="' + alt + '">';
+  });
+}
+
+function hydrateCpuThumbElements(rootEl, specsById, size = 280) {
+  if (!rootEl || typeof window.enqueueCpuThumbnail !== 'function') return;
+  rootEl.querySelectorAll('[data-cpu-thumb-id]').forEach(el => {
+    const id = el.dataset.cpuThumbId;
+    if (!id) return;
+    const spec = specsById.get(id);
+    if (!spec) return;
+    const cached = getCachedCpuThumbUrl(id, spec);
+    if (cached) {
+      if (!el.querySelector('img')) {
+        applyCpuThumbToDom(id, spec.name, cached);
+      }
+      return;
+    }
+    if (el.dataset.cpuThumbQueued === '1') return;
+    el.dataset.cpuThumbQueued = '1';
+    window.enqueueCpuThumbnail(spec, (dataUrl) => {
+      if (!dataUrl) return;
+      saveCpuProductThumb(id, spec, dataUrl);
+      applyCpuThumbToDom(id, spec.name, dataUrl);
+    }, size);
+  });
+}
+
+function formatCpuSpecLine(spec) {
+  const coreLabel = spec.cores === 1 ? '1 Core' : (spec.cores > 1 ? spec.cores + ' Cores' : 'No core');
+  const threadLabel = spec.threads > 0 ? spec.threads + ' Threads' : 'No threads';
+  return coreLabel + ' · ' + threadLabel;
+}
+
+function formatCpuHardwareBadges(spec) {
+  const bodyLabel = spec.body === 'carbon' ? 'Carbon Fiber' : (spec.body === 'silicon' ? 'Silicon Body' : 'Gray Plastic');
+  const coolingLabel = spec.cooling >= 2 ? 'Great Cooling' : (spec.cooling === 1 ? 'Built-In Cooling' : 'Standard Cooling');
+  return bodyLabel + ' · ' + formatCpuSpecLine(spec) + ' · ' + coolingLabel;
+}
+
+async function finishCpuDesign(){
+  if(!currentCompany||!currentUser||!sb)return;
+  const name=($('#cpuProductName')?.value||'').trim(),price=Number($('#cpuProductPrice')?.value||0),qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1))),msg=$('#cpuDesignMessage'),btn=$('#finishCpuBtn');
+  if(name.length<2||name.length>48){if(msg)msg.textContent='Name must be 2–48 characters.';return;}
+  if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}
+  if(btn){btn.disabled=true;btn.textContent='Manufacturing...';}
+
+  const activeCores = cpuDesignFourCores ? 4 : (cpuDesignTwoCores ? 2 : (cpuDesignCore ? 1 : 0));
+  const activeThreads = cpuDesignEightThreads ? 8 : (cpuDesignSixThreads ? 6 : (cpuDesignThreads ? 4 : 0));
+  const activeScore = (cpuDesignFourCores ? 18 : (cpuDesignTwoCores ? 8 : (cpuDesignCore ? 4 : 0)))
+    + (cpuDesignEightThreads ? 8 : (cpuDesignSixThreads ? 6 : (cpuDesignThreads ? 4 : 0)))
+    + (cpuDesignCarbonFiber ? 18 : (cpuDesignSilicon ? 6 : 0))
+    + (cpuDesignGreatCooling ? 18 : (cpuDesignBuiltInCooling ? 10 : 0));
+  const activeTier = activeScore>=200?'U':activeScore>=150?'X':activeScore>=125?'S++':activeScore>=100?'S+':activeScore>=75?'S':activeScore>=50?'A':activeScore>=36?'B':activeScore>=24?'C':activeScore>=10?'D':activeScore>=6?'E':'F';
+  const activeSpec = {
+    body: cpuDesignCarbonFiber ? 'carbon' : (cpuDesignSilicon ? 'silicon' : 'gray'),
+    cores: activeCores,
+    threads: activeThreads,
+    cooling: cpuDesignGreatCooling ? 2 : (cpuDesignBuiltInCooling ? 1 : 0),
+    name,
+    score: activeScore,
+    tier: activeTier,
+    logoUrl: currentCompany?.logo_data_url || ''
+  };
+
+  let snapDataUrl = '';
+  if (typeof window.captureCpuHeroSnapshot === 'function') {
+    try {
+      snapDataUrl = await window.captureCpuHeroSnapshot(activeSpec, 320);
+    } catch (_) {
+      snapDataUrl = '';
+    }
+  }
+
+  const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty,p_include_8_threads:cpuDesignEightThreads,p_include_4_cores:cpuDesignFourCores,p_include_carbon_fiber:cpuDesignCarbonFiber,p_include_built_in_cooling:cpuDesignBuiltInCooling,p_include_great_cooling:cpuDesignGreatCooling});
+  if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}
+  if(data?.id && snapDataUrl){
+    saveCpuProductThumb(data.id, activeSpec, snapDataUrl);
+  }
+  selectedCompanyProductId=data.id;
+  cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=cpuDesignEightThreads=cpuDesignFourCores=cpuDesignCarbonFiber=cpuDesignBuiltInCooling=cpuDesignGreatCooling=false;
+  await loadCompanyResearchAndProducts();
+  renderCompanyDashboard();
+  switchCompanyDashboardTab('products');
+  renderCompanyProducts();
+  if(typeof loadProfile==='function')await loadProfile();
+  toast(qty+' CPUs manufactured and added to stock!');
+  if(btn)btn.disabled=false;
+}
 function renderCompanyProducts(){
- const list=$('#companyProductList');if(!list)return;if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
- list.innerHTML=companyProducts.map(p=>'<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon">CPU</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(p.status==='published'?'Published':'Draft')+' · '+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>').join('');
+ const list=$('#companyProductList');if(!list)return;
+ const countChip=document.querySelector('#companyPanelProducts .company-count-chip');
+ if(countChip)countChip.textContent=companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S');
+ if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
+ const specsById = new Map();
+ list.innerHTML=companyProducts.map(p=>{
+   const spec = resolveCpuProductSpec(p);
+   specsById.set(p.id, spec);
+   return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(p.status==='published'?'Published':'Draft')+' · '+escapeHtml(formatCpuSpecLine(spec))+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+ }).join('');
  list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{selectedCompanyProductId=b.dataset.companyProduct;renderCompanyProducts();}));
+ hydrateCpuThumbElements(list, specsById, 240);
  if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){const d=$('#companyProductDetails');if(d&&d.dataset.productId!==selectedCompanyProductId)loadCompanyProductDetails(selectedCompanyProductId);}
 }
-async function loadCompanyProductDetails(id){const p=companyProducts.find(x=>x.id===id),d=$('#companyProductDetails');if(!p||!d)return;d.dataset.productId=id;d.classList.remove('hidden');d.innerHTML='<h4>'+escapeHtml(p.product_name)+'</h4><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(Number(p.product_value??p.production_cost??0))+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(p.cpu_score||0)+' · '+(p.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(Number(p.stock)>0?p.stock:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label><label>Produce quantity<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><button type="button" class="primary-btn" id="companyProduceMore">Produce more</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(p.stock>0?'':'disabled')+'>Delete stock · 50% refund</button><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProductSavePrice">Save price</button>'+(p.status==='draft'?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';$('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));$('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));$('#companyProduceMore')?.addEventListener('click',async()=>{const q=Math.max(1,Math.floor(Number($('#companyProduceQuantity')?.value||1))),{error}=await sb.rpc('produce_more_cpu',{p_product_id:id,p_quantity:q});if(error){$('#companyProductDetailMessage').textContent=error.message;return;}await loadCompanyResearchAndProducts();renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof loadProfile==='function')await loadProfile();});$('#companyLiquidateStock')?.addEventListener('click',async()=>{if(!confirm('Delete remaining stock and receive 50% of its production value?'))return;const {data,error}=await sb.rpc('liquidate_cpu_stock',{p_product_id:id});if(error){$('#companyProductDetailMessage').textContent=error.message;return;}await loadCompanyResearchAndProducts();renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof loadProfile==='function')await loadProfile();toast('Refund: '+money(Number(data?.refund||0)));});}
+async function loadCompanyProductDetails(id){
+ const p=companyProducts.find(x=>x.id===id),d=$('#companyProductDetails');if(!p||!d)return;
+ d.dataset.productId=id;d.classList.remove('hidden');
+ const spec = resolveCpuProductSpec(p);
+ d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(p.status==='published'?'Published on Product Feed':'Draft (Not yet published)')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(Number(p.product_value??p.production_cost??0))+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(p.cpu_score||0)+' · '+escapeHtml(p.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(Number(p.stock)>0?p.stock:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label><label>Produce quantity<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><button type="button" class="primary-btn" id="companyProduceMore">Produce more</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(p.stock>0?'':'disabled')+'>Delete stock · 50% refund</button><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProductSavePrice">Save price</button>'+(p.status==='draft'?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
+ hydrateCpuThumbElements(d, new Map([[p.id, spec]]), 320);
+ $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
+ $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+ $('#companyProduceMore')?.addEventListener('click',async()=>{const q=Math.max(1,Math.floor(Number($('#companyProduceQuantity')?.value||1))),{error}=await sb.rpc('produce_more_cpu',{p_product_id:id,p_quantity:q});if(error){$('#companyProductDetailMessage').textContent=error.message;return;}await loadCompanyResearchAndProducts();renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof loadProfile==='function')await loadProfile();});
+ $('#companyLiquidateStock')?.addEventListener('click',async()=>{if(!confirm('Delete remaining stock and receive 50% of its production value?'))return;const {data,error}=await sb.rpc('liquidate_cpu_stock',{p_product_id:id});if(error){$('#companyProductDetailMessage').textContent=error.message;return;}await loadCompanyResearchAndProducts();renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof loadProfile==='function')await loadProfile();toast('Refund: '+money(Number(data?.refund||0)));});
+}
 async function saveCompanyProductListing(id,publish){
  const price=Number($('#companyProductPriceEdit')?.value||0),msg=$('#companyProductDetailMessage');if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid price.';return;}
  const {data,error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:publish});if(error){if(msg)msg.textContent=error.message;return;}const i=companyProducts.findIndex(x=>x.id===id);if(i>=0)companyProducts[i]=data;renderCompanyProducts();await loadCompanyProductDetails(id);toast(publish?'Product published to Product Feed!':'Product price updated.');
 }
 async function loadPublishedProductFeed(){
  const grid=$('#publishedProductFeed');if(!grid||!sb)return;grid.innerHTML='<div class="muted">Loading products...</div>';
- const {data,error}=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,cpu_score,cpu_tier,stock,thread_count,core_count,product_companies(company_name)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+ let res=await sb.from('product_company_products').select('*,product_companies(company_name,logo_data_url)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+ if(res.error){
+  res=await sb.from('product_company_products').select('id,product_name,listed_price,has_simple_core,has_simple_threads,cpu_score,cpu_tier,stock,thread_count,core_count,product_companies(company_name,logo_data_url)').eq('status','published').order('created_at',{ascending:false}).limit(100);
+ }
+ const {data,error}=res;
  if(error){grid.innerHTML='<div class="empty-state"><h3>Could not load products</h3><p class="muted">'+escapeHtml(error.message)+'</p></div>';return;}
  if(!data?.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">▦</div><h3>No published products yet</h3><p>Products published by companies will appear here.</p></div>';return;}
- grid.innerHTML=data.map(p=>'<article class="published-product-card"><div class="product-feed-cpu">CPU</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+(p.has_simple_core?'1 Core':'No core')+' · '+(p.has_simple_threads?'4 Threads':'No threads')+'</p><p>'+Number(p.cpu_score||0)+' Score · '+escapeHtml(p.cpu_tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>').join('');
+ const specsById = new Map();
+ grid.innerHTML=data.map(p=>{
+  const spec = resolveCpuProductSpec(p);
+  specsById.set(p.id, spec);
+  return '<article class="published-product-card"><div class="product-feed-cpu" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+escapeHtml(formatCpuSpecLine(spec))+'</p><p>'+Number(p.cpu_score||0)+' Score · '+escapeHtml(p.cpu_tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
+ }).join('');
+ hydrateCpuThumbElements(grid, specsById, 300);
 }
 async function respondToCompanyTransfer(requestId, accept) {
   if (!currentUser || !sb) return;

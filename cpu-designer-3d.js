@@ -572,18 +572,31 @@
         loadedLogoImg = null;
         if (initialized) applyBodyMaterialFinish(activeState.body);
       }
-      return;
+      return Promise.resolve(null);
     }
-    if (clean === loadedLogoUrl && loadedLogoImg && loadedLogoImg.complete) return;
+    if (clean === loadedLogoUrl && loadedLogoImg && loadedLogoImg.complete) {
+      return Promise.resolve(loadedLogoImg);
+    }
     loadedLogoUrl = clean;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      if (loadedLogoUrl !== clean) return;
-      loadedLogoImg = img;
-      if (initialized) applyBodyMaterialFinish(activeState.body);
-    };
-    img.src = clean;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const done = (res) => resolve(res || null);
+      const timer = setTimeout(() => done(null), 1500);
+      img.onload = () => {
+        clearTimeout(timer);
+        if (loadedLogoUrl === clean) {
+          loadedLogoImg = img;
+          if (initialized) applyBodyMaterialFinish(activeState.body);
+        }
+        done(img);
+      };
+      img.onerror = () => {
+        clearTimeout(timer);
+        done(null);
+      };
+      img.src = clean;
+    });
   }
 
   // ---------- Extruded Geometry Builders ----------
@@ -1890,7 +1903,239 @@
     updateVisibilityState();
   }
 
+  let snapshotQueueBusy = false;
+  const thumbQueue = [];
+
+  async function captureCpuHeroSnapshot(stateOverride = null, size = 320) {
+    const ready = await initIfNeeded();
+    if (!ready || !THREE || !renderer || !scene || !camera || contextLost) return '';
+
+    const prevState = { ...activeState };
+    const snapState = stateOverride && typeof stateOverride === 'object'
+      ? {
+          body: stateOverride.body || 'gray',
+          cores: Number(stateOverride.cores || 0),
+          threads: Number(stateOverride.threads || 0),
+          cooling: Number(stateOverride.cooling || 0),
+          name: String(stateOverride.name || 'Baseline CPU'),
+          score: Number(stateOverride.score || 0),
+          tier: String(stateOverride.tier || 'F'),
+          logoUrl: String(stateOverride.logoUrl || '')
+        }
+      : { ...activeState };
+
+    if (snapState.logoUrl) {
+      await ensureLogoImageLoaded(snapState.logoUrl);
+    } else if (loadedLogoUrl) {
+      await ensureLogoImageLoaded('');
+    }
+
+    // Wait if stateOverride swapped scene geometry
+    const needRebuild =
+      prevState.body !== snapState.body ||
+      prevState.cores !== snapState.cores ||
+      prevState.threads !== snapState.threads ||
+      prevState.cooling !== snapState.cooling ||
+      prevState.name !== snapState.name ||
+      prevState.score !== snapState.score ||
+      prevState.tier !== snapState.tier ||
+      prevState.logoUrl !== snapState.logoUrl;
+
+    // Save camera, controls, CPU transforms, and layer positions
+    const prevPos = camera.position.clone();
+    const prevQuat = camera.quaternion.clone();
+    const prevAspect = camera.aspect;
+    const prevFov = camera.fov;
+    const prevCtrlTarget = controls ? controls.target.clone() : null;
+    const prevCtrlEnabled = controls ? controls.enabled : true;
+
+    const prevCpuPos = cpuRoot.position.clone();
+    const prevCpuRot = cpuRoot.rotation.clone();
+    const prevCpuScale = cpuRoot.scale.clone();
+    const prevPinsY = pinsGroup ? pinsGroup.position.y : 0;
+    const prevPcbY = pcbGroup ? pcbGroup.position.y : 0;
+    const prevIntY = interposerGroup ? interposerGroup.position.y : 0.068;
+    const prevDiesY = diesGroup ? diesGroup.position.y : 0.095;
+    const prevDiesScale = diesGroup ? diesGroup.scale.clone() : null;
+    const prevThrY = threadsGroup ? threadsGroup.position.y : 0.105;
+    const prevThrScale = threadsGroup ? threadsGroup.scale.clone() : null;
+    const prevIhsY = ihsGroup ? ihsGroup.position.y : 0.165;
+    const prevIhsRotX = ihsGroup ? ihsGroup.rotation.x : 0;
+    const prevIhsRotZ = ihsGroup ? ihsGroup.rotation.z : 0;
+    const prevIhsTopOp = mats.ihsTop ? mats.ihsTop.opacity : 1;
+    const prevIhsTopDw = mats.ihsTop ? mats.ihsTop.depthWrite : true;
+    const prevIhsFlgOp = mats.ihsFlange ? mats.ihsFlange.opacity : 1;
+    const prevIhsFlgDw = mats.ihsFlange ? mats.ihsFlange.depthWrite : true;
+    const prevCoolY = coolingGroup ? coolingGroup.position.y : 0.255;
+    const prevCoolScale = coolingGroup ? coolingGroup.scale.clone() : null;
+    const prevPR = renderer.getPixelRatio();
+
+    if (needRebuild) {
+      activeState = { ...snapState };
+      if (prevState.cores !== snapState.cores) rebuildSiliconCores(snapState.cores);
+      if (prevState.threads !== snapState.threads || prevState.cores !== snapState.cores) {
+        rebuildThreadInterconnects(snapState.threads, snapState.cores);
+      }
+      if (prevState.cooling !== snapState.cooling) rebuildCoolingStack(snapState.cooling);
+      applyBodyMaterialFinish(snapState.body);
+    }
+
+    // Pose cleanly assembled at a showcase studio hero 3/4 angle
+    if (controls) controls.enabled = false;
+    cpuRoot.position.set(0, 0, 0);
+    cpuRoot.rotation.set(0, 0, 0);
+    cpuRoot.scale.setScalar(1);
+    if (pinsGroup) pinsGroup.position.y = 0;
+    if (pcbGroup) pcbGroup.position.y = 0;
+    if (interposerGroup) interposerGroup.position.y = 0.068;
+    if (diesGroup) {
+      diesGroup.position.y = 0.095;
+      diesGroup.scale.setScalar(1);
+    }
+    if (threadsGroup) {
+      threadsGroup.position.y = 0.105;
+      threadsGroup.scale.setScalar(1);
+    }
+    if (ihsGroup) {
+      ihsGroup.position.y = 0.165;
+      ihsGroup.rotation.set(0, 0, 0);
+    }
+    if (mats.ihsTop) {
+      mats.ihsTop.opacity = 1;
+      mats.ihsTop.depthWrite = true;
+    }
+    if (mats.ihsFlange) {
+      mats.ihsFlange.opacity = 1;
+      mats.ihsFlange.depthWrite = true;
+    }
+    if (coolingGroup) {
+      coolingGroup.position.y = 0.255;
+      coolingGroup.scale.setScalar(1);
+    }
+
+    camera.aspect = 1;
+    camera.fov = 33;
+    camera.updateProjectionMatrix();
+
+    if (snapState.cooling >= 2) {
+      camera.position.set(2.88, 2.34, 3.00);
+      camera.lookAt(0, 0.30, 0);
+    } else if (snapState.cooling === 1) {
+      camera.position.set(2.50, 2.08, 2.60);
+      camera.lookAt(0, 0.16, 0);
+    } else {
+      camera.position.set(2.12, 2.22, 2.26);
+      camera.lookAt(0, 0.02, 0);
+    }
+
+    const outSize = Math.max(160, Math.min(512, size));
+    renderer.setPixelRatio(1);
+    renderer.setSize(outSize, outSize, false);
+    renderer.render(scene, camera);
+
+    let dataUrl = '';
+    try {
+      const snapCanvas = document.createElement('canvas');
+      snapCanvas.width = outSize;
+      snapCanvas.height = outSize;
+      const ctx = snapCanvas.getContext('2d');
+      ctx.drawImage(renderer.domElement, 0, 0, outSize, outSize);
+      dataUrl = snapCanvas.toDataURL('image/webp', 0.86);
+      if (!dataUrl || !dataUrl.startsWith('data:image/webp')) {
+        dataUrl = snapCanvas.toDataURL('image/png');
+      }
+    } catch (err) {
+      dataUrl = '';
+    }
+
+    // Restore live scene & camera synchronously
+    if (needRebuild) {
+      activeState = { ...prevState };
+      if (prevState.logoUrl !== snapState.logoUrl) {
+        ensureLogoImageLoaded(prevState.logoUrl);
+      }
+      if (snapState.cores !== prevState.cores) rebuildSiliconCores(prevState.cores);
+      if (snapState.threads !== prevState.threads || snapState.cores !== prevState.cores) {
+        rebuildThreadInterconnects(prevState.threads, prevState.cores);
+      }
+      if (snapState.cooling !== prevState.cooling) rebuildCoolingStack(prevState.cooling);
+      applyBodyMaterialFinish(prevState.body);
+    }
+
+    cpuRoot.position.copy(prevCpuPos);
+    cpuRoot.rotation.copy(prevCpuRot);
+    cpuRoot.scale.copy(prevCpuScale);
+    if (pinsGroup) pinsGroup.position.y = prevPinsY;
+    if (pcbGroup) pcbGroup.position.y = prevPcbY;
+    if (interposerGroup) interposerGroup.position.y = prevIntY;
+    if (diesGroup) {
+      diesGroup.position.y = prevDiesY;
+      if (prevDiesScale) diesGroup.scale.copy(prevDiesScale);
+    }
+    if (threadsGroup) {
+      threadsGroup.position.y = prevThrY;
+      if (prevThrScale) threadsGroup.scale.copy(prevThrScale);
+    }
+    if (ihsGroup) ihsGroup.rotation.set(prevIhsRotX, 0, prevIhsRotZ);
+    if (ihsGroup) ihsGroup.position.y = prevIhsY;
+    if (mats.ihsTop) {
+      mats.ihsTop.opacity = prevIhsTopOp;
+      mats.ihsTop.depthWrite = prevIhsTopDw;
+    }
+    if (mats.ihsFlange) {
+      mats.ihsFlange.opacity = prevIhsFlgOp;
+      mats.ihsFlange.depthWrite = prevIhsFlgDw;
+    }
+    if (coolingGroup) {
+      coolingGroup.position.y = prevCoolY;
+      if (prevCoolScale) coolingGroup.scale.copy(prevCoolScale);
+    }
+
+    camera.fov = prevFov;
+    camera.aspect = prevAspect;
+    camera.position.copy(prevPos);
+    camera.quaternion.copy(prevQuat);
+    camera.updateProjectionMatrix();
+    if (controls) {
+      if (prevCtrlTarget) controls.target.copy(prevCtrlTarget);
+      controls.enabled = prevCtrlEnabled;
+      controls.update();
+    }
+
+    renderer.setPixelRatio(prevPR);
+    syncStageSize();
+    if (pageVisible) renderer.render(scene, camera);
+
+    return dataUrl;
+  }
+
+  async function processThumbQueue() {
+    if (snapshotQueueBusy || !thumbQueue.length) return;
+    snapshotQueueBusy = true;
+    try {
+      while (thumbQueue.length) {
+        const job = thumbQueue.shift();
+        try {
+          const url = await captureCpuHeroSnapshot(job.spec, job.size || 256);
+          if (typeof job.onDone === 'function') job.onDone(url);
+        } catch (e) {
+          if (typeof job.onDone === 'function') job.onDone('');
+        }
+        await new Promise((r) => setTimeout(r, 12));
+      }
+    } finally {
+      snapshotQueueBusy = false;
+    }
+  }
+
+  function enqueueCpuThumbnail(spec, onDone, size = 256) {
+    thumbQueue.push({ spec, onDone, size });
+    processThumbQueue();
+  }
+
   window.updateCpuDesigner3D = updateCpuDesigner3D;
+  window.captureCpuHeroSnapshot = captureCpuHeroSnapshot;
+  window.enqueueCpuThumbnail = enqueueCpuThumbnail;
 
   // Boot gracefully if DOM is already on design page
   if (document.readyState === 'loading') {
