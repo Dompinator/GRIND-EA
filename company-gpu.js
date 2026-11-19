@@ -149,40 +149,18 @@ function drawGpu(){
 function renderGpuProducts(){
  const el=$('#eaGpuProductList');if(!el)return;
  const rows=(companyProducts||[]).filter(p=>p.product_line==='gpu');
- el.innerHTML=rows.map(p=>'<article class="ea-chip-card"><b>'+esc(p.product_name)+'</b><small>'+(p.status==='published'?'Published':'Draft')+' · Value 
- const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
- if(name.length<2||!chipId){$('#eaGpuMessage').textContent='Enter a name and choose a saved chip.';return;}
- if(body==='metallic'&&!researched('gpu_metallic_body')||body==='carbon'&&!researched('gpu_carbon_body')||rgb&&!researched('gpu_rgb')){toast('Research the selected GPU component first.');return;}
- const chip=chips.find(x=>x.id===chipId);if(!chip){await loadChips();$('#eaGpuMessage').textContent='Selected chip not found. Choose it again.';return;}
- const len=Number($('#eaGpuLength').value),wid=Number($('#eaGpuWidth').value),fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:f.type==='gpu_small_fans'?80:0),0),bodyValue=body==='carbon'?4000:body==='metallic'?1200:0,rgbValue=rgb?480:0,total=fanValue+bodyValue+rgbValue;
- const {error}=await sb.from('product_company_products').insert({company_id:currentCompany.id,owner_id:currentUser.id,product_line:'gpu',product_name:name,body_type:body,production_cost:total,product_value:total,listed_price:Math.max(1,Number($('#eaGpuPrice').value)||1),status:'draft',design_data:{chip_id:chip.id,chip_name:chip.chip_name,length:len,width:wid,fan_positions:gpuFans,fan_count:gpuFans.length,body,rgb}});
- $('#eaGpuMessage').textContent=error?'Could not save GPU draft: '+error.message:'GPU saved as a draft. You can publish it later from Products.';
- if(!error){toast('GPU draft saved.');await loadCompanyResearchAndProducts();}
-}
-const originalLoad=window.loadCompanyDashboard;
-window.loadCompanyDashboard=async function(){
- if(!currentUser||!sb)return;
- await refreshCompanies();
- const {data:invites}=await sb.from('product_company_transfers').select('id,company_id,sender_id,created_at,product_companies(company_name,logo_data_url)').eq('recipient_id',currentUser.id).eq('status','pending').order('created_at',{ascending:false}).limit(10);
- incomingCompanyTransfers=invites||[];renderCompanyIncomingTransfers?.();
- renderChooser();
- if(currentCompany){await loadCompanyResearchAndProducts();if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();if(isGpu())mountGpuWorkspace();}
-};
-const oldRender=window.renderCompanyDashboard;
-window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
-const oldShow=window.showPage;
-window.showPage=function(page){
- if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
- if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('design');return;}
- if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('chips');return;}
- oldShow?.(page);
- if(page==='company')renderChooser();
-};
-document.addEventListener('DOMContentLoaded',()=>{refreshCompanies();});
-if(sb?.auth?.onAuthStateChange)sb.auth.onAuthStateChange(()=>{setTimeout(()=>refreshCompanies(),0);});
-})()+Number(p.product_value||0).toLocaleString()+'</small><label>Listing price<input type="number" min="1" value="'+Number(p.listed_price||1)+'" data-gpu-price="'+p.id+'"></label>'+(p.status==='draft'?'<button type="button" data-gpu-publish="'+p.id+'">Publish product</button>':'<small>Visible in Product Feed</small>')+'</article>').join('')||'<p class="muted">No GPU products yet. Create one in GPU Design.</p>';
- el.querySelectorAll('[data-gpu-publish]').forEach(b=>b.addEventListener('click',async()=>{const id=b.dataset.gpuPublish,price=Number(el.querySelector('[data-gpu-price="'+id+'"]')?.value||0);if(price<=0){toast('Enter a valid listing price.');return;}const {data,error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:true});if(error){toast(error.message);return;}await loadCompanyResearchAndProducts();renderGpuProducts();toast('GPU published to Product Feed!');}));
- el.querySelectorAll('[data-gpu-price]').forEach(i=>i.addEventListener('change',async()=>{const id=i.dataset.gpuPrice,price=Number(i.value);if(price<=0)return;const p=rows.find(x=>x.id===id);if(p?.status==='published'){const {error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:false});if(error)toast(error.message);else{await loadCompanyResearchAndProducts();renderGpuProducts();}}}));
+ if(!rows.length){el.textContent='No GPU products yet. Create one in GPU Design.';return;}
+ el.innerHTML='';
+ rows.forEach(p=>{
+  const card=document.createElement('article');card.className='ea-chip-card';
+  const title=document.createElement('b');title.textContent=p.product_name;
+  const status=document.createElement('small');status.textContent=(p.status==='published'?'Published':'Draft')+' · Value $'+Number(p.product_value||0).toLocaleString();
+  const price=document.createElement('input');price.type='number';price.min='1';price.value=String(p.listed_price||1);
+  const label=document.createElement('label');label.textContent='Listing price';label.appendChild(price);
+  card.append(title,status,label);
+  if(p.status==='draft'){const button=document.createElement('button');button.type='button';button.textContent='Publish product';button.addEventListener('click',async()=>{const amount=Number(price.value);if(amount<=0){toast('Enter a valid listing price.');return;}const result=await sb.rpc('update_cpu_product_listing',{p_product_id:p.id,p_listed_price:amount,p_publish:true});if(result.error){toast(result.error.message);return;}await loadCompanyResearchAndProducts();renderGpuProducts();toast('GPU published to Product Feed!');});card.appendChild(button);}
+  el.appendChild(card);
+ });
 }
 async function saveGpu(){
  const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
