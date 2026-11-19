@@ -16,6 +16,7 @@
     cooling: 0,   // 0 | 1 | 2 | 3 | 4
     graphics: '',
     ai: '',
+    vCache: 'none',
     name: '',
     companyName: '',
     score: 0,
@@ -497,6 +498,13 @@
     ctx.fillStyle = inkMuted;
     ctx.font = '700 26px "JetBrains Mono", monospace';
     ctx.fillText(specTxt, size / 2, 842);
+
+    if (state.vCache && state.vCache !== 'none') {
+      const cacheLabel = ({basic:'V-CACHE',advanced:'V-CACHE+',basic_3d:'3D V-CACHE',advanced_3d:'3D V-CACHE+'})[state.vCache] || 'V-CACHE';
+      ctx.save(); ctx.fillStyle = '#172554'; ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.roundRect(310, 70, 404, 78, 16); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#dbeafe'; ctx.font = '800 28px "JetBrains Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText(cacheLabel, 512, 120); ctx.restore();
+    }
 
     if (state.graphics) {
       ctx.save();
