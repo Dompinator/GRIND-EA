@@ -2093,6 +2093,9 @@ function resolveCpuProductSpec(p) {
   let cores = 0;
   if (Number.isFinite(Number(p?.core_count)) && Number(p.core_count) > 0) {
     cores = Number(p.core_count);
+  } else if (p?.has_thirty_two_cores || p?.include_32_cores) { cores = 32;
+  } else if (p?.has_sixteen_cores || p?.include_16_cores) { cores = 16;
+  } else if (p?.has_eight_cores || p?.include_8_cores) { cores = 8;
   } else if (p?.has_four_cores || p?.include_4_cores) {
     cores = 4;
   } else if (p?.has_two_cores || p?.include_2_cores) {
@@ -2106,6 +2109,8 @@ function resolveCpuProductSpec(p) {
   let threads = 0;
   if (Number.isFinite(Number(p?.thread_count)) && Number(p.thread_count) > 0) {
     threads = Number(p.thread_count);
+  } else if (p?.has_eighteen_threads || p?.include_18_threads) { threads = 18;
+  } else if (p?.has_twelve_threads || p?.include_12_threads) { threads = 12;
   } else if (p?.has_eight_threads || p?.include_8_threads) {
     threads = 8;
   } else if (p?.has_six_threads || p?.include_6_threads) {
@@ -2118,7 +2123,8 @@ function resolveCpuProductSpec(p) {
 
   const rawBody = String(p?.body_type || p?.cpu_body || '').toLowerCase();
   let body = '';
-  if (rawBody.includes('carbon') || p?.has_carbon_fiber || p?.has_carbon_fiber_body || p?.carbon_fiber_body || p?.include_carbon_fiber) {
+  if (rawBody.includes('titanium') || p?.titanium_body || p?.include_titanium_body) { body = 'titanium';
+  } else if (rawBody.includes('carbon') || p?.has_carbon_fiber || p?.has_carbon_fiber_body || p?.carbon_fiber_body || p?.include_carbon_fiber) {
     body = 'carbon';
   } else if (rawBody.includes('silicon') || p?.has_silicon || p?.has_silicon_body || p?.silicon_body || p?.include_silicon) {
     body = 'silicon';
@@ -2132,7 +2138,8 @@ function resolveCpuProductSpec(p) {
 
   const rawCooling = String(p?.cooling_type || p?.cooling || '').toLowerCase();
   let cooling = null;
-  if (rawCooling.includes('great') || p?.has_great_cooling || p?.great_cooling || p?.include_great_cooling) {
+  if (rawCooling.includes('vapor') || p?.vapor_chamber_cooling || p?.include_vapor_chamber) { cooling = 3;
+  } else if (rawCooling.includes('great') || p?.has_great_cooling || p?.great_cooling || p?.include_great_cooling) {
     cooling = 2;
   } else if (rawCooling.includes('built') || p?.has_built_in_cooling || p?.built_in_cooling || p?.include_built_in_cooling) {
     cooling = 1;
@@ -2143,6 +2150,8 @@ function resolveCpuProductSpec(p) {
   } else {
     cooling = 0;
   }
+
+  const graphics = String(p?.graphics_type || p?.graphics || cached?.graphics || '');
 
   const logoUrl = String(
     p?.product_companies?.logo_data_url ||
@@ -2162,6 +2171,7 @@ function resolveCpuProductSpec(p) {
     cores,
     threads,
     cooling,
+    graphics,
     name: String(p?.product_name || cached?.name || companyName || 'CPU'),
     companyName,
     score: Number(p?.cpu_score ?? cached?.score ?? 0),
@@ -2239,9 +2249,9 @@ function formatCpuSpecLine(spec) {
 }
 
 function formatCpuHardwareBadges(spec) {
-  const bodyLabel = spec.body === 'carbon' ? 'Carbon Fiber' : (spec.body === 'silicon' ? 'Silicon Body' : 'Gray Plastic');
-  const coolingLabel = spec.cooling >= 2 ? 'Great Cooling' : (spec.cooling === 1 ? 'Built-In Cooling' : 'Standard Cooling');
-  return bodyLabel + ' · ' + formatCpuSpecLine(spec) + ' · ' + coolingLabel;
+  const bodyLabel = spec.body === 'titanium' ? 'Titanium Body' : spec.body === 'carbon' ? 'Carbon Fiber' : (spec.body === 'silicon' ? 'Silicon Body' : 'Gray Plastic');
+  const coolingLabel = spec.cooling >= 3 ? 'Vapor Chamber Cooling' : spec.cooling >= 2 ? 'Great Cooling' : (spec.cooling === 1 ? 'Built-In Cooling' : 'Standard Cooling');
+  return bodyLabel + ' · ' + formatCpuSpecLine(spec) + ' · ' + coolingLabel + (spec.graphics ? ' · Integrated Graphics' : '');
 }
 
 async function finishCpuDesign(){
@@ -2252,18 +2262,20 @@ async function finishCpuDesign(){
   if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}
   if(btn){btn.disabled=true;btn.textContent='Manufacturing...';}
 
-  const activeCores = cpuDesignFourCores ? 4 : (cpuDesignTwoCores ? 2 : (cpuDesignCore ? 1 : 0));
-  const activeThreads = cpuDesignEightThreads ? 8 : (cpuDesignSixThreads ? 6 : (cpuDesignThreads ? 4 : 0));
-  const activeScore = (cpuDesignFourCores ? 18 : (cpuDesignTwoCores ? 8 : (cpuDesignCore ? 4 : 0)))
-    + (cpuDesignEightThreads ? 8 : (cpuDesignSixThreads ? 6 : (cpuDesignThreads ? 4 : 0)))
-    + (cpuDesignCarbonFiber ? 18 : (cpuDesignSilicon ? 6 : 0))
-    + (cpuDesignGreatCooling ? 18 : (cpuDesignBuiltInCooling ? 10 : 0));
+  const activeCores = cpuDesignThirtyTwoCores ? 32 : cpuDesignSixteenCores ? 16 : cpuDesignEightCores ? 8 : cpuDesignFourCores ? 4 : cpuDesignTwoCores ? 2 : (cpuDesignCore ? 1 : 0);
+  const activeThreads = cpuDesignEighteenThreads ? 18 : cpuDesignTwelveThreads ? 12 : cpuDesignEightThreads ? 8 : cpuDesignSixThreads ? 6 : (cpuDesignThreads ? 4 : 0);
+  const activeScore = (cpuDesignThirtyTwoCores?38:cpuDesignSixteenCores?24:cpuDesignEightCores?18:cpuDesignFourCores?12:cpuDesignTwoCores?8:(cpuDesignCore?4:0))
+    + (cpuDesignEighteenThreads?18:cpuDesignTwelveThreads?12:cpuDesignEightThreads?8:cpuDesignSixThreads?6:(cpuDesignThreads?4:0))
+    + (cpuDesignTitaniumBody?32:cpuDesignCarbonFiber?18:cpuDesignSilicon?6:0)
+    + (cpuDesignVaporChamber?22:cpuDesignGreatCooling?18:cpuDesignBuiltInCooling?10:0)
+    + (cpuDesignAdvancedGraphics?22:cpuDesignSimpleGraphics?8:0);
   const activeTier = activeScore>=200?'U':activeScore>=150?'X':activeScore>=125?'S++':activeScore>=100?'S+':activeScore>=75?'S':activeScore>=50?'A':activeScore>=36?'B':activeScore>=24?'C':activeScore>=10?'D':activeScore>=6?'E':'F';
   const activeSpec = {
-    body: cpuDesignCarbonFiber ? 'carbon' : (cpuDesignSilicon ? 'silicon' : 'gray'),
+    body: cpuDesignTitaniumBody ? 'titanium' : (cpuDesignCarbonFiber ? 'carbon' : (cpuDesignSilicon ? 'silicon' : 'gray')),
     cores: activeCores,
     threads: activeThreads,
-    cooling: cpuDesignGreatCooling ? 2 : (cpuDesignBuiltInCooling ? 1 : 0),
+    cooling: cpuDesignVaporChamber ? 3 : (cpuDesignGreatCooling ? 2 : (cpuDesignBuiltInCooling ? 1 : 0)),
+    graphics: cpuDesignAdvancedGraphics ? 'advanced' : (cpuDesignSimpleGraphics ? 'simple' : ''),
     name,
     companyName: currentCompany?.company_name || '',
     score: activeScore,
@@ -2280,13 +2292,13 @@ async function finishCpuDesign(){
     }
   }
 
-  const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty,p_include_8_threads:cpuDesignEightThreads,p_include_4_cores:cpuDesignFourCores,p_include_carbon_fiber:cpuDesignCarbonFiber,p_include_built_in_cooling:cpuDesignBuiltInCooling,p_include_great_cooling:cpuDesignGreatCooling});
+  const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty,p_include_8_threads:cpuDesignEightThreads,p_include_4_cores:cpuDesignFourCores,p_include_carbon_fiber:cpuDesignCarbonFiber,p_include_built_in_cooling:cpuDesignBuiltInCooling,p_include_great_cooling:cpuDesignGreatCooling,p_include_eight_cores:cpuDesignEightCores,p_include_sixteen_cores:cpuDesignSixteenCores,p_include_thirty_two_cores:cpuDesignThirtyTwoCores,p_include_twelve_threads:cpuDesignTwelveThreads,p_include_eighteen_threads:cpuDesignEighteenThreads,p_include_titanium_body:cpuDesignTitaniumBody,p_include_vapor_chamber:cpuDesignVaporChamber,p_include_simple_graphics:cpuDesignSimpleGraphics,p_include_advanced_graphics:cpuDesignAdvancedGraphics});
   if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}
   if(data?.id && snapDataUrl){
     saveCpuProductThumb(data.id, activeSpec, snapDataUrl);
   }
   selectedCompanyProductId=data.id;
-  cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=cpuDesignEightThreads=cpuDesignFourCores=cpuDesignCarbonFiber=cpuDesignBuiltInCooling=cpuDesignGreatCooling=false;
+  cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=cpuDesignEightThreads=cpuDesignFourCores=cpuDesignCarbonFiber=cpuDesignBuiltInCooling=cpuDesignGreatCooling=cpuDesignEightCores=cpuDesignSixteenCores=cpuDesignThirtyTwoCores=cpuDesignTwelveThreads=cpuDesignEighteenThreads=cpuDesignTitaniumBody=cpuDesignVaporChamber=cpuDesignSimpleGraphics=cpuDesignAdvancedGraphics=false;
   await loadCompanyResearchAndProducts();
   renderCompanyDashboard();
   switchCompanyDashboardTab('products');
