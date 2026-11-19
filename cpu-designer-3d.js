@@ -111,9 +111,9 @@
     if (THREE && OrbitControls && RoomEnvironment) return true;
     try {
       const [threeMod, orbitMod, envMod] = await Promise.all([
-        import('https://esm.sh/three@0.170.0'),
-        import('https://esm.sh/three@0.170.0/examples/jsm/controls/OrbitControls.js?deps=three@0.170.0'),
-        import('https://esm.sh/three@0.170.0/examples/jsm/environments/RoomEnvironment.js?deps=three@0.170.0')
+        import('three'),
+        import('three/addons/controls/OrbitControls.js'),
+        import('three/addons/environments/RoomEnvironment.js')
       ]);
       THREE = threeMod;
       OrbitControls = orbitMod.OrbitControls;
@@ -1269,10 +1269,16 @@
     });
 
     const lidBtn = dockWrap.querySelector('#cpuLidToggleBtn');
+    const syncLidBtn = () => {
+      if (!lidBtn) return;
+      const isOpen = targetLidOpen > 0.5;
+      lidBtn.classList.toggle('active', isOpen);
+      lidBtn.textContent = isOpen ? 'Close Lid' : 'Open Lid';
+    };
+    dockWrap._syncLidBtn = syncLidBtn;
     lidBtn?.addEventListener('click', () => {
       targetLidOpen = targetLidOpen > 0.5 ? 0 : 1;
-      lidBtn.classList.toggle('active', targetLidOpen > 0.5);
-      lidBtn.textContent = targetLidOpen > 0.5 ? 'Close Lid' : 'Open Lid';
+      syncLidBtn();
     });
 
     const spinBtn = dockWrap.querySelector('#cpuSpinToggleBtn');
@@ -1643,19 +1649,28 @@
       prev.score !== activeState.score ||
       prev.tier !== activeState.tier;
 
+    const syncLid = (open) => {
+      targetLidOpen = open ? 1 : 0;
+      const dock = document.getElementById(DOCK_ID);
+      if (dock && typeof dock._syncLidBtn === 'function') dock._syncLidBtn();
+    };
+
     if (coresChanged) {
       rebuildSiliconCores(activeState.cores);
       animWeights.cores = 0.25;
       // Thread bus endpoints adapt to core layout
       rebuildThreadInterconnects(activeState.threads, activeState.cores);
+      if (activeState.cores > 0 && activeState.cooling === 0) syncLid(true);
     }
     if (threadsChanged && !coresChanged) {
       rebuildThreadInterconnects(activeState.threads, activeState.cores);
       animWeights.threads = 0.25;
+      if (activeState.threads > 0 && activeState.cooling === 0) syncLid(true);
     }
     if (coolingChanged) {
       rebuildCoolingStack(activeState.cooling);
       animWeights.cooling = 0.15;
+      if (activeState.cooling > 0) syncLid(false);
     }
     if (prev.body !== activeState.body) {
       animWeights.bodyPulse = 1;
