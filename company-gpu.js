@@ -96,7 +96,7 @@ function mountGpuWorkspace(){
  addBackButton();renderResearchLists();loadChips();drawGpu();
  const tabs=$('.company-dashboard-tabs');if(tabs&&!$('#eaGpuTab')){const b=document.createElement('button');b.id='eaGpuTab';b.className='company-dashboard-tab';b.textContent='GPU / CHIP';b.addEventListener('click',showGpuMain);tabs.appendChild(b);}
 }
-function showGpuMain(){document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));$('#eaGpuTab')?.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel')?.classList.remove('hidden');renderGpuWorkspace();}
+function showGpuMain(){document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));$('#eaGpuTab')?.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel')?.classList.remove('hidden');renderResearchLists();loadChips();drawGpu();}
 function setGpuTab(tab){
  document.querySelectorAll('[data-gpu-tab]').forEach(b=>b.classList.toggle('active',b.dataset.gpuTab===tab));
  const views={design:'#eaGpuDesign',chips:'#eaGpuChips',gpuResearch:'#eaGpuResearch',chipResearch:'#eaChipResearch',products:'#eaGpuProducts'};Object.entries(views).forEach(([key,selector])=>$(selector)?.classList.toggle('hidden',key!==tab));
