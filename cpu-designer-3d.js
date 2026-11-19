@@ -11,8 +11,8 @@
 
   const DEFAULT_STATE = {
     body: 'gray', // gray | silicon | carbon | titanium
-    cores: 0,     // 0 | 1 | 2 | 4 | 8 | 16 | 32
-    threads: 0,   // 0 | 4 | 6 | 8 | 12 | 18
+    cores: 0,     // 0 | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 86
+    threads: 0,   // 0 | 4 | 6 | 8 | 12 | 18 | 36 | 64 | 86 | 108
     cooling: 0,   // 0 | 1 | 2 | 3 | 4
     graphics: '',
     ai: '',
@@ -1136,7 +1136,7 @@
     const iodGeom = createRoundedRectGeometry(0.38, 0.30, 0.04, 0.025, 0.006);
     const iodMesh = new THREE.Mesh(iodGeom, mats.iodSilicon);
     iodMesh.castShadow = !isSoftwareGl;
-    iodMesh.position.set(0, 0.025, coreCount >= 32 ? 0.78 : 0.48);
+    iodMesh.position.set(0, 0.025, coreCount >= 64 ? 0.86 : coreCount >= 32 ? 0.78 : 0.48);
     diesGroup.add(iodMesh);
 
     if (coreCount <= 0) {
@@ -1147,12 +1147,12 @@
       return;
     }
 
-    const cols = coreCount <= 1 ? 1 : coreCount <= 4 ? 2 : coreCount <= 8 ? 4 : 8;
+    const cols = coreCount >= 86 ? 11 : coreCount >= 64 ? 8 : coreCount <= 1 ? 1 : coreCount <= 4 ? 2 : coreCount <= 8 ? 4 : 8;
     const rows = Math.ceil(coreCount / cols);
-    const spacingX = coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.72 / Math.max(1, cols - 1);
-    const spacingZ = coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.40;
-    const dieW = coreCount >= 32 ? 0.15 : coreCount >= 16 ? 0.19 : coreCount >= 8 ? 0.25 : coreCount >= 4 ? 0.42 : coreCount === 2 ? 0.54 : 0.68;
-    const dieH = coreCount >= 32 ? 0.14 : coreCount >= 16 ? 0.17 : coreCount >= 8 ? 0.22 : coreCount >= 4 ? 0.28 : coreCount === 2 ? 0.34 : 0.40;
+    const spacingX = coreCount >= 86 ? 0.18 : coreCount >= 64 ? 0.22 : coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.72 / Math.max(1, cols - 1);
+    const spacingZ = coreCount >= 64 ? 0.15 : coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.40;
+    const dieW = coreCount >= 64 ? 0.135 : coreCount >= 32 ? 0.15 : coreCount >= 16 ? 0.19 : coreCount >= 8 ? 0.25 : coreCount >= 4 ? 0.42 : coreCount === 2 ? 0.54 : 0.68;
+    const dieH = coreCount >= 64 ? 0.125 : coreCount >= 32 ? 0.14 : coreCount >= 16 ? 0.17 : coreCount >= 8 ? 0.22 : coreCount >= 4 ? 0.28 : coreCount === 2 ? 0.34 : 0.40;
 
     const chipGeom = createRoundedRectGeometry(dieW, dieH, 0.035, 0.02, 0.005);
     const frameGeom = createRoundedRectGeometry(dieW + 0.035, dieH + 0.035, 0.012, 0.025, 0.003);
@@ -1160,7 +1160,7 @@
       const col = i % cols;
       const row = Math.floor(i / cols);
       const cx = (col - (Math.min(cols, coreCount) - 1) / 2) * spacingX;
-      const cz = -0.34 + row * spacingZ;
+      const cz = (coreCount >= 64 ? -0.72 : -0.34) + row * spacingZ;
       const collar = new THREE.Mesh(frameGeom, mats.copper);
       collar.position.set(cx, 0.008, cz);
       diesGroup.add(collar);
