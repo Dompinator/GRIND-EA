@@ -2165,6 +2165,7 @@
       prevState.threads !== snapState.threads ||
       prevState.cooling !== snapState.cooling ||
       prevState.graphics !== snapState.graphics ||
+      prevState.ai !== snapState.ai ||
       prevState.name !== snapState.name ||
       prevState.companyName !== snapState.companyName ||
       prevState.score !== snapState.score ||
@@ -2207,6 +2208,7 @@
         rebuildThreadInterconnects(snapState.threads, snapState.cores);
       }
       if (prevState.cooling !== snapState.cooling) rebuildCoolingStack(snapState.cooling);
+      if (prevState.ai !== snapState.ai) rebuildAiBadge(snapState.ai);
       applyBodyMaterialFinish(snapState.body);
     }
 
@@ -2289,6 +2291,7 @@
         rebuildThreadInterconnects(prevState.threads, prevState.cores);
       }
       if (snapState.cooling !== prevState.cooling) rebuildCoolingStack(prevState.cooling);
+      if (snapState.ai !== prevState.ai) rebuildAiBadge(prevState.ai);
       applyBodyMaterialFinish(prevState.body);
     }
 
