@@ -175,6 +175,22 @@ async function saveGpu(){
  $('#eaGpuMessage').textContent=error?'Could not save GPU draft: '+error.message:'GPU saved as a draft. You can publish it later from Products.';
  if(!error){toast('GPU draft saved.');await loadCompanyResearchAndProducts();}
 }
+
+const originalPublishedFeed=window.loadPublishedProductFeed;
+window.loadPublishedProductFeed=async function(){
+ await originalPublishedFeed?.();
+ if(!sb)return;
+ const {data,error}=await sb.from('product_company_products').select('id,product_name,design_data,listed_price,product_value').eq('status','published').eq('product_line','gpu').order('created_at',{ascending:false}).limit(100);
+ if(error||!data?.length)return;
+ const grid=$('#publishedProductFeed');if(!grid)return;
+ data.forEach(p=>{
+  const card=[...grid.querySelectorAll('.published-product-card')].find(x=>x.querySelector('h4')?.textContent===p.product_name);
+  if(!card)return;
+  const visual=card.querySelector('.product-feed-cpu');
+  if(visual){visual.className='product-feed-gpu';visual.innerHTML='<span>▰</span><b>'+esc(p.design_data?.brand||'GPU')+'</b><small>'+Number(p.design_data?.fan_count||0)+' FANS</small>';}
+  const specs=card.querySelector('p');if(specs)specs.textContent=(p.design_data?.chip_name||'GPU Chip')+' · '+Number(p.design_data?.length||0)+' mm · '+Number(p.design_data?.width||0)+' mm';
+ });
+};
 const originalLoad=window.loadCompanyDashboard;
 window.loadCompanyDashboard=async function(){
  if(!currentUser||!sb)return;
