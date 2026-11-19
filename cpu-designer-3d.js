@@ -16,7 +16,8 @@
     cooling: 0,   // 0 | 1 | 2
     name: 'Baseline CPU',
     score: 0,
-    tier: 'F'
+    tier: 'F',
+    logoUrl: ''
   };
 
   let THREE = null;
@@ -36,6 +37,10 @@
   let controls = null;
   let pmremGenerator = null;
   let envTexture = null;
+
+  // Cached Company Logo Image for Apple-style CPU top printing
+  let loadedLogoUrl = '';
+  let loadedLogoImg = null;
 
   // Dynamic model state & smooth animation targets
   let activeState = { ...DEFAULT_STATE };
@@ -414,44 +419,171 @@
       ctx.stroke();
     });
 
-    // Laser-etched markings
-    ctx.textAlign = 'center';
-    ctx.fillStyle = inkMuted;
-    ctx.font = '800 38px "Plus Jakarta Sans", system-ui, sans-serif';
-    ctx.fillText(
-      body === 'carbon' ? 'GRIND // CARBON EDITION' : body === 'silicon' ? 'GRIND // SILICON SERIES' : 'GRIND // ARCHITECTURE',
-      size / 2,
-      250
+    // Laser-etched markings + Apple-style Company Logo printed prominently on CPU top
+    const hasCustomLogo = Boolean(
+      loadedLogoImg &&
+      loadedLogoUrl === (state.logoUrl || '') &&
+      loadedLogoImg.complete &&
+      loadedLogoImg.naturalWidth > 0
     );
 
-    const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 24);
-    ctx.fillStyle = inkPrimary;
-    const fontSize = safeName.length > 16 ? 68 : safeName.length > 11 ? 84 : 98;
-    ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
-    ctx.fillText(safeName, size / 2, 470);
+    ctx.textAlign = 'center';
+    if (hasCustomLogo) {
+      const logoSize = 276;
+      const lx = (size - logoSize) / 2;
+      const ly = 148;
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.shadowColor = body === 'carbon' ? 'rgba(0,0,0,0.65)' : 'rgba(15,23,42,0.28)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 4;
+      ctx.drawImage(loadedLogoImg, lx, ly, logoSize, logoSize);
+      ctx.restore();
 
-    // Spec line
-    const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
-    const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
-    ctx.fillStyle = inkMuted;
-    ctx.font = '700 36px "JetBrains Mono", monospace';
-    ctx.fillText(`${coreTxt}  ·  ${threadTxt}`, size / 2, 575);
+      const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 24);
+      ctx.fillStyle = inkPrimary;
+      const fontSize = safeName.length > 16 ? 58 : safeName.length > 11 ? 72 : 84;
+      ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
+      ctx.fillText(safeName, size / 2, 540);
 
-    // Tier stamp box
-    const tierTxt = `TIER ${state.tier || 'F'}  ·  SCORE ${Number(state.score || 0)}`;
-    ctx.fillStyle = accent;
-    ctx.font = '800 34px "JetBrains Mono", monospace';
-    ctx.fillText(tierTxt, size / 2, 720);
+      const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
+      const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
+      ctx.fillStyle = inkMuted;
+      ctx.font = '700 34px "JetBrains Mono", monospace';
+      ctx.fillText(`${coreTxt}  ·  ${threadTxt}`, size / 2, 628);
 
-    // Bottom wafer serial micro-code
-    ctx.fillStyle = inkMuted;
-    ctx.font = '600 24px "JetBrains Mono", monospace';
-    ctx.fillText('GRIND SEMICONDUCTOR · FAB EA-01', size / 2, 845);
+      const tierTxt = `TIER ${state.tier || 'F'}  ·  SCORE ${Number(state.score || 0)}`;
+      ctx.fillStyle = accent;
+      ctx.font = '800 32px "JetBrains Mono", monospace';
+      ctx.fillText(tierTxt, size / 2, 742);
+
+      ctx.fillStyle = inkMuted;
+      ctx.font = '600 22px "JetBrains Mono", monospace';
+      ctx.fillText('GRIND SEMICONDUCTOR · FAB EA-01', size / 2, 845);
+    } else {
+      ctx.fillStyle = inkMuted;
+      ctx.font = '800 38px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.fillText(
+        body === 'carbon' ? 'GRIND // CARBON EDITION' : body === 'silicon' ? 'GRIND // SILICON SERIES' : 'GRIND // ARCHITECTURE',
+        size / 2,
+        250
+      );
+
+      const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 24);
+      ctx.fillStyle = inkPrimary;
+      const fontSize = safeName.length > 16 ? 68 : safeName.length > 11 ? 84 : 98;
+      ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", system-ui, sans-serif`;
+      ctx.fillText(safeName, size / 2, 470);
+
+      // Spec line
+      const coreTxt = state.cores > 0 ? `${state.cores} CORE${state.cores > 1 ? 'S' : ''}` : 'NO CORE';
+      const threadTxt = state.threads > 0 ? `${state.threads} THREADS` : 'NO THREADS';
+      ctx.fillStyle = inkMuted;
+      ctx.font = '700 36px "JetBrains Mono", monospace';
+      ctx.fillText(`${coreTxt}  ·  ${threadTxt}`, size / 2, 575);
+
+      // Tier stamp box
+      const tierTxt = `TIER ${state.tier || 'F'}  ·  SCORE ${Number(state.score || 0)}`;
+      ctx.fillStyle = accent;
+      ctx.font = '800 34px "JetBrains Mono", monospace';
+      ctx.fillText(tierTxt, size / 2, 720);
+
+      // Bottom wafer serial micro-code
+      ctx.fillStyle = inkMuted;
+      ctx.font = '600 24px "JetBrains Mono", monospace';
+      ctx.fillText('GRIND SEMICONDUCTOR · FAB EA-01', size / 2, 845);
+    }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
     return tex;
+  }
+
+  function createCoolingCapLogoTexture(state) {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, '#2a3040');
+    grad.addColorStop(0.5, '#191d28');
+    grad.addColorStop(1, '#10131b');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Brushed horizontal grain
+    for (let y = 0; y < size; y += 2) {
+      ctx.fillStyle = (y % 4 === 0) ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)';
+      ctx.fillRect(0, y, size, 1);
+    }
+
+    ctx.strokeStyle = 'rgba(226,232,240,0.22)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(26, 26, size - 52, size - 52);
+
+    const hasCustomLogo = Boolean(
+      loadedLogoImg &&
+      loadedLogoUrl === (state.logoUrl || '') &&
+      loadedLogoImg.complete &&
+      loadedLogoImg.naturalWidth > 0
+    );
+
+    if (hasCustomLogo) {
+      const ls = 240;
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 10;
+      ctx.drawImage(loadedLogoImg, (size - ls) / 2, 74, ls, ls);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = 'rgba(226,232,240,0.82)';
+      ctx.font = '900 44px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('GRIND', size / 2, 225);
+    }
+
+    const safeName = (String(state.name || 'Baseline CPU').trim() || 'Baseline CPU').slice(0, 20);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.textAlign = 'center';
+    ctx.font = '800 34px "Plus Jakarta Sans", system-ui, sans-serif';
+    ctx.fillText(safeName, size / 2, 395);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '700 20px "JetBrains Mono", monospace';
+    ctx.fillText(state.cooling >= 2 ? 'GREAT COOLING // CRYO LOOP' : 'BUILT-IN COOLING', size / 2, 442);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+    return tex;
+  }
+
+  function ensureLogoImageLoaded(url) {
+    const clean = String(url || '').trim();
+    if (!clean) {
+      if (loadedLogoUrl) {
+        loadedLogoUrl = '';
+        loadedLogoImg = null;
+        if (initialized) applyBodyMaterialFinish(activeState.body);
+      }
+      return;
+    }
+    if (clean === loadedLogoUrl && loadedLogoImg && loadedLogoImg.complete) return;
+    loadedLogoUrl = clean;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (loadedLogoUrl !== clean) return;
+      loadedLogoImg = img;
+      if (initialized) applyBodyMaterialFinish(activeState.body);
+    };
+    img.src = clean;
   }
 
   // ---------- Extruded Geometry Builders ----------
@@ -612,6 +744,7 @@
     textures.pcbCarbon = createPcbTextures('carbon');
     textures.siliconDie = createSiliconDieTexture();
     textures.ihs = createIhsEtchTexture(activeState);
+    textures.coolingLogo = createCoolingCapLogoTexture(activeState);
 
     mats.pcb = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
@@ -721,6 +854,14 @@
       emissiveIntensity: 0.85,
       metalness: 0.4,
       roughness: 0.25
+    });
+
+    mats.coolingLogoCap = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      map: textures.coolingLogo,
+      metalness: 0.48,
+      roughness: 0.28,
+      clearcoat: 0.45
     });
   }
 
@@ -1022,39 +1163,52 @@
     bolts.computeBoundingSphere();
     coolingGroup.add(bolts);
 
-    // 2. Copper Coldplate Vapor Chamber Block
-    const blockGeom = createRoundedRectGeometry(1.22, 1.22, isGreat ? 0.12 : 0.08, 0.06, 0.012);
+    // 2. Copper Vapor Coldplate Collar
+    const blockGeom = createRoundedRectGeometry(isGreat ? 1.18 : 0.96, isGreat ? 1.18 : 0.96, isGreat ? 0.11 : 0.055, 0.06, 0.010);
     const blockMesh = new THREE.Mesh(blockGeom, mats.copper);
     blockMesh.castShadow = !isSoftwareGl;
-    blockMesh.position.y = isGreat ? 0.075 : 0.055;
+    blockMesh.position.y = isGreat ? 0.065 : 0.038;
     coolingGroup.add(blockMesh);
 
-    // 3. Sintered U-Bent Copper Heatpipes (2 for Built-In, 4 for Great Cooling)
-    const pipeCount = isGreat ? 4 : 2;
-    const finStackBottomY = isGreat ? 0.22 : 0.13;
-    const finStackTopY = isGreat ? 0.72 : 0.42;
+    // 3. Built-In Cooling: small precision copper pipes going right INTO the CPU
+    //    Great Cooling: noticeably bigger, thicker high-capacity copper pipes plunging deep INSIDE the CPU
+    const pipeRadius = isGreat ? 0.056 : 0.022;
+    const collarOuterR = isGreat ? 0.088 : 0.042;
+    const collarHeight = isGreat ? 0.065 : 0.042;
+    const finStackBottomY = isGreat ? 0.22 : 0.095;
+    const finStackTopY = isGreat ? 0.70 : 0.28;
+    const pipeEntryDepthY = isGreat ? -0.105 : -0.075; // Plunges directly inside the CPU IHS & die pocket!
 
-    for (let p = 0; p < pipeCount; p++) {
-      const offsetZ = (p - (pipeCount - 1) / 2) * (isGreat ? 0.28 : 0.42);
-      const spreadX = isGreat ? 0.62 : 0.48;
-      const pipeCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-spreadX, finStackTopY + 0.05, offsetZ),
-        new THREE.Vector3(-spreadX, finStackBottomY, offsetZ),
-        new THREE.Vector3(-0.25, 0.07, offsetZ),
-        new THREE.Vector3(0.25, 0.07, offsetZ),
-        new THREE.Vector3(spreadX, finStackBottomY, offsetZ),
-        new THREE.Vector3(spreadX, finStackTopY + 0.05, offsetZ)
-      ]);
-      const pGeom = new THREE.TubeGeometry(pipeCurve, 32, 0.036, 12, false);
-      const pMesh = new THREE.Mesh(pGeom, mats.copper);
-      pMesh.castShadow = !isSoftwareGl;
-      coolingGroup.add(pMesh);
-    }
+    const collarGeom = new THREE.CylinderGeometry(collarOuterR, collarOuterR * 1.1, collarHeight, 16);
 
-    // 4. Skived Fin Stack (InstancedMesh)
     if (!isGreat) {
-      const finCount = 14;
-      const finGeom = new THREE.BoxGeometry(1.36, 0.014, 1.32);
+      // Built-In Cooling: 4 sleek small copper heatpipes arching out of compact fin core and diving into CPU socket ports
+      const pipeOffsetsZ = [-0.42, -0.16, 0.16, 0.42];
+      pipeOffsetsZ.forEach((oz) => {
+        const pipeCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.62, pipeEntryDepthY, oz),
+          new THREE.Vector3(-0.62, 0.045, oz),
+          new THREE.Vector3(-0.48, 0.19, oz),
+          new THREE.Vector3(0.0, 0.22, oz),
+          new THREE.Vector3(0.48, 0.19, oz),
+          new THREE.Vector3(0.62, 0.045, oz),
+          new THREE.Vector3(0.62, pipeEntryDepthY, oz)
+        ]);
+        const pGeom = new THREE.TubeGeometry(pipeCurve, 32, pipeRadius, 12, false);
+        const pMesh = new THREE.Mesh(pGeom, mats.copper);
+        pMesh.castShadow = !isSoftwareGl;
+        coolingGroup.add(pMesh);
+
+        [-0.62, 0.62].forEach((cx) => {
+          const cMesh = new THREE.Mesh(collarGeom, mats.darkAnodized);
+          cMesh.position.set(cx, -0.005, oz);
+          coolingGroup.add(cMesh);
+        });
+      });
+
+      // Compact low-profile aluminum fin stack + printed Company Logo top plate
+      const finCount = 10;
+      const finGeom = new THREE.BoxGeometry(1.18, 0.012, 1.14);
       const fins = new THREE.InstancedMesh(finGeom, mats.alumFin, finCount);
       fins.castShadow = !isSoftwareGl;
       fins.receiveShadow = true;
@@ -1070,11 +1224,47 @@
       fins.computeBoundingSphere();
       coolingGroup.add(fins);
 
-      const capGeom = createRoundedRectGeometry(1.38, 1.34, 0.025, 0.04, 0.008);
-      const capMesh = new THREE.Mesh(capGeom, mats.darkAnodized);
-      capMesh.position.y = finStackTopY + 0.03;
+      const capGeom = createRoundedRectGeometry(1.22, 1.18, 0.028, 0.05, 0.008);
+      const capMesh = new THREE.Mesh(capGeom, [mats.coolingLogoCap, mats.darkAnodized]);
+      capMesh.castShadow = !isSoftwareGl;
+      capMesh.position.y = finStackTopY + 0.024;
       coolingGroup.add(capMesh);
     } else {
+      // Great Cooling: 4 BIG thick copper heatpipes sweeping from dual towers straight inside the CPU!
+      const pipeOffsetsZ = [-0.46, -0.16, 0.16, 0.46];
+      pipeOffsetsZ.forEach((oz) => {
+        const pipeCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.32, pipeEntryDepthY, oz),
+          new THREE.Vector3(-0.34, 0.08, oz),
+          new THREE.Vector3(-0.62, 0.24, oz),
+          new THREE.Vector3(-0.56, finStackTopY + 0.03, oz),
+          new THREE.Vector3(-0.56, finStackTopY + 0.08, oz)
+        ]);
+        const pGeomL = new THREE.TubeGeometry(pipeCurve, 28, pipeRadius, 14, false);
+        const pMeshL = new THREE.Mesh(pGeomL, mats.copper);
+        pMeshL.castShadow = !isSoftwareGl;
+        coolingGroup.add(pMeshL);
+
+        const pipeCurveR = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0.32, pipeEntryDepthY, oz),
+          new THREE.Vector3(0.34, 0.08, oz),
+          new THREE.Vector3(0.62, 0.24, oz),
+          new THREE.Vector3(0.56, finStackTopY + 0.03, oz),
+          new THREE.Vector3(0.56, finStackTopY + 0.08, oz)
+        ]);
+        const pGeomR = new THREE.TubeGeometry(pipeCurveR, 28, pipeRadius, 14, false);
+        const pMeshR = new THREE.Mesh(pGeomR, mats.copper);
+        pMeshR.castShadow = !isSoftwareGl;
+        coolingGroup.add(pMeshR);
+
+        // Oversized machined pipe intake sockets where big pipes plunge inside CPU
+        [-0.32, 0.32].forEach((cx) => {
+          const cMesh = new THREE.Mesh(collarGeom, mats.darkAnodized);
+          cMesh.position.set(cx, 0.012, oz);
+          coolingGroup.add(cMesh);
+        });
+      });
+
       // Twin cooling towers + center PWM axial rotor fan
       const towerFinCount = 13;
       const finGeom = new THREE.BoxGeometry(0.52, 0.015, 1.44);
@@ -1097,7 +1287,7 @@
       fins.computeBoundingSphere();
       coolingGroup.add(fins);
 
-      // Machined top shroud caps + cryo light accent strips
+      // Machined top shroud caps + cryo light accent strips + Center Company Logo Crest Bridge
       const topPlateGeom = createRoundedRectGeometry(0.56, 1.48, 0.03, 0.04, 0.008);
       const stripGeom = new THREE.BoxGeometry(0.42, 0.012, 0.045);
       [-0.56, 0.56].forEach(tx => {
@@ -1110,9 +1300,16 @@
         coolingGroup.add(strip);
       });
 
+      // Printed Company Logo Top Crest Plate bridging Great Cooling towers cleanly on top
+      const bridgeBadgeGeom = createRoundedRectGeometry(0.76, 0.76, 0.032, 0.06, 0.010);
+      const bridgeBadge = new THREE.Mesh(bridgeBadgeGeom, [mats.coolingLogoCap, mats.darkAnodized]);
+      bridgeBadge.castShadow = !isSoftwareGl;
+      bridgeBadge.position.set(0, finStackTopY + 0.075, 0);
+      coolingGroup.add(bridgeBadge);
+
       // Center PWM Axial Fan Assembly (shroud ring + spinning 9-blade hub)
-      const fanY = (finStackBottomY + finStackTopY) * 0.52;
-      const shroudGeom = new THREE.TorusGeometry(0.42, 0.035, 12, 36);
+      const fanY = (finStackBottomY + finStackTopY) * 0.48;
+      const shroudGeom = new THREE.TorusGeometry(0.40, 0.032, 12, 36);
       const shroud = new THREE.Mesh(shroudGeom, mats.darkAnodized);
       shroud.rotation.y = Math.PI / 2;
       shroud.position.set(0, fanY, 0);
@@ -1121,19 +1318,19 @@
       fanRotorGroup = new THREE.Group();
       fanRotorGroup.position.set(0, fanY, 0);
 
-      const hubGeom = new THREE.CylinderGeometry(0.11, 0.11, 0.08, 24);
+      const hubGeom = new THREE.CylinderGeometry(0.105, 0.105, 0.08, 24);
       const hubMesh = new THREE.Mesh(hubGeom, mats.alumFin);
       hubMesh.rotation.z = Math.PI / 2;
       fanRotorGroup.add(hubMesh);
 
-      const bladeGeom = new THREE.BoxGeometry(0.015, 0.28, 0.085);
+      const bladeGeom = new THREE.BoxGeometry(0.015, 0.26, 0.08);
       const bladesCount = 9;
       for (let b = 0; b < bladesCount; b++) {
         const angle = (b / bladesCount) * Math.PI * 2;
         const pivot = new THREE.Group();
         pivot.rotation.x = angle;
         const blade = new THREE.Mesh(bladeGeom, mats.fanBlade);
-        blade.position.y = 0.22;
+        blade.position.y = 0.21;
         blade.rotation.y = 0.45; // aero pitch
         pivot.add(blade);
         fanRotorGroup.add(pivot);
@@ -1188,11 +1385,18 @@
       mats.ihsFlange.roughness = 0.38;
     }
 
-    // Re-etch IHS plate with live name + spec + finish
+    // Re-etch IHS plate & cooling top cap with live company logo + name + spec + finish
     if (textures.ihs) textures.ihs.dispose();
     textures.ihs = createIhsEtchTexture(activeState);
     mats.ihsTop.map = textures.ihs;
     mats.ihsTop.needsUpdate = true;
+
+    if (mats.coolingLogoCap) {
+      if (textures.coolingLogo) textures.coolingLogo.dispose();
+      textures.coolingLogo = createCoolingCapLogoTexture(activeState);
+      mats.coolingLogoCap.map = textures.coolingLogo;
+      mats.coolingLogoCap.needsUpdate = true;
+    }
   }
 
   // ---------- Dock & Camera Presets ----------
@@ -1634,8 +1838,11 @@
       cooling: Number(nextState.cooling || 0),
       name: String(nextState.name || 'Baseline CPU'),
       score: Number(nextState.score || 0),
-      tier: String(nextState.tier || 'F')
+      tier: String(nextState.tier || 'F'),
+      logoUrl: String(nextState.logoUrl || '')
     };
+
+    ensureLogoImageLoaded(activeState.logoUrl);
 
     const ready = await initIfNeeded();
     if (!ready || !THREE) return;
@@ -1647,7 +1854,8 @@
       prev.body !== activeState.body ||
       prev.name !== activeState.name ||
       prev.score !== activeState.score ||
-      prev.tier !== activeState.tier;
+      prev.tier !== activeState.tier ||
+      prev.logoUrl !== activeState.logoUrl;
 
     const syncLid = (open) => {
       targetLidOpen = open ? 1 : 0;
@@ -1675,7 +1883,7 @@
     if (prev.body !== activeState.body) {
       animWeights.bodyPulse = 1;
     }
-    if (bodyOrLabelChanged || coresChanged || threadsChanged) {
+    if (bodyOrLabelChanged || coresChanged || threadsChanged || coolingChanged) {
       applyBodyMaterialFinish(activeState.body);
     }
 

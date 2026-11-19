@@ -358,15 +358,19 @@
           <div id="companyDashboard" class="hidden">
             <div class="company-hero-panel">
               <div class="company-identity">
-                <div id="companyDashboardLogo" class="company-dashboard-logo">▣</div>
+                <div id="companyDashboardLogo" class="company-dashboard-logo" title="Open Logo Studio">▣</div>
                 <div><div class="eyebrow purple-text">YOUR COMPANY</div><h3 id="companyDashboardName">Company</h3><p id="companyDashboardDescription" class="muted"></p></div>
               </div>
-              <span class="company-cpu-chip">CPU MANUFACTURER</span>
+              <div class="company-hero-actions">
+                <button type="button" class="zoom-btn company-hero-logo-btn" id="companyHeroLogoBtn">✦ Custom Logo</button>
+                <span class="company-cpu-chip">CPU MANUFACTURER</span>
+              </div>
             </div>
             <div class="company-dashboard-tabs">
               <button type="button" class="company-dashboard-tab active" data-company-tab="money">Money</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="research">Research</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="products">Products</button>
+              <button type="button" class="company-dashboard-tab" data-company-tab="logo">Logo</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="settings">Settings</button>
             </div>
             <div class="company-dashboard-panel" id="companyPanelMoney">
@@ -399,6 +403,97 @@
               <div class="company-dashboard-section">
                 <div class="company-section-heading"><div><div class="eyebrow purple-text">CATALOGUE</div><h4>All products</h4></div><span class="company-count-chip">0 PRODUCTS</span></div>
                 <div id="companyProductList" class="company-product-list"><div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div></div><div id="companyProductDetails" class="company-product-details hidden"></div>
+              </div>
+            </div>
+            <div class="company-dashboard-panel hidden" id="companyPanelLogo">
+              <div class="company-dashboard-section logo-studio-panel">
+                <div class="logo-studio-topbar">
+                  <div>
+                    <div class="eyebrow purple-text">COMPANY BRANDING</div>
+                    <h4>Logo Studio</h4>
+                    <p class="muted tiny">Combine shapes, cutouts, and letters — printed cleanly on top of every CPU you design.</p>
+                  </div>
+                  <div class="logo-studio-top-actions">
+                    <button type="button" class="zoom-btn" id="logoUndoBtn">↩ Undo</button>
+                    <button type="button" class="primary-btn" id="logoSavePrintBtn">Save &amp; Print on CPUs</button>
+                  </div>
+                </div>
+                <div class="logo-studio-presets">
+                  <span class="muted tiny">Starters:</span>
+                  <button type="button" class="zoom-btn" data-logo-preset="bitten">Apple Bite</button>
+                  <button type="button" class="zoom-btn" data-logo-preset="silicon_crest">Silicon Crest</button>
+                  <button type="button" class="zoom-btn" data-logo-preset="apex_mono">Apex Emblem</button>
+                  <button type="button" class="zoom-btn" data-logo-preset="orbital">Orbital</button>
+                  <button type="button" class="zoom-btn" data-logo-preset="blank">Blank Canvas</button>
+                </div>
+                <div class="logo-studio-grid">
+                  <div class="logo-studio-stage-col">
+                    <div class="logo-studio-canvas-wrap">
+                      <canvas id="logoStudioCanvas" class="logo-studio-canvas" width="512" height="512"></canvas>
+                      <div class="logo-studio-hint muted tiny">Drag shapes to move (auto-snaps to center) · Drag blue square to resize · Drag top purple dot to rotate</div>
+                    </div>
+                    <div class="logo-cpu-stamp-card">
+                      <div class="logo-cpu-stamp-head">
+                        <div>
+                          <div class="eyebrow purple-text">LIVE PRINT PREVIEW</div>
+                          <strong>Printed on Top of CPU</strong>
+                        </div>
+                        <div class="logo-cpu-tone-tabs">
+                          <button type="button" class="active" data-logo-cpu-tone="gray">Gray</button>
+                          <button type="button" data-logo-cpu-tone="silicon">Silicon</button>
+                          <button type="button" data-logo-cpu-tone="carbon">Carbon</button>
+                        </div>
+                      </div>
+                      <canvas id="logoCpuStampPreview" class="logo-cpu-stamp-canvas" width="220" height="220"></canvas>
+                    </div>
+                  </div>
+                  <div class="logo-studio-controls-col">
+                    <div class="logo-studio-box">
+                      <div class="eyebrow purple-text">ADD SHAPES</div>
+                      <div id="logoShapePalette" class="logo-shape-palette"></div>
+                    </div>
+                    <div class="logo-studio-box">
+                      <div class="eyebrow purple-text">LAYERS (TOP TO BOTTOM)</div>
+                      <div id="logoLayerStack" class="logo-layer-stack"></div>
+                    </div>
+                    <div class="logo-studio-box">
+                      <div class="eyebrow purple-text">SELECTED SHAPE</div>
+                      <p id="logoNoSelectionMsg" class="muted tiny" style="margin:6px 0 0;">Click any shape on the canvas or in Layers to customize size, color, rotation, or Cutout bite mode.</p>
+                      <div id="logoLayerInspector" class="logo-inspector hidden">
+                        <label id="logoTextRow" class="hidden">Letter / Text<input id="logoLayerText" maxlength="12" placeholder="G"></label>
+                        <div class="logo-mode-row">
+                          <span class="muted tiny">Blend Mode</span>
+                          <div class="logo-mode-tabs">
+                            <button type="button" class="active" data-logo-mode="solid">Solid Fill</button>
+                            <button type="button" data-logo-mode="cutout">Cutout (Bite)</button>
+                          </div>
+                        </div>
+                        <div>
+                          <span class="muted tiny">Color</span>
+                          <div class="logo-color-row">
+                            <div id="logoColorSwatches" class="logo-swatches"></div>
+                            <input type="color" id="logoLayerColor" value="#f8fafc" aria-label="Custom shape color">
+                          </div>
+                        </div>
+                        <div class="logo-slider-grid">
+                          <label><span>Size <strong id="logoLayerSizeOut">160px</strong></span><input type="range" id="logoLayerSize" min="26" max="460" value="160"></label>
+                          <label><span>Rotate <strong id="logoLayerRotOut">0°</strong></span><input type="range" id="logoLayerRot" min="0" max="359" value="0"></label>
+                          <label><span>Width %</span><input type="range" id="logoLayerScaleX" min="30" max="220" value="100"></label>
+                          <label><span>Height %</span><input type="range" id="logoLayerScaleY" min="30" max="220" value="100"></label>
+                          <label class="logo-slider-full"><span>Opacity</span><input type="range" id="logoLayerOpacity" min="10" max="100" value="100"></label>
+                        </div>
+                        <div class="logo-layer-actions">
+                          <button type="button" class="zoom-btn" id="logoLayerCenterBtn">Center</button>
+                          <button type="button" class="zoom-btn" id="logoLayerDupBtn">Duplicate</button>
+                          <button type="button" class="zoom-btn" id="logoLayerUpBtn">↑ Forward</button>
+                          <button type="button" class="zoom-btn" id="logoLayerDownBtn">↓ Back</button>
+                          <button type="button" class="deny-btn" id="logoLayerDeleteBtn">Delete</button>
+                        </div>
+                      </div>
+                    </div>
+                    <p id="logoStudioMessage" class="form-message" aria-live="polite"></p>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="company-dashboard-panel hidden" id="companyPanelSettings">
@@ -1852,7 +1947,8 @@
   <div id="rewardBurstLayer" class="reward-burst-layer" aria-hidden="true"></div>
 
   <div id="toast" class="toast" role="status"></div>
-  <script defer src="cpu-designer-3d.js?v=2"></script>
-  <script src="app.js?v=87"></script>
+  <script defer src="company-logo-studio.js?v=1"></script>
+  <script defer src="cpu-designer-3d.js?v=3"></script>
+  <script src="app.js?v=88"></script>
 </body>
 </html>

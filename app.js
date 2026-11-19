@@ -126,7 +126,7 @@ let grindBotSending = false;
 const PROFILES_CACHE_LS_KEY = 'grind_profiles_cache_v1';
 const COIN_IMAGES_CACHE_LS_KEY = 'grind_coin_imgs_v1';
 const PLAY_CACHE_LS_KEY = 'grind_play_cache_v2';
-const SHARED_PROFILE_TTL_MS = 10 * 60 * 1000;
+const SHARED_PROFILE_TTL_MS = 20 * 60 * 1000;
 const sharedProfilesCache = new Map();
 const sharedCoinImagesCache = new Map();
 let sharedProfilesLastBulkFetchAt = 0;
@@ -140,6 +140,11 @@ let featuredCoinsPromise = null;
 let coinsTradeStatsCache = null;
 let coinsTradeStatsFetchedAt = 0;
 let coinsTradeStatsDirty = true;
+let coinsLastFetchedAt = 0;
+let openPriceResolvedDateKey = '';
+let liveFeedLastFetchedAt = 0;
+let coinsRealtimePendingWhileHidden = false;
+let liveRealtimePendingWhileHidden = false;
 
 (function hydrateSharedCachesFromStorage() {
   try {
@@ -798,7 +803,7 @@ let adminModStateCache = { bans: new Map(), resets: new Map(), warnings: new Map
 let pendingWarnAckTs = 0;
 let adminModStateFetchedAt = 0;
 let adminModStatePromise = null;
-const ADMIN_MOD_STATE_TTL_MS = 120000;
+const ADMIN_MOD_STATE_TTL_MS = 300000;
 
 async function _fetchAdminModerationStateFresh() {
   const bans = new Map();
@@ -1944,11 +1949,30 @@ function renderCompanyDashboard() {
 }
 
 function switchCompanyDashboardTab(tab) {
-  ['money','research','products','settings'].forEach(name => {
+  ['money','research','products','logo','settings'].forEach(name => {
     $('#companyPanel' + name[0].toUpperCase() + name.slice(1))?.classList.toggle('hidden', name !== tab);
     document.querySelector('[data-company-tab="' + name + '"]')?.classList.toggle('active', name === tab);
   });
+  if (tab === 'logo' && typeof window.CompanyLogoStudio?.open === 'function') {
+    window.CompanyLogoStudio.open(currentCompany);
+  }
 }
+
+window.saveCompanyDesignedLogo = async function (dataUrl) {
+  if (!currentUser || !currentCompany || !sb) throw new Error('Create a company first.');
+  const { data, error } = await sb.from('product_companies')
+    .update({ logo_data_url: dataUrl })
+    .eq('id', currentCompany.id)
+    .eq('owner_id', currentUser.id)
+    .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
+    .single();
+  if (error) throw new Error(error.message || 'Could not save company logo.');
+  currentCompany = data;
+  renderCompanyDashboard();
+  if (typeof renderCpuDesigner === 'function') renderCpuDesigner();
+  if (typeof toast === 'function') toast('Company logo saved & printed on your CPUs!');
+  return data;
+};
 
 async function loadOutgoingCompanyTransfer() {
   if (!currentCompany || !currentUser || !sb) return;
@@ -2010,7 +2034,7 @@ async function unlockCpuResearch(k){
  await loadCompanyResearchAndProducts();renderCompanyDashboard();if(msg)msg.textContent='Research unlocked! This component is now available in Design.';if(typeof updateUIProfile==='function')updateUIProfile();playSound('upload');toast('Research unlocked!');
 }
 function switchCpuDesignMenu(m){cpuDesignMenu=m;['body','threads','cores','cooling'].forEach(x=>{$('#cpuMenu'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('hidden',x!==m);document.querySelector('[data-cpu-menu="'+x+'"]')?.classList.toggle('active',x===m);});}
-function renderCpuDesigner(){const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;const opts=[['core','cpuCoresOption','simple_1_core',cpuDesignCore,'1 Core','4 Score · $45/unit'],['threads','cpuThreadsOption','simple_4_threads',cpuDesignThreads,'4 Threads','4 Score · $40/unit'],['silicon','cpuOption_silicon','silicon_body',cpuDesignSilicon,'Silicon Body','6 Score · $150/unit'],['carbon_fiber','cpuOption_carbon_fiber','carbon_fiber_body',cpuDesignCarbonFiber,'Carbon Fiber Body','18 Score · $800/unit'],['six_threads','cpuOption_six_threads','six_threads',cpuDesignSixThreads,'6 Threads','6 Score · $60/unit'],['eight_threads','cpuOption_eight_threads','eight_threads',cpuDesignEightThreads,'8 Threads','8 Score · $80/unit'],['two_cores','cpuOption_two_cores','two_cores',cpuDesignTwoCores,'2 Cores','8 Score · $90/unit'],['four_cores','cpuOption_four_cores','four_cores',cpuDesignFourCores,'4 Cores','18 Score · $180/unit'],['built_in_cooling','cpuOption_built_in_cooling','built_in_cooling',cpuDesignBuiltInCooling,'Built-In Cooling','10 Score · $200/unit'],['great_cooling','cpuOption_great_cooling','great_cooling',cpuDesignGreatCooling,'Great Cooling','18 Score · $400/unit']];opts.forEach(([id,elementId,key,on,name,desc])=>{const el=$('#'+elementId);if(!el)return;const ok=hasCpuResearch(key);el.classList.toggle('locked',!ok);el.classList.toggle('selected',on);el.innerHTML='<span class="cpu-component-icon">◈</span><span><strong>'+name+'</strong><small>'+(ok?desc:'Research required')+'</small></span><button class="zoom-btn" type="button" '+(ok?'data-cpu-toggle="'+id+'"':'data-research-goto')+'>'+(ok?(on?'Selected':'Add'):'Research')+'</button>';});$('#cpuGrayBodyOption')?.classList.toggle('selected',!cpuDesignSilicon&&!cpuDesignCarbonFiber);const cost=(cpuDesignFourCores?180:(cpuDesignTwoCores?90:(cpuDesignCore?45:0)))+(cpuDesignEightThreads?80:(cpuDesignSixThreads?60:(cpuDesignThreads?40:0)))+(cpuDesignCarbonFiber?800:(cpuDesignSilicon?150:0))+(cpuDesignGreatCooling?400:(cpuDesignBuiltInCooling?200:0)),score=(cpuDesignFourCores?18:(cpuDesignTwoCores?8:(cpuDesignCore?4:0)))+(cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0)))+(cpuDesignCarbonFiber?18:(cpuDesignSilicon?6:0))+(cpuDesignGreatCooling?18:(cpuDesignBuiltInCooling?10:0)),tier=score>=200?'U':score>=150?'X':score>=125?'S++':score>=100?'S+':score>=75?'S':score>=50?'A':score>=36?'B':score>=24?'C':score>=10?'D':score>=6?'E':'F',qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1)));$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#cpuDesignScore').textContent=score+' · '+tier;$('#finishCpuBtn').textContent='Manufacture '+qty+' · '+money(cost*qty);$('#finishCpuBtn').disabled=false;const model=$('#cpuModel');if(model){model.classList.toggle('silicon-body',cpuDesignSilicon||cpuDesignCarbonFiber);model.classList.toggle('carbon-fiber-body',cpuDesignCarbonFiber);model.classList.toggle('built-in-cooling',cpuDesignBuiltInCooling||cpuDesignGreatCooling);model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';}const caption=$('.cpu-preview-caption');if(caption)caption.textContent=cpuDesignCarbonFiber?'Carbon Fiber Body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):cpuDesignSilicon?'Silicon CPU body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'Simple gray plastic CPU body');if(typeof window.updateCpuDesigner3D==='function'){const activeCores=cpuDesignFourCores?4:(cpuDesignTwoCores?2:(cpuDesignCore?1:0));const activeThreads=cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0));window.updateCpuDesigner3D({body:cpuDesignCarbonFiber?'carbon':(cpuDesignSilicon?'silicon':'gray'),cores:activeCores,threads:activeThreads,cooling:cpuDesignGreatCooling?2:(cpuDesignBuiltInCooling?1:0),name:($('#cpuProductName')?.value||'').trim()||'Baseline CPU',score,tier});}}
+function renderCpuDesigner(){const empty=$('#companyDesignNoCompany'),designer=$('#cpuDesigner');if(!empty||!designer)return;empty.classList.toggle('hidden',!!currentCompany);designer.classList.toggle('hidden',!currentCompany);if(!currentCompany)return;const opts=[['core','cpuCoresOption','simple_1_core',cpuDesignCore,'1 Core','4 Score · $45/unit'],['threads','cpuThreadsOption','simple_4_threads',cpuDesignThreads,'4 Threads','4 Score · $40/unit'],['silicon','cpuOption_silicon','silicon_body',cpuDesignSilicon,'Silicon Body','6 Score · $150/unit'],['carbon_fiber','cpuOption_carbon_fiber','carbon_fiber_body',cpuDesignCarbonFiber,'Carbon Fiber Body','18 Score · $800/unit'],['six_threads','cpuOption_six_threads','six_threads',cpuDesignSixThreads,'6 Threads','6 Score · $60/unit'],['eight_threads','cpuOption_eight_threads','eight_threads',cpuDesignEightThreads,'8 Threads','8 Score · $80/unit'],['two_cores','cpuOption_two_cores','two_cores',cpuDesignTwoCores,'2 Cores','8 Score · $90/unit'],['four_cores','cpuOption_four_cores','four_cores',cpuDesignFourCores,'4 Cores','18 Score · $180/unit'],['built_in_cooling','cpuOption_built_in_cooling','built_in_cooling',cpuDesignBuiltInCooling,'Built-In Cooling','10 Score · $200/unit'],['great_cooling','cpuOption_great_cooling','great_cooling',cpuDesignGreatCooling,'Great Cooling','18 Score · $400/unit']];opts.forEach(([id,elementId,key,on,name,desc])=>{const el=$('#'+elementId);if(!el)return;const ok=hasCpuResearch(key);el.classList.toggle('locked',!ok);el.classList.toggle('selected',on);el.innerHTML='<span class="cpu-component-icon">◈</span><span><strong>'+name+'</strong><small>'+(ok?desc:'Research required')+'</small></span><button class="zoom-btn" type="button" '+(ok?'data-cpu-toggle="'+id+'"':'data-research-goto')+'>'+(ok?(on?'Selected':'Add'):'Research')+'</button>';});const graySelected=!cpuDesignSilicon&&!cpuDesignCarbonFiber;$('#cpuGrayBodyOption')?.classList.toggle('selected',graySelected);const grayBtn=$('#cpuGrayBodyOption button');if(grayBtn)grayBtn.textContent=graySelected?'Selected':'Select';const cost=(cpuDesignFourCores?180:(cpuDesignTwoCores?90:(cpuDesignCore?45:0)))+(cpuDesignEightThreads?80:(cpuDesignSixThreads?60:(cpuDesignThreads?40:0)))+(cpuDesignCarbonFiber?800:(cpuDesignSilicon?150:0))+(cpuDesignGreatCooling?400:(cpuDesignBuiltInCooling?200:0)),score=(cpuDesignFourCores?18:(cpuDesignTwoCores?8:(cpuDesignCore?4:0)))+(cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0)))+(cpuDesignCarbonFiber?18:(cpuDesignSilicon?6:0))+(cpuDesignGreatCooling?18:(cpuDesignBuiltInCooling?10:0)),tier=score>=200?'U':score>=150?'X':score>=125?'S++':score>=100?'S+':score>=75?'S':score>=50?'A':score>=36?'B':score>=24?'C':score>=10?'D':score>=6?'E':'F',qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1)));$('#cpuDesignCost').textContent=money(cost);$('#cpuDesignValue').textContent=money(cost);$('#cpuDesignScore').textContent=score+' · '+tier;$('#finishCpuBtn').textContent='Manufacture '+qty+' · '+money(cost*qty);$('#finishCpuBtn').disabled=false;const model=$('#cpuModel');if(model){model.classList.toggle('silicon-body',cpuDesignSilicon||cpuDesignCarbonFiber);model.classList.toggle('carbon-fiber-body',cpuDesignCarbonFiber);model.classList.toggle('built-in-cooling',cpuDesignBuiltInCooling||cpuDesignGreatCooling);model.style.transform='rotateX('+cpuRotationX+'deg) rotateY('+cpuRotationY+'deg)';}const caption=$('.cpu-preview-caption');if(caption)caption.textContent=cpuDesignCarbonFiber?'Carbon Fiber Body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):cpuDesignSilicon?'Silicon CPU body · '+(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'No cooling'):(cpuDesignGreatCooling?'Great Cooling':cpuDesignBuiltInCooling?'Built-In Cooling':'Simple gray plastic CPU body');if(typeof window.updateCpuDesigner3D==='function'){const activeCores=cpuDesignFourCores?4:(cpuDesignTwoCores?2:(cpuDesignCore?1:0));const activeThreads=cpuDesignEightThreads?8:(cpuDesignSixThreads?6:(cpuDesignThreads?4:0));window.updateCpuDesigner3D({body:cpuDesignCarbonFiber?'carbon':(cpuDesignSilicon?'silicon':'gray'),cores:activeCores,threads:activeThreads,cooling:cpuDesignGreatCooling?2:(cpuDesignBuiltInCooling?1:0),name:($('#cpuProductName')?.value||'').trim()||'Baseline CPU',score,tier,logoUrl:currentCompany?.logo_data_url||''});}}
 async function finishCpuDesign(){if(!currentCompany||!currentUser||!sb)return;const name=($('#cpuProductName')?.value||'').trim(),price=Number($('#cpuProductPrice')?.value||0),qty=Math.max(1,Math.floor(Number($('#cpuProductionQuantity')?.value||1))),msg=$('#cpuDesignMessage'),btn=$('#finishCpuBtn');if(name.length<2||name.length>48){if(msg)msg.textContent='Name must be 2–48 characters.';return;}if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid starting price.';return;}if(btn){btn.disabled=true;btn.textContent='Manufacturing...';}const {data,error}=await sb.rpc('finish_cpu_product',{p_company_id:currentCompany.id,p_product_name:name,p_listed_price:price,p_include_core:cpuDesignCore,p_include_threads:cpuDesignThreads,p_include_silicon:cpuDesignSilicon,p_include_6_threads:cpuDesignSixThreads,p_include_2_cores:cpuDesignTwoCores,p_quantity:qty,p_include_8_threads:cpuDesignEightThreads,p_include_4_cores:cpuDesignFourCores,p_include_carbon_fiber:cpuDesignCarbonFiber,p_include_built_in_cooling:cpuDesignBuiltInCooling,p_include_great_cooling:cpuDesignGreatCooling});if(error){if(msg)msg.textContent=error.message;if(btn){btn.disabled=false;renderCpuDesigner();}return;}selectedCompanyProductId=data.id;cpuDesignCore=cpuDesignThreads=cpuDesignSilicon=cpuDesignSixThreads=cpuDesignTwoCores=cpuDesignEightThreads=cpuDesignFourCores=cpuDesignCarbonFiber=cpuDesignBuiltInCooling=cpuDesignGreatCooling=false;await loadCompanyResearchAndProducts();renderCompanyDashboard();switchCompanyDashboardTab('products');renderCompanyProducts();if(typeof loadProfile==='function')await loadProfile();toast(qty+' CPUs manufactured and added to stock!');if(btn)btn.disabled=false;}
 function renderCompanyProducts(){
  const list=$('#companyProductList');if(!list)return;if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
@@ -2060,7 +2084,7 @@ async function respondToCompanyTransfer(requestId, accept) {
 
 $$('[data-research-node]').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.researchNode!=='baseline_cpu')unlockCpuResearch(n.dataset.researchNode);}));
 $$('[data-cpu-menu]').forEach(b=>b.addEventListener('click',()=>switchCpuDesignMenu(b.dataset.cpuMenu)));
-document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){if(t.dataset.cpuToggle==='gray_body'){cpuDesignSilicon=false;cpuDesignCarbonFiber=false;}if(t.dataset.cpuToggle==='core')cpuDesignCore=!cpuDesignCore;if(t.dataset.cpuToggle==='threads'){cpuDesignThreads=!cpuDesignThreads;if(cpuDesignThreads)cpuDesignSixThreads=false;}if(t.dataset.cpuToggle==='silicon')cpuDesignSilicon=!cpuDesignSilicon;if(t.dataset.cpuToggle==='six_threads'){cpuDesignSixThreads=!cpuDesignSixThreads;if(cpuDesignSixThreads)cpuDesignThreads=false;}if(t.dataset.cpuToggle==='two_cores'){cpuDesignTwoCores=!cpuDesignTwoCores;if(cpuDesignTwoCores)cpuDesignCore=false;}if(t.dataset.cpuToggle==='eight_threads'){cpuDesignEightThreads=!cpuDesignEightThreads;if(cpuDesignEightThreads)cpuDesignSixThreads=cpuDesignThreads=false;}if(t.dataset.cpuToggle==='four_cores'){cpuDesignFourCores=!cpuDesignFourCores;if(cpuDesignFourCores)cpuDesignTwoCores=cpuDesignCore=false;}if(t.dataset.cpuToggle==='carbon_fiber'){cpuDesignCarbonFiber=!cpuDesignCarbonFiber;if(cpuDesignCarbonFiber)cpuDesignSilicon=true;}if(t.dataset.cpuToggle==='built_in_cooling'){cpuDesignBuiltInCooling=!cpuDesignBuiltInCooling;if(!cpuDesignBuiltInCooling)cpuDesignGreatCooling=false;}if(t.dataset.cpuToggle==='great_cooling'){cpuDesignGreatCooling=!cpuDesignGreatCooling;if(cpuDesignGreatCooling)cpuDesignBuiltInCooling=true;}renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-cpu-toggle]');if(t){const k=t.dataset.cpuToggle;if(k==='gray_body'){cpuDesignSilicon=false;cpuDesignCarbonFiber=false;}else if(k==='silicon'){cpuDesignSilicon=!cpuDesignSilicon;if(cpuDesignSilicon)cpuDesignCarbonFiber=false;}else if(k==='carbon_fiber'){cpuDesignCarbonFiber=!cpuDesignCarbonFiber;if(cpuDesignCarbonFiber)cpuDesignSilicon=false;}else if(k==='core'){cpuDesignCore=!cpuDesignCore;if(cpuDesignCore){cpuDesignTwoCores=false;cpuDesignFourCores=false;}}else if(k==='two_cores'){cpuDesignTwoCores=!cpuDesignTwoCores;if(cpuDesignTwoCores){cpuDesignCore=false;cpuDesignFourCores=false;}}else if(k==='four_cores'){cpuDesignFourCores=!cpuDesignFourCores;if(cpuDesignFourCores){cpuDesignCore=false;cpuDesignTwoCores=false;}}else if(k==='threads'){cpuDesignThreads=!cpuDesignThreads;if(cpuDesignThreads){cpuDesignSixThreads=false;cpuDesignEightThreads=false;}}else if(k==='six_threads'){cpuDesignSixThreads=!cpuDesignSixThreads;if(cpuDesignSixThreads){cpuDesignThreads=false;cpuDesignEightThreads=false;}}else if(k==='eight_threads'){cpuDesignEightThreads=!cpuDesignEightThreads;if(cpuDesignEightThreads){cpuDesignThreads=false;cpuDesignSixThreads=false;}}else if(k==='built_in_cooling'){cpuDesignBuiltInCooling=!cpuDesignBuiltInCooling;if(cpuDesignBuiltInCooling)cpuDesignGreatCooling=false;}else if(k==='great_cooling'){cpuDesignGreatCooling=!cpuDesignGreatCooling;if(cpuDesignGreatCooling)cpuDesignBuiltInCooling=false;}renderCpuDesigner();}if(e.target.closest('[data-research-goto]')){showPage('company');switchCompanyDashboardTab('research');}});
 $('#finishCpuBtn')?.addEventListener('click',finishCpuDesign);
 const researchTree=$('#cpuResearchTree'),researchWorld=$('#cpuResearchWorld');
 if(researchTree&&researchWorld&&!researchTree.dataset.navigationReady){
@@ -2120,6 +2144,8 @@ $('#companyCreateForm')?.addEventListener('submit', async e => {
 document.querySelectorAll('[data-company-tab]').forEach(btn => {
   btn.addEventListener('click', () => { switchCompanyDashboardTab(btn.dataset.companyTab); if(btn.dataset.companyTab==='research')renderCpuResearchTree(); if(btn.dataset.companyTab==='products')renderCompanyProducts(); });
 });
+$('#companyHeroLogoBtn')?.addEventListener('click', () => { if (currentCompany) switchCompanyDashboardTab('logo'); });
+$('#companyDashboardLogo')?.addEventListener('click', () => { if (currentCompany) switchCompanyDashboardTab('logo'); });
 
 $('#companySettingsLogoPreview')?.addEventListener('click', () => $('#companySettingsLogoInput')?.click());
 $('#companySettingsLogoInput')?.addEventListener('change', e => {
@@ -2275,7 +2301,7 @@ $('#feedSearch')?.addEventListener('input', e => {
 async function loadProUserIds(force = false) {
   if (!sb) return;
   if (proUserIdsPromise) return proUserIdsPromise;
-  if (!force && proUserIdsFetchedAt && (Date.now() - proUserIdsFetchedAt) < 60000) return;
+  if (!force && proUserIdsFetchedAt && (Date.now() - proUserIdsFetchedAt) < 180000) return;
   proUserIdsPromise = (async () => {
     try {
       let q = sb
@@ -2301,7 +2327,7 @@ async function loadProUserIds(force = false) {
 async function fetchFeaturedCoins(force = false) {
   if (!sb) return [];
   if (featuredCoinsPromise) return featuredCoinsPromise;
-  if (!force && featuredCoinsFetchedAt && (Date.now() - featuredCoinsFetchedAt) < 60000) {
+  if (!force && featuredCoinsFetchedAt && (Date.now() - featuredCoinsFetchedAt) < 180000) {
     return featuredCoinIdsCache;
   }
   featuredCoinsPromise = (async () => {
@@ -2550,33 +2576,37 @@ async function _loadCoinsFresh() {
     let tradedTodaySet = coinsTradeStatsCache?.tradedTodaySet || new Set();
     const startOfTodayIso = getStartOfTodayDate().toISOString();
     const currentDateKey = getLocalDateKey(0);
+    if (openPriceResolvedDateKey !== currentDateKey) {
+      openPriceMap = new Map();
+      openPriceResolvedDateKey = currentDateKey;
+    }
     const needStatsRefresh =
       coinsTradeStatsDirty ||
       !coinsTradeStatsCache ||
       lastCoinsDateKey !== currentDateKey ||
-      (Date.now() - coinsTradeStatsFetchedAt) > 12000;
+      (Date.now() - coinsTradeStatsFetchedAt) > 45000;
     lastCoinsDateKey = currentDateKey;
 
     const fetchStatsPromise = needStatsRefresh
       ? (async () => {
           const nextStats = new Map();
-          const nextOpenPriceMap = new Map();
+          const nextOpenPriceMap = new Map(openPriceMap);
           const nextTradedTodaySet = new Set();
           try {
             let buyQ = sb.from('trades')
               .select('coin_id, amount_usd, created_at')
               .eq('type', 'buy')
               .order('created_at', { ascending: false })
-              .limit(1000);
+              .limit(600);
             let todayQ = sb.from('trades')
               .select('coin_id, created_at')
               .gte('created_at', startOfTodayIso)
-              .limit(1000);
+              .limit(600);
             let previousPriceQ = sb.from('trades')
               .select('coin_id, price_after, created_at')
               .lt('created_at', startOfTodayIso)
               .order('created_at', { ascending: false })
-              .limit(1000);
+              .limit(600);
             if (srvResetTs > 0) {
               const srvIso = new Date(srvResetTs).toISOString();
               buyQ = buyQ.gt('created_at', srvIso);
@@ -2603,18 +2633,21 @@ async function _loadCoinsFresh() {
             });
             const missingOpenPriceIds = tradedTodayIds.filter(id => !nextOpenPriceMap.has(id));
             if (missingOpenPriceIds.length) {
-              const fallbackPrices = await Promise.all(missingOpenPriceIds.map(id =>
-                sb.from('trades')
-                  .select('price_after')
-                  .eq('coin_id', id)
-                  .lt('created_at', startOfTodayIso)
-                  .order('created_at', { ascending: false })
-                  .limit(1)
-                  .maybeSingle()
-              ));
-              fallbackPrices.forEach((result, index) => {
-                const id = missingOpenPriceIds[index];
-                nextOpenPriceMap.set(id, result.data?.price_after != null ? Number(result.data.price_after) : 1);
+              // Single batched query replaces N+1 per-coin HTTP calls
+              let batchPrevQ = sb.from('trades')
+                .select('coin_id, price_after, created_at')
+                .in('coin_id', missingOpenPriceIds)
+                .lt('created_at', startOfTodayIso)
+                .order('created_at', { ascending: false })
+                .limit(Math.min(500, missingOpenPriceIds.length * 4));
+              if (srvResetTs > 0) batchPrevQ = batchPrevQ.gt('created_at', new Date(srvResetTs).toISOString());
+              const { data: fallbackRows } = await batchPrevQ;
+              (fallbackRows || []).forEach(row => {
+                if (!row.coin_id || nextOpenPriceMap.has(row.coin_id)) return;
+                nextOpenPriceMap.set(row.coin_id, row.price_after != null ? Number(row.price_after) : 1);
+              });
+              missingOpenPriceIds.forEach(id => {
+                if (!nextOpenPriceMap.has(id)) nextOpenPriceMap.set(id, 1);
               });
             }
             stats = nextStats;
@@ -2626,6 +2659,8 @@ async function _loadCoinsFresh() {
           } catch (e) {}
         })()
       : Promise.resolve();
+
+    coinsLastFetchedAt = Date.now();
 
     await Promise.all([
       ensureProfilesCached(creatorIds),
@@ -10851,6 +10886,7 @@ let liveEventsCache = [];
 
 async function loadLiveFeed() {
   if (!sb) return;
+  liveFeedLastFetchedAt = Date.now();
   await Promise.all([loadProUserIds(), fetchAdminModerationState()]);
   const srvResetTs = adminModStateCache.serverResetTs || 0;
   const delCoins = adminModStateCache.deletedCoinIds || new Set();
@@ -11811,7 +11847,7 @@ async function _fetchUserNotificationsFresh() {
 
 let userNotificationsFetchedAt = 0;
 let userNotificationsPromise = null;
-const NOTIFICATION_SCAN_TTL_MS = 180000;
+const NOTIFICATION_SCAN_TTL_MS = 300000;
 
 async function fetchUserNotifications(force = false) {
   if (!sb || !currentUser) return [];
@@ -13094,28 +13130,62 @@ let notifRealtimeRefreshTimer = null;
 let dmRealtimeRefreshTimer = null;
 let coinCommentsRealtimeTimer = null;
 
+const COINS_REALTIME_MIN_GAP_MS = 20000;
+const LIVE_FEED_REALTIME_MIN_GAP_MS = 12000;
+
+function flushHiddenRealtimeRefreshes() {
+  if (document.hidden || !sb) return;
+  if (coinsRealtimePendingWhileHidden) {
+    coinsRealtimePendingWhileHidden = false;
+    loadCoins();
+    if (selectedCoin && currentPage === 'coin') renderCoinDetail();
+  }
+  if (liveRealtimePendingWhileHidden && currentPage === 'live') {
+    liveRealtimePendingWhileHidden = false;
+    loadLiveFeed();
+  }
+}
+
+if (!window.__grindVisibilitySyncBound) {
+  window.__grindVisibilitySyncBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) flushHiddenRealtimeRefreshes();
+  });
+}
+
+function scheduleRealtimeCoinsAndLiveRefresh(fromTrade) {
+  if (fromTrade) coinsTradeStatsDirty = true;
+  if (document.hidden) {
+    coinsRealtimePendingWhileHidden = true;
+    if (currentPage === 'live') liveRealtimePendingWhileHidden = true;
+    return;
+  }
+  const now = Date.now();
+  const waitCoins = Math.max(fromTrade ? 2500 : 3200, COINS_REALTIME_MIN_GAP_MS - (now - coinsLastFetchedAt));
+  clearTimeout(coinsRealtimeRefreshTimer);
+  coinsRealtimeRefreshTimer = setTimeout(() => {
+    if (document.hidden) {
+      coinsRealtimePendingWhileHidden = true;
+      return;
+    }
+    loadCoins();
+    if (selectedCoin && currentPage === 'coin') renderCoinDetail();
+    if (currentPage === 'live' && (Date.now() - liveFeedLastFetchedAt) >= LIVE_FEED_REALTIME_MIN_GAP_MS) {
+      loadLiveFeed();
+    }
+    if (currentPage === 'global' && lbMode === 'weekly' && Date.now() > lbAnimatingUntil) renderLeaderboard();
+    if (typeof refreshOpenTraderBattleModalLive === 'function') refreshOpenTraderBattleModalLive();
+  }, waitCoins);
+}
+
 function startRealtime() {
   if (!sb) return;
   realtimeChannel = sb.channel('grind-live', { config: { broadcast: { self: false } } })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'coins' }, () => {
-      coinsTradeStatsDirty = true;
-      clearTimeout(coinsRealtimeRefreshTimer);
-      coinsRealtimeRefreshTimer = setTimeout(() => {
-        loadCoins();
-        if (currentPage === 'live') loadLiveFeed();
-        if (typeof refreshOpenTraderBattleModalLive === 'function') refreshOpenTraderBattleModalLive();
-      }, 2800);
+      scheduleRealtimeCoinsAndLiveRefresh(false);
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, () => {
-      coinsTradeStatsDirty = true;
-      clearTimeout(coinsRealtimeRefreshTimer);
-      coinsRealtimeRefreshTimer = setTimeout(() => {
-        loadCoins();
-        if (selectedCoin && currentPage === 'coin') renderCoinDetail();
-        if (currentPage === 'live') loadLiveFeed();
-        if (currentPage === 'global' && lbMode === 'weekly' && Date.now() > lbAnimatingUntil) renderLeaderboard();
-        if (typeof refreshOpenTraderBattleModalLive === 'function') refreshOpenTraderBattleModalLive();
-      }, 2200);
+      scheduleRealtimeCoinsAndLiveRefresh(true);
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'premium_requests' }, payload => {
       const changedReason = String(payload?.new?.reason || payload?.old?.reason || '');
@@ -13127,13 +13197,13 @@ function startRealtime() {
         invalidateAdminModerationStateCache();
         userNotificationsFetchedAt = 0;
         adminNotificationsFetchedAt = 0;
-        if (currentUser) loadProfile();
+        if (currentUser && !document.hidden) loadProfile();
       }
 
       // 2. Updates & Warnings & Direct Premium/PRO tier status changes
       if (changedReason.startsWith('__UPDATE__:') || changedReason.startsWith('__PRO_TIER__')) {
         if (changedReason.startsWith('__PRO_TIER__')) proUserIdsFetchedAt = 0;
-        if (currentUser && (changedReason.startsWith('__UPDATE__:') || changedUid === myUid)) loadProfile();
+        if (currentUser && !document.hidden && (changedReason.startsWith('__UPDATE__:') || changedUid === myUid)) loadProfile();
       } else if (!changedReason.startsWith('__') && myUid && changedUid === myUid) {
         if (currentUser) loadProfile();
       }
@@ -13141,65 +13211,67 @@ function startRealtime() {
       // 3. Featured coins
       if (changedReason.startsWith('__FEATURED_COINS__:')) {
         featuredCoinsFetchedAt = 0;
-        if (currentPage === 'feed') fetchFeaturedCoins(true).then(() => renderFeaturedSection());
+        if (currentPage === 'feed' && !document.hidden) fetchFeaturedCoins(true).then(() => renderFeaturedSection());
       }
 
       // 4. Coin comments
       if (changedReason.startsWith('__CMT_')) {
-        if (selectedCoin && currentPage === 'coin') {
+        if (selectedCoin && currentPage === 'coin' && !document.hidden) {
           clearTimeout(coinCommentsRealtimeTimer);
           coinCommentsRealtimeTimer = setTimeout(() => {
-            if (selectedCoin && currentPage === 'coin') loadCoinComments(selectedCoin);
-          }, 1200);
+            if (selectedCoin && currentPage === 'coin' && !document.hidden) loadCoinComments(selectedCoin);
+          }, 1800);
         }
       }
 
       // 5. LIVE shoutouts
-      if (changedReason.startsWith('__LIVE_POST__:') && currentPage === 'live') {
-        clearTimeout(liveRealtimeRefreshTimer);
-        liveRealtimeRefreshTimer = setTimeout(() => {
-          if (currentPage === 'live') loadLiveFeed();
-        }, 1500);
+      if (changedReason.startsWith('__LIVE_POST__:')) {
+        if (currentPage === 'live' && !document.hidden) {
+          const waitLive = Math.max(1800, LIVE_FEED_REALTIME_MIN_GAP_MS - (Date.now() - liveFeedLastFetchedAt));
+          clearTimeout(liveRealtimeRefreshTimer);
+          liveRealtimeRefreshTimer = setTimeout(() => {
+            if (currentPage === 'live' && !document.hidden) loadLiveFeed();
+          }, waitLive);
+        } else if (currentPage === 'live') {
+          liveRealtimePendingWhileHidden = true;
+        }
       }
 
       // 6. Battle Pass (only reload when current user is viewing their own Pass & it changed)
-      if (changedReason.startsWith('__PASS_') && currentPage === 'pass' && myUid && changedUid === myUid) {
+      if (changedReason.startsWith('__PASS_') && currentPage === 'pass' && !document.hidden && myUid && changedUid === myUid) {
         loadPassState().then(() => renderPassPage());
       }
 
       // 7. Titles & Crates (only when title/crate events actually occur)
       if ((changedReason.startsWith('__TITLE_EQUIP__:') || changedReason.startsWith('__CRATE_ITEM__:')) && typeof loadTitleSystemState === 'function') {
-        clearTimeout(titleRealtimeRefreshTimer);
-        titleRealtimeRefreshTimer = setTimeout(() => {
-          loadTitleSystemState(true).then(() => {
-            if (currentPage === 'account' && typeof renderAccountIdentityAndTitles === 'function') renderAccountIdentityAndTitles();
-            if (currentPage === 'marketplace' && typeof renderMarketplacePage === 'function') renderMarketplacePage();
-            if (currentPage === 'global' && Date.now() > lbAnimatingUntil) renderLeaderboard();
-          });
-        }, 2500);
+        if (!document.hidden && (currentPage === 'account' || currentPage === 'marketplace' || currentPage === 'global')) {
+          clearTimeout(titleRealtimeRefreshTimer);
+          titleRealtimeRefreshTimer = setTimeout(() => {
+            loadTitleSystemState(true).then(() => {
+              if (currentPage === 'account' && typeof renderAccountIdentityAndTitles === 'function') renderAccountIdentityAndTitles();
+              if (currentPage === 'marketplace' && typeof renderMarketplacePage === 'function') renderMarketplacePage();
+              if (currentPage === 'global' && Date.now() > lbAnimatingUntil) renderLeaderboard();
+            });
+          }, 3500);
+        }
       }
 
-      // 8. PLAY events (strictly scoped & debounced)
+      // 8. PLAY events (strictly scoped, debounced & visible-tab gated)
       if (changedReason.startsWith('__PLAY_') && typeof loadPlayData === 'function') {
-        if (payload?.eventType === 'INSERT' && payload?.new) {
+        if (payload?.eventType === 'INSERT' && payload?.new && !document.hidden) {
           handleRealtimePremiumInsertPopup(payload.new);
         }
-        const isHighFreqPayoutOrView =
-          changedReason.startsWith('__PLAY_VIEW__:') ||
-          changedReason.startsWith('__PLAY_VIEW_PAID__:') ||
-          changedReason.startsWith('__PLAY_LIKE_PAID__:') ||
-          changedReason.startsWith('__PLAY_LIKER_PAID__:') ||
-          changedReason.startsWith('__PLAY_FOLLOW_PAID__:') ||
-          changedReason.startsWith('__PLAY_DONATE_PAID__:');
-        const relevantPageVisible =
+        const relevantPageVisible = !document.hidden && (
           currentPage === 'play' ||
           currentPage === 'account' ||
           currentPage === 'live' ||
           (currentPage === 'global' && lbMode === 'creators') ||
-          Boolean(playState.openCommentsVideoId);
-        if (!isHighFreqPayoutOrView || relevantPageVisible) {
+          Boolean(playState.openCommentsVideoId)
+        );
+        if (relevantPageVisible) {
           clearTimeout(playRealtimeRefreshTimer);
           playRealtimeRefreshTimer = setTimeout(() => {
+            if (document.hidden) return;
             loadPlayData(true).then(() => {
               if (typeof syncAllPlayEarnings === 'function') syncAllPlayEarnings();
               else {
@@ -13212,39 +13284,45 @@ function startRealtime() {
               }
               if (currentPage === 'global' && lbMode === 'creators' && Date.now() > lbAnimatingUntil) renderLeaderboard();
               if (playState.openCommentsVideoId && typeof renderPlayCommentsDrawerList === 'function') renderPlayCommentsDrawerList();
-              if (currentPage === 'live') loadLiveFeed();
+              if (currentPage === 'live' && (Date.now() - liveFeedLastFetchedAt) >= LIVE_FEED_REALTIME_MIN_GAP_MS) loadLiveFeed();
             });
-          }, 2500);
+          }, 4000);
         }
       }
 
-      // 9. Notifications & Admin inbox (only for notification-worthy events, debounced)
-      const isNotifEvent =
+      // 9. Notifications & Admin inbox: ONLY rescan immediately for personal/critical events or when user is on Notifications
+      const isPersonalOrAdminNotif =
+        changedReason.startsWith('__ADMIN_CMD__:') ||
+        changedReason.startsWith('__UPDATE__:') ||
+        changedReason.startsWith('__REPORT__:') ||
+        changedReason.startsWith('__PREM_REQ__:') ||
+        !changedReason.startsWith('__') ||
+        (myUid && changedReason.includes(myUid));
+
+      const isAnyNotifEvent =
+        isPersonalOrAdminNotif ||
         changedReason.startsWith('__PLAY_VOTE__:') ||
         changedReason.startsWith('__PLAY_CMT__:') ||
         changedReason.startsWith('__PLAY_CMT_DEL__:') ||
         changedReason.startsWith('__PLAY_FOLLOW__:') ||
         changedReason.startsWith('__PLAY_DONATE__:') ||
         changedReason.startsWith('__CMT_') ||
-        changedReason.startsWith('__ADMIN_CMD__:') ||
-        changedReason.startsWith('__UPDATE__:') ||
-        changedReason.startsWith('__REPORT__:') ||
-        changedReason.startsWith('__PREM_REQ__:') ||
         changedReason.startsWith('__TB_CHALLENGE__:') ||
-        changedReason.startsWith('__TB_RESULT__:') ||
-        !changedReason.startsWith('__');
+        changedReason.startsWith('__TB_RESULT__:');
 
-      if (isNotifEvent) {
+      if (isAnyNotifEvent && (currentPage === 'notifications' || isPersonalOrAdminNotif || (isDompinator() && currentPage === 'admin'))) {
         userNotificationsFetchedAt = 0;
         adminNotificationsFetchedAt = 0;
-        if (currentPage === 'notifications') {
-          clearTimeout(notifRealtimeRefreshTimer);
-          notifRealtimeRefreshTimer = setTimeout(() => loadRequests(), 2500);
-        } else if (currentUser) {
-          clearTimeout(notifRealtimeRefreshTimer);
-          notifRealtimeRefreshTimer = setTimeout(() => updateNotificationsBadge(), 5000);
+        if (!document.hidden) {
+          if (currentPage === 'notifications') {
+            clearTimeout(notifRealtimeRefreshTimer);
+            notifRealtimeRefreshTimer = setTimeout(() => loadRequests(), 3000);
+          } else if (currentUser) {
+            clearTimeout(notifRealtimeRefreshTimer);
+            notifRealtimeRefreshTimer = setTimeout(() => updateNotificationsBadge(), 8000);
+          }
+          if (isDompinator() && currentPage === 'admin') loadAdminPage();
         }
-        if (isDompinator() && currentPage === 'admin') loadAdminPage();
       }
 
       // 10. Direct Messages: ONLY refresh on actual __DM_ events involving current user (or when DM modal is open)!
@@ -13253,7 +13331,7 @@ function startRealtime() {
         const involvesMe = !myUid || changedUid === myUid || changedReason.includes(myUid);
         if (dmOpen || involvesMe) {
           clearTimeout(dmRealtimeRefreshTimer);
-          dmRealtimeRefreshTimer = setTimeout(() => refreshDirectMessages(true), 800);
+          dmRealtimeRefreshTimer = setTimeout(() => refreshDirectMessages(true), 1200);
         }
       }
 
@@ -18805,9 +18883,11 @@ async function refreshActiveBattleModalDom(b, { showLoading = false } = {}) {
     let battleHoldings = [];
 
     try {
+      const cCols = sharedProfilesCache.has(String(b.challengerId)) ? 'id, username, is_premium, net_worth' : 'id, username, avatar_url, is_premium, net_worth';
+      const oCols = sharedProfilesCache.has(String(b.opponentId)) ? 'id, username, is_premium, net_worth' : 'id, username, avatar_url, is_premium, net_worth';
       const [cpRes, opRes, trRes, hdRes] = await Promise.all([
-        sb.from('profiles').select('id, username, avatar_url, is_premium, net_worth').eq('id', b.challengerId).maybeSingle(),
-        sb.from('profiles').select('id, username, avatar_url, is_premium, net_worth').eq('id', b.opponentId).maybeSingle(),
+        sb.from('profiles').select(cCols).eq('id', b.challengerId).maybeSingle(),
+        sb.from('profiles').select(oCols).eq('id', b.opponentId).maybeSingle(),
         sb.from('trades')
           .select('id, coin_id, user_id, type, amount_usd, shares, price_after, created_at')
           .in('user_id', [b.challengerId, b.opponentId])
@@ -18845,9 +18925,9 @@ async function refreshActiveBattleModalDom(b, { showLoading = false } = {}) {
       try {
         const { data: extraCoins } = await sb
           .from('coins')
-          .select('id, name, ticker, image_url, price, created_at')
+          .select('id, name, ticker, price, created_at')
           .in('id', Array.from(missingCoinIds));
-        (extraCoins || []).forEach(c => coinsById.set(String(c.id), c));
+        (extraCoins || []).forEach(c => coinsById.set(String(c.id), { ...c, image_url: sharedCoinImagesCache.get(String(c.id)) ?? null }));
       } catch (e) {}
     }
 
@@ -19130,11 +19210,12 @@ async function openTraderBattleInfoModal(battleId) {
         tbState.liveSyncTimer = null;
         return;
       }
+      if (document.hidden) return;
       const latest = tbState.battles.get(b.id);
       if (latest && latest.status === 'active') {
         refreshActiveBattleModalDom(latest, { showLoading: false });
       }
-    }, 4500);
+    }, 10000);
     return;
   }
 
