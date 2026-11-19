@@ -7711,3 +7711,16 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .product-feed-gpu{height:100px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:12px;position:relative;overflow:hidden;background:linear-gradient(135deg,#242632,#090b12);border:1px solid #6b5a85;color:#e9e4f5;margin-bottom:13px}
 .product-feed-gpu:before{content:"";position:absolute;inset:14px 7%;border:4px solid #8993a2;border-radius:12px;background:linear-gradient(135deg,#3e424d,#171923);box-shadow:0 5px 18px #0008}
 .product-feed-gpu span,.product-feed-gpu b,.product-feed-gpu small{position:relative;z-index:1}.product-feed-gpu span{font-size:25px}.product-feed-gpu b{font-size:12px;letter-spacing:1px}.product-feed-gpu small{font-size:9px;color:#c4b5fd}
+
+/* GPU company uses the same sidebar Design + dashboard Research structure as CPU. */
+.ea-gpu-panel{margin:0;padding:0;border:0;background:transparent}
+.ea-gpu-tabs{margin:0 0 16px;padding:4px;border:1px solid var(--line);border-radius:11px;background:#100c19;width:max-content;max-width:100%}
+.ea-gpu-tabs button{min-width:110px}
+.ea-company-research{margin:0 0 18px}
+.ea-research-subtabs{display:flex;gap:7px;margin:0 0 14px}
+.ea-research-subtabs button{padding:8px 18px;border:1px solid var(--line);border-radius:9px;background:#211832;color:var(--text);font-weight:700;cursor:pointer}
+.ea-research-subtabs button.active{background:#6333a0;border-color:#a855f7}
+#eaCompanyResearch .ea-research-list.hidden{display:none}
+#page-company-design #eaGpuPanel.hidden{display:none}
+#page-company-design #cpuDesigner.hidden{display:none}
+#page-company-products #eaGpuProductList{margin-top:16px}
