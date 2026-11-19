@@ -93,8 +93,9 @@ function mountGpuWorkspace(){
   canvas?.addEventListener('pointerup',()=>dragFan=-1);canvas?.addEventListener('pointercancel',()=>dragFan=-1);
  }
  addBackButton();renderResearchLists();loadChips();drawGpu();
- const tabs=$('.company-dashboard-tabs');if(tabs&&!$('#eaGpuTab')){const b=document.createElement('button');b.id='eaGpuTab';b.className='company-dashboard-tab';b.textContent='GPU / CHIP';b.addEventListener('click',()=>{document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel').classList.remove('hidden');});tabs.appendChild(b);}
+ const tabs=$('.company-dashboard-tabs');if(tabs&&!$('#eaGpuTab')){const b=document.createElement('button');b.id='eaGpuTab';b.className='company-dashboard-tab';b.textContent='GPU / CHIP';b.addEventListener('click',showGpuMain);tabs.appendChild(b);}
 }
+function showGpuMain(){document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));$('#eaGpuTab')?.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel')?.classList.remove('hidden');renderGpuWorkspace();}
 function setGpuTab(tab){
  document.querySelectorAll('[data-gpu-tab]').forEach(b=>b.classList.toggle('active',b.dataset.gpuTab===tab));
  ['design','chips','gpuResearch','chipResearch','products'].forEach(k=>$('#eaGpu'+k[0].toUpperCase()+k.slice(1))?.classList.toggle('hidden',k!==tab));
@@ -186,8 +187,8 @@ window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(curren
 const oldShow=window.showPage;
 window.showPage=function(page){
  if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
- if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('design');return;}
- if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();setGpuTab('chips');return;}
+ if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();showGpuMain();setGpuTab('design');return;}
+ if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();showGpuMain();setGpuTab('products');return;}
  oldShow?.(page);
  if(page==='company')renderChooser();
 };
