@@ -81,7 +81,8 @@ function mountGpuWorkspace(){
   dash.appendChild(panel);
   panel.querySelectorAll('[data-gpu-tab]').forEach(b=>b.addEventListener('click',()=>setGpuTab(b.dataset.gpuTab)));
   document.querySelectorAll('[data-company-tab]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.companyTab!=='gpu')$('#eaGpuPanel')?.classList.add('hidden');}));
-  ['eaGpuLength','eaGpuWidth','eaGpuBody','eaGpuShroud','eaGpuBackplate','eaGpuBrand','eaGpuRgb','eaGpuPrice'].forEach(id=>$('#'+id)?.addEventListener('input',drawGpu));\n  $('#eaGpuLogo')?.addEventListener('change',readGpuLogo);
+  ['eaGpuLength','eaGpuWidth','eaGpuBody','eaGpuShroud','eaGpuBackplate','eaGpuBrand','eaGpuRgb','eaGpuPrice'].forEach(id=>$('#'+id)?.addEventListener('input',drawGpu));
+  $('#eaGpuLogo')?.addEventListener('change',readGpuLogo);
   $('#eaGpuAddFan')?.addEventListener('click',()=>{const type=$('#eaGpuFanType').value;if(!researched(type)){toast('Research this fan type first.');return;}if(gpuFans.length<6)gpuFans.push({position:.5,type});drawGpu();});
   $('#eaGpuRemoveFan')?.addEventListener('click',()=>{if(gpuFans.length>1)gpuFans.pop();drawGpu();});
   $('#eaGpuFanType')?.addEventListener('change',()=>{});
@@ -130,7 +131,8 @@ async function loadChips(){
  optionsFor('#eaChipSpeed',['chip_ok_speed','chip_decent_speed','chip_good_speed','chip_fast_speed','chip_insane_speed','chip_super_speed']);
  optionsFor('#eaChipPower',['chip_decent_power','chip_good_power','chip_strong_power','chip_super_powerful']);
 }
-function readGpuLogo(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=256;c.height=256;const ctx=c.getContext('2d');const scale=Math.min(256/img.width,256/img.height);ctx.drawImage(img,(256-img.width*scale)/2,(256-img.height*scale)/2,img.width*scale,img.height*scale);gpuBrandLogo=c.toDataURL('image/webp',.78);drawGpu();};img.src=String(reader.result);};reader.readAsDataURL(file);}\nfunction canvasPoint(e){const r=$('#eaGpuCanvas').getBoundingClientRect();return {x:(e.clientX-r.left)*900/r.width,y:(e.clientY-r.top)*480/r.height};}
+function readGpuLogo(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=256;c.height=256;const ctx=c.getContext('2d');const scale=Math.min(256/img.width,256/img.height);ctx.drawImage(img,(256-img.width*scale)/2,(256-img.height*scale)/2,img.width*scale,img.height*scale);gpuBrandLogo=c.toDataURL('image/webp',.78);drawGpu();};img.src=String(reader.result);};reader.readAsDataURL(file);}
+function canvasPoint(e){const r=$('#eaGpuCanvas').getBoundingClientRect();return {x:(e.clientX-r.left)*900/r.width,y:(e.clientY-r.top)*480/r.height};}
 function fanCoords(){const c=$('#eaGpuCanvas');const len=Number($('#eaGpuLength')?.value||300),w=Number($('#eaGpuWidth')?.value||125),scale=Math.min(1.6,Math.min(650/len,300/w)),gw=len*scale,gh=w*scale,x=(900-gw)/2,y=(480-gh)/2;return gpuFans.map(f=>({x:x+gw*f.position,y:y+gh/2,r:Math.min(gh*.34,gw/gpuFans.length*.34),type:f.type}));}
 function nearestFan(x,y){const arr=fanCoords();let best=-1,dist=1e9;arr.forEach((p,i)=>{const d=Math.hypot(p.x-x,p.y-y);if(d<p.r*1.7&&d<dist){best=i;dist=d;}});return best;}
 function drawGpu(){
