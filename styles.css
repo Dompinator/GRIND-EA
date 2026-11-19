@@ -7692,4 +7692,5 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .cpu-model.titanium-body .cpu-top-face{background:linear-gradient(145deg,#f1f5f9 0%,#9aa8b8 48%,#4b596b 100%)!important;border-color:#dce6f1!important;color:#17212e!important;box-shadow:inset 0 0 0 3px #e2e8f0,inset 0 0 24px #cbd5e155,0 0 24px #94a3b855!important}
 .cpu-model.titanium-body .cpu-side-face{background:linear-gradient(90deg,#64748b,#1e293b)!important}
 .cpu-model.integrated-graphics .cpu-top-face:before{content:'INTEGRATED GRAPHICS';display:block;position:absolute;left:8px;top:7px;padding:3px 5px;border:1px solid #38bdf8;border-radius:4px;background:#082f49;color:#e0f2fe;font-size:7px;font-weight:800;letter-spacing:.5px}
-.cpu-model.vapor-chamber-cooling .cpu-top-face:after{content:'VAPOR CHAMBER'!important;color:#67e8f9!important}
+ .cpu-model.vapor-chamber-cooling .cpu-top-face:after{content:'VAPOR CHAMBER'!important;color:#67e8f9!important}
+.cpu-model.ultra-cooling .cpu-top-face:after{content:'ULTRA COOLING'!important;color:#d97706!important}
