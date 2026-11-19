@@ -121,12 +121,17 @@ function mountGpuProductsPage(){
  const page=$('#page-company-products');if(!page)return;
  page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">GPU MANUFACTURING</div><h3>Products</h3><p class="muted">Your GPU designs, drafts and published products.</p></div></div><div id="eaGpuProductList" class="ea-saved-chips"></div>';
 }
+function restoreCpuProductsPage(){
+ const page=$('#page-company-products');if(!page)return;
+ page.innerHTML='<div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">▦</div><h3>Products</h3><p class="muted">Your manufactured products will appear here.</p></div>';
+}
 function hideGpuWorkspace(){
  $('#eaGpuPanel')?.classList.add('hidden');
  $('#eaCompanyResearch')?.classList.add('hidden');
  $('#cpuResearchTree')?.classList.remove('hidden');
  const section=$('#companyPanelResearch .research-section');if(section){const eyebrow=section.querySelector('.company-section-heading .eyebrow');const heading=section.querySelector('.company-section-heading h4');const chip=section.querySelector('.company-count-chip');if(eyebrow)eyebrow.textContent='CPU DEVELOPMENT';if(heading)heading.textContent='Research tree';if(chip)chip.textContent='CPU RESEARCH';}
  $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
+ restoreCpuProductsPage();
 }
 function showGpuMain(){if(!isGpu())return;$('#page-company-design #cpuDesigner')?.classList.add('hidden');$('#eaGpuPanel')?.classList.remove('hidden');setGpuTab(activeGpuView);loadChips();drawGpu();}
 function setGpuTab(tab){
