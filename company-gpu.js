@@ -45,6 +45,7 @@ async function refreshCompanies(){
  if(error){console.error('Company list:',error);return;}
  companies=data||[];
  if(currentCompany&&!companies.some(c=>c.id===currentCompany.id))currentCompany=null;
+ if(!currentCompany){const savedId=localStorage.getItem('grind_active_company_id');currentCompany=companies.find(c=>c.id===savedId)||null;}
  renderChooser();
 }
 async function selectCompany(id){
@@ -54,7 +55,8 @@ async function selectCompany(id){
  await loadCompanyResearchAndProducts();
  if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();
  renderChooser();
- if(isGpu())mountGpuWorkspace();
+ if(isGpu()){mountGpuWorkspace();mountGpuResearch();renderGpuProducts();}else{hideGpuWorkspace();}
+
 }
 async function createCompany(e){
  e.preventDefault();const msg=$('#eaCompanyCreateMessage');
@@ -73,11 +75,11 @@ function addBackButton(){
 }
 function mountGpuWorkspace(){
  if(!isGpu())return;
- const dash=$('#companyDashboard');if(!dash)return;
+ const dash=$('#page-company-design');if(!dash)return;
  let panel=$('#eaGpuPanel');
  if(!panel){
   panel=document.createElement('section');panel.id='eaGpuPanel';panel.className='company-dashboard-section ea-gpu-panel';
-  panel.innerHTML='<div class="ea-gpu-tabs"><button data-gpu-tab="design" class="active">GPU Design</button><button data-gpu-tab="chips">Chips</button><button data-gpu-tab="gpuResearch">GPU Research</button><button data-gpu-tab="chipResearch">CHIP Research</button><button data-gpu-tab="products">My GPUs</button></div><div id="eaGpuDesign" class="ea-gpu-view"><div class="ea-gpu-layout"><div class="ea-gpu-preview"><div class="ea-gpu-label">LIVE GRAPHICS CARD PREVIEW <small>Drag fans to reposition</small></div><canvas id="eaGpuCanvas" width="900" height="480"></canvas><div id="eaGpuCost" class="ea-gpu-cost"></div></div><div class="ea-gpu-controls"><label>GPU name<input id="eaGpuName" maxlength="48" value="New Graphics Card"></label><label>Saved chip<select id="eaGpuChipSelect"><option value="">Loading chips...</option></select></label><label>Length <input id="eaGpuLength" type="range" min="180" max="420" value="300"></label><label>Width <input id="eaGpuWidth" type="range" min="90" max="180" value="125"></label><label>Fan type<select id="eaGpuFanType"><option value="gpu_small_fans">Small Fans</option><option value="gpu_medium_fans">Medium Fans</option><option value="gpu_smart_fans">Smart Fans</option></select></label><div class="ea-fan-row"><span>Fans: <b id="eaGpuFanCount">2</b></span><button id="eaGpuRemoveFan" type="button">−</button><button id="eaGpuAddFan" type="button">＋ Add fan</button></div><label>Body type<select id="eaGpuBody"><option value="plastic">Plastic · Free</option><option value="metallic">Metallic</option><option value="carbon">Carbon</option></select></label><label>Shroud shape<select id="eaGpuShroud"><option value="rounded">Rounded</option><option value="angular">Angular</option><option value="compact">Compact</option></select></label><label class="ea-check"><input type="checkbox" id="eaGpuBackplate" checked> Backplate</label><label>Branding text<input id="eaGpuBrand" maxlength="20" value="GRIND"></label><label>Brand logo<input type="file" id="eaGpuLogo" accept="image/png,image/jpeg,image/webp"></label><label class="ea-check"><input type="checkbox" id="eaGpuRgb"> RGB lighting</label><label>Listing price<input id="eaGpuPrice" type="number" min="1" value="1200"></label><button class="primary-btn" id="eaGpuSave" type="button">Save as draft</button><p id="eaGpuMessage" class="form-message"></p></div></div></div><div id="eaGpuChips" class="ea-gpu-view hidden"><div class="ea-chip-layout"><div><h4>GPU Chip Designer</h4><p class="muted">Simple silver package. Only the chip name changes visually.</p><div class="ea-chip-preview"><span id="eaChipPreviewName">NOVA</span></div></div><div class="ea-gpu-controls"><label>Chip name<input id="eaChipName" maxlength="40" value="Nova GPU Chip"></label><label>Speed<select id="eaChipSpeed"></select></label><label>Power<select id="eaChipPower"></select></label><div class="ea-vram"><b>VRAM</b><small>Reserved section. Research upgrades will be added later.</small></div><button class="primary-btn" id="eaSaveChip" type="button">Save chip</button><p id="eaChipMessage" class="form-message"></p></div></div><div id="eaSavedChips" class="ea-saved-chips"></div></div><div id="eaGpuResearch" class="ea-gpu-view hidden"><h4>GPU Research</h4><div id="eaGpuResearchList" class="ea-research-list"></div></div><div id="eaChipResearch" class="ea-gpu-view hidden"><h4>CHIP Research</h4><div id="eaChipResearchList" class="ea-research-list"></div></div><div id="eaGpuProducts" class="ea-gpu-view hidden"><h4>GPU Products</h4><div id="eaGpuProductList" class="ea-saved-chips"></div></div>';
+  panel.innerHTML='<div class="ea-gpu-tabs"><button data-gpu-tab="design" class="active">GPU</button><button data-gpu-tab="chips">CHIP</button></div><div id="eaGpuDesign" class="ea-gpu-view"><div class="ea-gpu-layout"><div class="ea-gpu-preview"><div class="ea-gpu-label">LIVE GRAPHICS CARD PREVIEW <small>Drag fans to reposition</small></div><canvas id="eaGpuCanvas" width="900" height="480"></canvas><div id="eaGpuCost" class="ea-gpu-cost"></div></div><div class="ea-gpu-controls"><label>GPU name<input id="eaGpuName" maxlength="48" value="New Graphics Card"></label><label>Saved chip<select id="eaGpuChipSelect"><option value="">Loading chips...</option></select></label><label>Length <input id="eaGpuLength" type="range" min="180" max="420" value="300"></label><label>Width <input id="eaGpuWidth" type="range" min="90" max="180" value="125"></label><label>Fan type<select id="eaGpuFanType"><option value="gpu_small_fans">Small Fans</option><option value="gpu_medium_fans">Medium Fans</option><option value="gpu_smart_fans">Smart Fans</option></select></label><div class="ea-fan-row"><span>Fans: <b id="eaGpuFanCount">2</b></span><button id="eaGpuRemoveFan" type="button">−</button><button id="eaGpuAddFan" type="button">＋ Add fan</button></div><label>Body type<select id="eaGpuBody"><option value="plastic">Plastic · Free</option><option value="metallic">Metallic</option><option value="carbon">Carbon</option></select></label><label>Shroud shape<select id="eaGpuShroud"><option value="rounded">Rounded</option><option value="angular">Angular</option><option value="compact">Compact</option></select></label><label class="ea-check"><input type="checkbox" id="eaGpuBackplate" checked> Backplate</label><label>Branding text<input id="eaGpuBrand" maxlength="20" value="GRIND"></label><label>Brand logo<input type="file" id="eaGpuLogo" accept="image/png,image/jpeg,image/webp"></label><label class="ea-check"><input type="checkbox" id="eaGpuRgb"> RGB lighting</label><label>Listing price<input id="eaGpuPrice" type="number" min="1" value="1200"></label><button class="primary-btn" id="eaGpuSave" type="button">Save as draft</button><p id="eaGpuMessage" class="form-message"></p></div></div></div><div id="eaGpuChips" class="ea-gpu-view hidden"><div class="ea-chip-layout"><div><h4>GPU Chip Designer</h4><p class="muted">Simple silver package. Only the chip name changes visually.</p><div class="ea-chip-preview"><span id="eaChipPreviewName">NOVA</span></div></div><div class="ea-gpu-controls"><label>Chip name<input id="eaChipName" maxlength="40" value="Nova GPU Chip"></label><label>Speed<select id="eaChipSpeed"></select></label><label>Power<select id="eaChipPower"></select></label><div class="ea-vram"><b>VRAM</b><small>Reserved section. Research upgrades will be added later.</small></div><button class="primary-btn" id="eaSaveChip" type="button">Save chip</button><p id="eaChipMessage" class="form-message"></p></div></div><div id="eaSavedChips" class="ea-saved-chips"></div></div>';
   dash.appendChild(panel);
   panel.querySelectorAll('[data-gpu-tab]').forEach(b=>b.addEventListener('click',()=>setGpuTab(b.dataset.gpuTab)));
   document.querySelectorAll('[data-company-tab]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.companyTab!=='gpu')$('#eaGpuPanel')?.classList.add('hidden');}));
@@ -96,11 +98,41 @@ function mountGpuWorkspace(){
  addBackButton();renderResearchLists();loadChips();drawGpu();
  const tabs=$('.company-dashboard-tabs');if(tabs&&!$('#eaGpuTab')){const b=document.createElement('button');b.id='eaGpuTab';b.className='company-dashboard-tab';b.textContent='GPU / CHIP';b.addEventListener('click',showGpuMain);tabs.appendChild(b);}
 }
-function showGpuMain(){document.querySelectorAll('[data-company-tab]').forEach(x=>x.classList.remove('active'));$('#eaGpuTab')?.classList.add('active');document.querySelectorAll('.company-dashboard-panel').forEach(x=>x.classList.add('hidden'));$('#eaGpuPanel')?.classList.remove('hidden');renderResearchLists();loadChips();drawGpu();}
+function mountGpuResearch(){
+ const section=$('#companyPanelResearch .research-section');if(!section)return;
+ $('#cpuResearchTree')?.classList.toggle('hidden',isGpu());
+ let wrap=$('#eaCompanyResearch');
+ if(!wrap){
+  wrap=document.createElement('div');wrap.id='eaCompanyResearch';wrap.className='ea-company-research';
+  wrap.innerHTML='<div class="ea-research-subtabs"><button type="button" data-ea-research="GPU" class="active">GPU</button><button type="button" data-ea-research="CHIP">CHIP</button></div><div id="eaGpuResearchList" class="ea-research-list"></div><div id="eaChipResearchList" class="ea-research-list hidden"></div>';
+  const tree=$('#cpuResearchTree');section.insertBefore(wrap,tree||null);
+  wrap.querySelectorAll('[data-ea-research]').forEach(b=>b.addEventListener('click',()=>setResearchGroup(b.dataset.eaResearch)));
+ }
+ wrap.classList.toggle('hidden',!isGpu());
+ if(isGpu())renderResearchLists();
+}
+function setResearchGroup(group){
+ $('#eaGpuResearchList')?.classList.toggle('hidden',group!=='GPU');
+ $('#eaChipResearchList')?.classList.toggle('hidden',group!=='CHIP');
+ document.querySelectorAll('[data-ea-research]').forEach(b=>b.classList.toggle('active',b.dataset.eaResearch===group));
+ renderResearchLists();
+}
+function mountGpuProductsPage(){
+ const page=$('#page-company-products');if(!page)return;
+ page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">GPU MANUFACTURING</div><h3>Products</h3><p class="muted">Your GPU designs, drafts and published products.</p></div></div><div id="eaGpuProductList" class="ea-saved-chips"></div>';
+}
+function hideGpuWorkspace(){
+ $('#eaGpuPanel')?.classList.add('hidden');
+ $('#eaCompanyResearch')?.classList.add('hidden');
+ $('#cpuResearchTree')?.classList.remove('hidden');
+ $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
+}
+function showGpuMain(){if(!isGpu())return;$('#page-company-design #cpuDesigner')?.classList.add('hidden');$('#eaGpuPanel')?.classList.remove('hidden');setGpuTab(activeGpuView);loadChips();drawGpu();}
 function setGpuTab(tab){
  document.querySelectorAll('[data-gpu-tab]').forEach(b=>b.classList.toggle('active',b.dataset.gpuTab===tab));
- const views={design:'#eaGpuDesign',chips:'#eaGpuChips',gpuResearch:'#eaGpuResearch',chipResearch:'#eaChipResearch',products:'#eaGpuProducts'};Object.entries(views).forEach(([key,selector])=>$(selector)?.classList.toggle('hidden',key!==tab));
- if(tab==='chips')loadChips();if(tab==='gpuResearch'||tab==='chipResearch')renderResearchLists();if(tab==='products')renderGpuProducts();
+ activeGpuView=tab==='chips'?'chips':'design';
+ const views={design:'#eaGpuDesign',chips:'#eaGpuChips'};Object.entries(views).forEach(([key,selector])=>$(selector)?.classList.toggle('hidden',key!==activeGpuView));
+ if(activeGpuView==='chips')loadChips();
 }
 function renderResearchLists(){
  const render=(target,group)=>{const el=$(target);if(!el)return;el.innerHTML=GPU_RESEARCH.filter(r=>r.group===group).map(r=>{const yes=researched(r.key),locked=r.pre&&!researched(r.pre);return '<article class="ea-research-card"><div><b>'+r.name+'</b><small>Research $'+r.cost.toLocaleString()+' · Value $'+r.value.toLocaleString()+' · '+r.score+' Score'+(locked?' · Requires '+GPU_RESEARCH.find(x=>x.key===r.pre).name:'')+'</small></div><button data-research-key="'+r.key+'" '+(yes||locked?'disabled':'')+'>'+(yes?'Unlocked':locked?'Locked':'Research')+'</button></article>';}).join('');el.querySelectorAll('[data-research-key]').forEach(b=>b.addEventListener('click',()=>unlockResearch(b.dataset.researchKey,group)));};
@@ -198,17 +230,35 @@ window.loadCompanyDashboard=async function(){
  const {data:invites}=await sb.from('product_company_transfers').select('id,company_id,sender_id,created_at,product_companies(company_name,logo_data_url)').eq('recipient_id',currentUser.id).eq('status','pending').order('created_at',{ascending:false}).limit(10);
  incomingCompanyTransfers=invites||[];renderCompanyIncomingTransfers?.();
  renderChooser();
- if(currentCompany){await loadCompanyResearchAndProducts();if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();if(isGpu())mountGpuWorkspace();}
+ if(currentCompany){
+  await loadCompanyResearchAndProducts();
+  if(typeof renderCompanyDashboard==='function')renderCompanyDashboard();
+  if(isGpu()){mountGpuWorkspace();mountGpuResearch();mountGpuProductsPage();renderGpuProducts();}
+ }
 };
 const oldRender=window.renderCompanyDashboard;
-window.renderCompanyDashboard=function(){oldRender?.();renderChooser();if(currentCompany){const badge=$('.company-cpu-chip');if(badge)badge.textContent=isGpu()?'GPU MANUFACTURER':'CPU MANUFACTURER';addBackButton();if(isGpu()){mountGpuWorkspace();document.querySelector('[data-company-tab=\"research\"]')?.classList.add('hidden');$('#companyPanelResearch')?.classList.add('hidden');}else{$('#eaGpuPanel')?.classList.add('hidden');document.querySelector('[data-company-tab=\"research\"]')?.classList.remove('hidden');}}};
+window.renderCompanyDashboard=function(){
+ oldRender?.();renderChooser();
+ if(!currentCompany)return;
+ const badge=$('.company-cpu-chip');if(badge)badge.textContent=isGpu()?'GPU MANUFACTURER':'CPU MANUFACTURER';
+ addBackButton();
+ if(isGpu()){
+  mountGpuWorkspace();mountGpuResearch();mountGpuProductsPage();
+  $('#eaCompanyResearch')?.classList.remove('hidden');
+  $('#cpuResearchTree')?.classList.add('hidden');
+ }else hideGpuWorkspace();
+};
 const oldShow=window.showPage;
 window.showPage=function(page){
  if((page==='company-design'||page==='company-products')&&!currentCompany){oldShow?.('company');return;}
- if(page==='company-design'&&isGpu()){oldShow?.('company');mountGpuWorkspace();showGpuMain();setGpuTab('design');return;}
- if(page==='company-products'&&isGpu()){oldShow?.('company');mountGpuWorkspace();showGpuMain();setGpuTab('products');return;}
  oldShow?.(page);
  if(page==='company')renderChooser();
+ if(page==='company-design'&&isGpu()){
+  mountGpuWorkspace();showGpuMain();setGpuTab(activeGpuView);
+ }
+ if(page==='company-products'&&isGpu()){
+  mountGpuProductsPage();renderGpuProducts();
+ }
 };
 document.addEventListener('DOMContentLoaded',()=>{refreshCompanies();});
 if(sb?.auth?.onAuthStateChange)sb.auth.onAuthStateChange(()=>{setTimeout(()=>refreshCompanies(),0);});
