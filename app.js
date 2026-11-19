@@ -2180,6 +2180,7 @@ function resolveCpuProductSpec(p) {
     cooling,
     graphics,
     ai,
+    vCache: String(p?.v_cache_type || cached?.vCache || 'none'),
     name: String(p?.product_name || cached?.name || companyName || 'CPU'),
     companyName,
     score: Number(p?.cpu_score ?? cached?.score ?? 0),
@@ -2253,7 +2254,7 @@ function hydrateCpuThumbElements(rootEl, specsById, size = 280) {
 function formatCpuSpecLine(spec) {
   const coreLabel = spec.cores === 1 ? '1 Core' : (spec.cores > 1 ? spec.cores + ' Cores' : 'No core');
   const threadLabel = spec.threads > 0 ? spec.threads + ' Threads' : 'No threads';
-  return coreLabel + ' · ' + threadLabel + (spec.ai ? ' · AI' : '');
+  return coreLabel + ' · ' + threadLabel + (spec.ai ? ' · AI' : '') + (spec.vCache && spec.vCache !== 'none' ? ' · ' + ({basic:'Basic V-Cache',advanced:'Advanced V-Cache',basic_3d:'Basic 3D V-Cache',advanced_3d:'Advanced 3D V-Cache'}[spec.vCache] || 'V-Cache') : '');
 }
 
 function formatCpuHardwareBadges(spec) {
