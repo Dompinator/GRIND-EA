@@ -7694,3 +7694,5 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .cpu-model.integrated-graphics .cpu-top-face:before{content:'INTEGRATED GRAPHICS';display:block;position:absolute;left:8px;top:7px;padding:3px 5px;border:1px solid #38bdf8;border-radius:4px;background:#082f49;color:#e0f2fe;font-size:7px;font-weight:800;letter-spacing:.5px}
  .cpu-model.vapor-chamber-cooling .cpu-top-face:after{content:'VAPOR CHAMBER'!important;color:#67e8f9!important}
 .cpu-model.ultra-cooling .cpu-top-face:after{content:'ULTRA COOLING'!important;color:#d97706!important}
+.cpu-model.ai-integration .cpu-top-face{position:relative}
+.cpu-model.ai-integration .cpu-top-face:after{content:'AI'!important;display:block;position:absolute;left:8px;bottom:7px;padding:3px 7px;border:1px solid #a78bfa;border-radius:4px;background:#2e1065;color:#ede9fe!important;font-size:9px;font-weight:900;letter-spacing:1px}
