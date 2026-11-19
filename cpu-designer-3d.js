@@ -587,6 +587,14 @@
     ctx.fillStyle = '#94a3b8';
     ctx.font = '700 16px "JetBrains Mono", monospace';
     ctx.fillText(state.cooling >= 3 ? 'VAPOR CHAMBER' : state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
+    if (state.graphics) {
+      ctx.fillStyle = '#082f49';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect(322, 22, 168, 32, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe'; ctx.font = '700 13px "JetBrains Mono", monospace';
+      ctx.fillText('INTEGRATED GRAPHICS', 406, 43);
+    }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -1087,7 +1095,7 @@
     const iodGeom = createRoundedRectGeometry(0.38, 0.30, 0.04, 0.025, 0.006);
     const iodMesh = new THREE.Mesh(iodGeom, mats.iodSilicon);
     iodMesh.castShadow = !isSoftwareGl;
-    iodMesh.position.set(0, 0.025, 0.48);
+    iodMesh.position.set(0, 0.025, coreCount >= 32 ? 0.78 : 0.48);
     diesGroup.add(iodMesh);
 
     if (coreCount <= 0) {
