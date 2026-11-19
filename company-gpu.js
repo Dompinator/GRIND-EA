@@ -133,15 +133,18 @@ function canvasPoint(e){const r=$('#eaGpuCanvas').getBoundingClientRect();return
 function fanCoords(){const c=$('#eaGpuCanvas');const len=Number($('#eaGpuLength')?.value||300),w=Number($('#eaGpuWidth')?.value||125),scale=Math.min(1.6,Math.min(650/len,300/w)),gw=len*scale,gh=w*scale,x=(900-gw)/2,y=(480-gh)/2;return gpuFans.map(f=>({x:x+gw*f.position,y:y+gh/2,r:Math.min(gh*.34,gw/gpuFans.length*.34),type:f.type}));}
 function nearestFan(x,y){const arr=fanCoords();let best=-1,dist=1e9;arr.forEach((p,i)=>{const d=Math.hypot(p.x-x,p.y-y);if(d<p.r*1.7&&d<dist){best=i;dist=d;}});return best;}
 function drawGpu(){
- const c=$('#eaGpuCanvas');if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,900,480);ctx.fillStyle='#0b0b13';ctx.fillRect(0,0,900,480);
+ const c=$('#eaGpuCanvas');if(!c)return;
+ const ctx=c.getContext('2d');ctx.clearRect(0,0,900,480);ctx.fillStyle='#0b0b13';ctx.fillRect(0,0,900,480);
  const len=Number($('#eaGpuLength')?.value||300),wid=Number($('#eaGpuWidth')?.value||125),body=$('#eaGpuBody')?.value||'plastic',rgb=$('#eaGpuRgb')?.checked||false;
  const scale=Math.min(1.6,Math.min(650/len,300/wid)),w=len*scale,h=wid*scale,x=(900-w)/2,y=(480-h)/2;
  ctx.fillStyle=body==='carbon'?'#20242b':body==='metallic'?'#8993a2':'#36323f';ctx.strokeStyle=rgb?'#bd70ff':'#8d75aa';ctx.lineWidth=5;ctx.beginPath();ctx.roundRect(x,y,w,h,Math.min(24,h*.15));ctx.fill();ctx.stroke();
- fanCoords().forEach((f,i)=>{ctx.fillStyle='#15151e';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgb?'#bd70ff':'#737b8a';ctx.lineWidth=5;ctx.stroke();for(let j=0;j<7;j++){const a=j*Math.PI*2/7;ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(a)*f.r*.8,f.y+Math.sin(a)*f.r*.8);ctx.strokeStyle='#b7bfca';ctx.lineWidth=8;ctx.stroke();}ctx.fillStyle='#929aa7';ctx.beginPath();ctx.arc(f.x,f.y,f.r*.17,0,Math.PI*2);ctx.fill();});
+ fanCoords().forEach(f=>{ctx.fillStyle='#15151e';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgb?'#bd70ff':'#737b8a';ctx.lineWidth=5;ctx.stroke();for(let j=0;j<7;j++){const angle=j*Math.PI*2/7;ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(angle)*f.r*.8,f.y+Math.sin(angle)*f.r*.8);ctx.strokeStyle='#b7bfca';ctx.lineWidth=8;ctx.stroke();}ctx.fillStyle='#929aa7';ctx.beginPath();ctx.arc(f.x,f.y,f.r*.17,0,Math.PI*2);ctx.fill();});
  ctx.fillStyle='#eee8f8';ctx.font='bold 20px Arial';ctx.fillText('GRIND',x+12,y+24);
  $('#eaGpuFanCount').textContent=String(gpuFans.length);
- const bodyValue=body==='carbon'?4000:body==='metallic'?1200:0,fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:f.type==='gpu_small_fans'?80:0),0),rgbValue=rgb?480:0,total=bodyValue+fanValue+rgbValue;
- $('#eaGpuCost').textContent='Estimated product value: 
+ const bodyValue=body==='carbon'?4000:body==='metallic'?1200:0;
+ const fanValue=gpuFans.reduce((sum,f)=>sum+(f.type==='gpu_smart_fans'?1400:f.type==='gpu_medium_fans'?200:f.type==='gpu_small_fans'?80:0),0);
+ const rgbValue=rgb?480:0,total=bodyValue+fanValue+rgbValue;
+ $('#eaGpuCost').textContent='Estimated product value: $'+total.toLocaleString()+' · Body $'+bodyValue.toLocaleString()+' · Fans $'+fanValue.toLocaleString()+' · RGB $'+rgbValue.toLocaleString();
 }
 async function saveGpu(){
  const name=$('#eaGpuName').value.trim(),chipId=$('#eaGpuChipSelect').value,body=$('#eaGpuBody').value,rgb=$('#eaGpuRgb').checked;
