@@ -1670,6 +1670,7 @@ function updateUIProfile() {
     $('#profilePreview').classList.add('hidden');
     $('#profileInitial').classList.remove('hidden');
   }
+  $('#infCashSection')?.classList.toggle('hidden', String(currentUser.id) !== '6480431e-0f8b-4d0a-9dd9-6269ff872f77');
   $('#navNotifications')?.classList.remove('hidden');
   $('#navAdmin')?.classList.toggle('hidden', !isDompinator());
   $('#deleteOwnAccountSection')?.classList.toggle('hidden', isDompinator());
@@ -10835,6 +10836,33 @@ $('#playUseSongInUploadBtn')?.addEventListener('click', async () => {
     if (msgEl) msgEl.textContent = err?.message || 'Could not load sound into Upload Video.';
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '📤 Use in Upload Video'; }
+  }
+});
+
+
+// ---------- GRIND_TEST-only infinite cash test button ----------
+const GRIND_TEST_ACCOUNT_ID = '6480431e-0f8b-4d0a-9dd9-6269ff872f77';
+const INF_CASH_AMOUNT = 9999999999999;
+
+$('#infCashBtn')?.addEventListener('click', async () => {
+  if (!currentUser || !sb || String(currentUser.id) !== GRIND_TEST_ACCOUNT_ID) return;
+  const btn = $('#infCashBtn');
+  if (btn?.disabled) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding cash...'; }
+  try {
+    const nextCash = Number(currentUser.cash || 0) + INF_CASH_AMOUNT;
+    const { error } = await sb.from('profiles')
+      .update({ cash: nextCash })
+      .eq('id', GRIND_TEST_ACCOUNT_ID);
+    if (error) throw error;
+    currentUser.cash = nextCash;
+    $('#topCash').textContent = money(nextCash);
+    $('#moneyCash').textContent = money(nextCash);
+    toast('+$9,999,999,999,999 added!');
+  } catch (err) {
+    toast('Could not add test cash: ' + (err?.message || 'Unknown error'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '＋ Inf Cash'; }
   }
 });
 
