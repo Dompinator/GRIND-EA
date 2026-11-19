@@ -1268,6 +1268,109 @@
       capMesh.castShadow = !isSoftwareGl;
       capMesh.position.y = finStackTopY + 0.024;
       coolingGroup.add(capMesh);
+    } else if (isVapor) {
+      // Vapor Chamber Cooling: a broad sealed copper chamber feeds one dense fin tower.
+      // This is intentionally a different architecture from Great Cooling's twin towers.
+      const chamberBase = new THREE.Mesh(
+        new THREE.BoxGeometry(1.62, 0.105, 1.62),
+        mats.copper
+      );
+      chamberBase.position.set(0, 0.105, 0);
+      chamberBase.castShadow = !isSoftwareGl;
+      chamberBase.receiveShadow = true;
+      coolingGroup.add(chamberBase);
+
+      // Dark perimeter gasket and raised machined chamber rim.
+      const gasket = new THREE.Mesh(
+        new THREE.BoxGeometry(1.54, 0.025, 1.54),
+        mats.darkAnodized
+      );
+      gasket.position.set(0, 0.164, 0);
+      coolingGroup.add(gasket);
+
+      const chamberLid = new THREE.Mesh(
+        new THREE.BoxGeometry(1.50, 0.055, 1.50),
+        mats.copper
+      );
+      chamberLid.position.set(0, 0.197, 0);
+      chamberLid.castShadow = !isSoftwareGl;
+      coolingGroup.add(chamberLid);
+
+      // Visible flattened vapor channels branching from the central evaporator zone.
+      const channelMat = mats.alumFin;
+      const channelGeom = new THREE.BoxGeometry(0.035, 0.012, 1.12);
+      for (let i = -3; i <= 3; i++) {
+        const channel = new THREE.Mesh(channelGeom, channelMat);
+        channel.position.set(i * 0.19, 0.231, 0);
+        coolingGroup.add(channel);
+      }
+      const evaporator = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.27, 0.27, 0.025, 48),
+        mats.darkAnodized
+      );
+      evaporator.position.set(0, 0.239, 0);
+      coolingGroup.add(evaporator);
+      const evaporatorCore = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.19, 0.19, 0.03, 48),
+        mats.copper
+      );
+      evaporatorCore.position.set(0, 0.258, 0);
+      coolingGroup.add(evaporatorCore);
+
+      // One broad, tightly packed fin tower (not Great Cooling's two towers).
+      const vaporFinCount = 24;
+      const vaporFinGeom = new THREE.BoxGeometry(1.34, 0.46, 0.018);
+      const vaporFins = new THREE.InstancedMesh(vaporFinGeom, mats.alumFin, vaporFinCount);
+      vaporFins.castShadow = !isSoftwareGl;
+      vaporFins.receiveShadow = true;
+      for (let i = 0; i < vaporFinCount; i++) {
+        _dummy.position.set(0, 0.50, -0.57 + i * (1.14 / (vaporFinCount - 1)));
+        _dummy.rotation.set(0, 0, 0);
+        _dummy.scale.set(1, 1, 1);
+        _dummy.updateMatrix();
+        vaporFins.setMatrixAt(i, _dummy.matrix);
+      }
+      vaporFins.instanceMatrix.needsUpdate = true;
+      vaporFins.computeBoundingSphere();
+      coolingGroup.add(vaporFins);
+
+      // Single front-mounted axial fan with a distinct circular shroud.
+      const fanY = 0.51;
+      const shroud = new THREE.Mesh(
+        new THREE.TorusGeometry(0.39, 0.035, 12, 40),
+        mats.darkAnodized
+      );
+      shroud.rotation.y = Math.PI / 2;
+      shroud.position.set(0, fanY, 0.72);
+      coolingGroup.add(shroud);
+
+      fanRotorGroup = new THREE.Group();
+      fanRotorGroup.position.set(0, fanY, 0.72);
+      const hub = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.105, 0.105, 0.09, 24),
+        mats.alumFin
+      );
+      hub.rotation.x = Math.PI / 2;
+      fanRotorGroup.add(hub);
+
+      const bladeGeom = new THREE.BoxGeometry(0.015, 0.25, 0.075);
+      for (let b = 0; b < 9; b++) {
+        const bladePivot = new THREE.Group();
+        bladePivot.rotation.z = (b / 9) * Math.PI * 2;
+        const blade = new THREE.Mesh(bladeGeom, mats.fanBlade);
+        blade.position.y = 0.20;
+        blade.rotation.z = 0.35;
+        bladePivot.add(blade);
+        fanRotorGroup.add(bladePivot);
+      }
+      coolingGroup.add(fanRotorGroup);
+
+      const vaporBadge = new THREE.Mesh(
+        createRoundedRectGeometry(0.72, 0.24, 0.025, 0.045, 0.008),
+        [mats.coolingLogoCap, mats.darkAnodized]
+      );
+      vaporBadge.position.set(0, 0.755, -0.39);
+      coolingGroup.add(vaporBadge);
     } else {
       // Great Cooling: 4 BIG thick copper heatpipes sweeping from dual towers straight inside the CPU!
       const pipeOffsetsZ = [-0.46, -0.16, 0.16, 0.46];
