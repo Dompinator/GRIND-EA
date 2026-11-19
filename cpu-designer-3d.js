@@ -586,7 +586,7 @@
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '700 16px "JetBrains Mono", monospace';
-    ctx.fillText(state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
+    ctx.fillText(state.cooling >= 3 ? 'VAPOR CHAMBER' : state.cooling >= 2 ? 'GREAT COOLING' : 'BUILT-IN COOLING', size / 2, 460);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
