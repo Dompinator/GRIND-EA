@@ -211,7 +211,10 @@ async function saveChip(){
  if(!error){toast('Chip saved to Chips.');loadChips();}
 }
 async function loadChips(){
- if(!currentCompany)return;const {data,error}=await sb.from('product_company_gpu_chips').select('*').eq('company_id',currentCompany.id).order('created_at',{ascending:false});
+ if(!currentCompany)return;
+ optionsFor('#eaChipSpeed',['chip_ok_speed','chip_decent_speed','chip_good_speed','chip_fast_speed','chip_insane_speed','chip_super_speed']);
+ optionsFor('#eaChipPower',['chip_decent_power','chip_good_power','chip_strong_power','chip_super_powerful']);
+ const {data,error}=await sb.from('product_company_gpu_chips').select('*').eq('company_id',currentCompany.id).order('created_at',{ascending:false});
  const wrap=$('#eaSavedChips');if(error){if(wrap)wrap.textContent=error.message;return;}chips=data||[];
  const select=$('#eaGpuChipSelect');if(select)select.innerHTML='<option value="">Choose a saved chip</option>'+chips.map(c=>'<option value="'+c.id+'">'+esc(c.chip_name)+'</option>').join('');
  if(wrap)wrap.innerHTML=chips.map(c=>'<button class="ea-chip-card" data-chip-select="'+c.id+'"><span>▦</span><b>'+esc(c.chip_name)+'</b><small>'+esc(c.speed_level)+' · '+esc(c.power_level)+'</small></button>').join('')||'<p class="muted">No chips saved yet.</p>';
