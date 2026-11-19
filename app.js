@@ -2152,7 +2152,8 @@ function resolveCpuProductSpec(p) {
     cooling = 0;
   }
 
-  const graphics = String(p?.graphics_type || p?.graphics || cached?.graphics || '');
+  const graphicsRaw = String(p?.graphics_type || p?.graphics || cached?.graphics || '').toLowerCase();
+  const graphics = graphicsRaw === 'simple' || graphicsRaw === 'advanced' ? graphicsRaw : '';
 
   const logoUrl = String(
     p?.product_companies?.logo_data_url ||
