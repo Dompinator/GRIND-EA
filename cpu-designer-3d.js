@@ -15,6 +15,7 @@
     threads: 0,   // 0 | 4 | 6 | 8 | 12 | 18
     cooling: 0,   // 0 | 1 | 2 | 3 | 4
     graphics: '',
+    ai: '',
     name: '',
     companyName: '',
     score: 0,
@@ -75,6 +76,7 @@
   let diesGroup = null;
   let threadsGroup = null;
   let ihsGroup = null;
+  let aiBadgeGroup = null;
   let coolingGroup = null;
   let fanRotorGroup = null;
 
@@ -1085,6 +1087,37 @@
     crown.position.y = 0.045;
 
     ihsGroup.add(flange, crown);
+    aiBadgeGroup = new THREE.Group();
+    ihsGroup.add(aiBadgeGroup);
+    rebuildAiBadge(activeState.ai);
+  }
+
+  function rebuildAiBadge(aiType) {
+    if (!aiBadgeGroup) return;
+    clearGroupDynamic(aiBadgeGroup);
+    if (!aiType) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#21133f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#a78bfa';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+    ctx.fillStyle = '#f5f3ff';
+    ctx.font = '900 82px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('AI', 128, 66);
+    const labelTexture = new THREE.CanvasTexture(canvas);
+    labelTexture.colorSpace = THREE.SRGBColorSpace;
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.20, 0.035), mats.darkAnodized);
+    backing.castShadow = !isSoftwareGl;
+    backing.position.set(0.55, 0.12, 0.84);
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.37, 0.15), new THREE.MeshBasicMaterial({ map: labelTexture, transparent: false, toneMapped: false }));
+    label.position.set(0.55, 0.12, 0.861);
+    aiBadgeGroup.add(backing, label);
   }
 
   // ---------- Dynamic Hardware Rebuild per Research Selection ----------
@@ -2035,6 +2068,7 @@
       threads: Number(nextState.threads || 0),
       cooling: Number(nextState.cooling || 0),
       graphics: String(nextState.graphics || ''),
+      ai: String(nextState.ai || ''),
       name: String(nextState.name ?? ''),
       companyName: String(nextState.companyName ?? ''),
       score: Number(nextState.score || 0),
@@ -2057,6 +2091,7 @@
       prev.score !== activeState.score ||
       prev.tier !== activeState.tier ||
       prev.graphics !== activeState.graphics ||
+      prev.ai !== activeState.ai ||
       prev.logoUrl !== activeState.logoUrl;
 
     const syncLid = (open) => {
@@ -2085,6 +2120,7 @@
     if (prev.body !== activeState.body) {
       animWeights.bodyPulse = 1;
     }
+    if (prev.ai !== activeState.ai) rebuildAiBadge(activeState.ai);
     if (bodyOrLabelChanged || coresChanged || threadsChanged || coolingChanged) {
       applyBodyMaterialFinish(activeState.body);
     }
@@ -2107,6 +2143,7 @@
           threads: Number(stateOverride.threads || 0),
           cooling: Number(stateOverride.cooling || 0),
           graphics: String(stateOverride.graphics || ''),
+          ai: String(stateOverride.ai || ''),
           name: String(stateOverride.name ?? ''),
           companyName: String(stateOverride.companyName ?? ''),
           score: Number(stateOverride.score || 0),
