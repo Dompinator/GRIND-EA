@@ -7724,3 +7724,12 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 #page-company-design #eaGpuPanel.hidden{display:none}
 #page-company-design #cpuDesigner.hidden{display:none}
 #page-company-products #eaGpuProductList{margin-top:16px}
+
+/* Procedural 3D GPU editor viewport */
+.ea-gpu-3d-stage{height:410px;min-height:320px;width:100%;margin-top:10px;border-radius:10px;overflow:hidden;position:relative;background:radial-gradient(ellipse at 50% 35%,#292238,#090910 72%);touch-action:none;cursor:grab}.ea-gpu-3d-stage:active{cursor:grabbing}.ea-gpu-3d-stage canvas{display:block;width:100%;height:100%}.gpu-3d-loading,.gpu-3d-error{height:100%;min-height:320px;display:grid;place-items:center;color:var(--muted);font-size:12px;padding:20px;text-align:center}
+/* GPU and CHIP research use the same draggable node-tree presentation as CPU research. */
+#eaGpuResearchTree,#eaChipResearchTree{height:560px;max-width:900px;margin:24px auto;background:radial-gradient(ellipse at 50% 25%,#844cbe20,transparent 62%);border:1px solid #a855f722;border-radius:18px;overflow:hidden;cursor:grab;touch-action:none;user-select:none;position:relative}
+#eaGpuResearchWorld,#eaChipResearchWorld{position:absolute;left:0;top:0;transform-origin:top left;will-change:transform}
+#eaGpuResearchTree .research-tree-lines,#eaChipResearchTree .research-tree-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#eaGpuResearchTree .research-tree-lines path,#eaChipResearchTree .research-tree-lines path{fill:none;stroke:#7951a5;stroke-width:3;stroke-dasharray:7 7}
+#eaGpuResearchTree.hidden,#eaChipResearchTree.hidden{display:none}
