@@ -69,7 +69,7 @@
   let currentExplode = 0;
   let targetExplode = 0;
   let camAnimActive = false;
-  const camTargetPos = { x: 2.9, y: 2.45, z: 3.15 };
+  const camTargetPos = { x: 2.9, y: 2.45, z: -3.15 };
   const camTargetLook = { x: 0, y: 0.05, z: 0 };
 
   // Raycast interaction state
@@ -81,6 +81,27 @@
   let pendingRebuild = false;
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const GPU_MIN_LEN = 210;
+  const GPU_MAX_LEN = 360;
+  const GPU_MIN_WID = 105;
+  const GPU_MAX_WID = 150;
+  const GPU_MIN_RATIO = 1.75; // length / width
+  const GPU_MAX_RATIO = 2.95;
+
+  function clampLengthForWidth(rawLen, wid) {
+    const w = clamp(Math.round(Number(wid) || 125), GPU_MIN_WID, GPU_MAX_WID);
+    const minL = Math.max(GPU_MIN_LEN, Math.ceil(w * GPU_MIN_RATIO));
+    const maxL = Math.min(GPU_MAX_LEN, Math.floor(w * GPU_MAX_RATIO));
+    return clamp(Math.round(Number(rawLen) || 300), minL, maxL);
+  }
+
+  function clampWidthForLength(rawWid, len) {
+    const l = clamp(Math.round(Number(len) || 300), GPU_MIN_LEN, GPU_MAX_LEN);
+    const minW = Math.max(GPU_MIN_WID, Math.ceil(l / GPU_MAX_RATIO));
+    const maxW = Math.min(GPU_MAX_WID, Math.floor(l / GPU_MIN_RATIO));
+    return clamp(Math.round(Number(rawWid) || 125), minW, maxW);
+  }
 
   function detectSoftwareWebGL() {
     try {
@@ -711,9 +732,8 @@
       mesh.rotation.x = Math.PI / 2;
       dragPlaneAxis = 'y';
       dragPlaneConst = g.position.y;
-    } else if (placement === 'rear') {
-      g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.016);
-      mesh.rotation.y = Math.PI;
+    } else if (placement === 'opposite' || placement === 'front') {
+      g.position.set(xCoord, bounds.shroudMidY, bounds.frontZ + 0.016);
       dragPlaneAxis = 'z';
       dragPlaneConst = g.position.z;
     } else if (placement === 'right') {
@@ -735,17 +755,9 @@
       dragPlaneAxis = 'x';
       dragPlaneConst = g.position.x;
     } else {
-      // 'side' (Front Side +Z, classic NVIDIA GEFORCE RTX placement!)
-      g.position.set(xCoord, bounds.shroudMidY, bounds.frontZ + 0.016);
-      // Add subtle sleek NVIDIA-style side nameplate trim plate behind text
-      if (isText) {
-        const badgeBack = new THREE.Mesh(
-          new THREE.BoxGeometry(planeW * 1.06, planeH * 1.12, 0.008),
-          new THREE.MeshStandardMaterial({ color: 0x0b0d14, metalness: 0.7, roughness: 0.25 })
-        );
-        badgeBack.position.z = -0.006;
-        g.add(badgeBack);
-      }
+      // 'side' / 'rear' -> Main Power Side (-Z edge) with no black box backing
+      g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.016);
+      mesh.rotation.y = Math.PI;
       dragPlaneAxis = 'z';
       dragPlaneConst = g.position.z;
     }
@@ -781,27 +793,27 @@
       if (el.kind === 'text') {
         const scale = clamp(Number(el.size ?? 1.0), 0.55, 1.6);
         const placement = el.placement || 'side';
-        const isEdge = placement === 'side' || placement === 'rear' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'opposite' || placement === 'front' || placement === 'both_sides' || placement === 'right' || placement === 'left';
         const planeH = isEdge ? clamp(bounds.outerShroudH * 0.85 * scale, 0.09, bounds.outerShroudH * 1.1) : Math.min(bounds.d * 0.28 * scale, 0.32);
         const planeW = Math.min(bounds.w * 0.72, planeH * 3.85);
         const tex = getTextDecalTexture(el.text || 'GPU', el.color || '#ffffff');
 
         if (placement === 'both_sides') {
           mountSingleDecalMesh(el, 'side', bounds, tex, planeW, planeH, true, el.color);
-          mountSingleDecalMesh(el, 'rear', bounds, tex, planeW, planeH, true, el.color);
+          mountSingleDecalMesh(el, 'opposite', bounds, tex, planeW, planeH, true, el.color);
         } else {
           mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, true, el.color);
         }
       } else if (el.kind === 'logo') {
         const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.6);
         const placement = el.placement || 'back';
-        const isEdge = placement === 'side' || placement === 'rear' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'opposite' || placement === 'front' || placement === 'both_sides' || placement === 'right' || placement === 'left';
         const sz = isEdge ? clamp(bounds.outerShroudH * 0.92 * scale, 0.1, bounds.outerShroudH * 1.15) : Math.min(bounds.d * 0.52, 0.38) * scale;
         const tex = getLogoDecalTexture(el.logoUrl || '', accentHex);
 
         if (placement === 'both_sides') {
           mountSingleDecalMesh(el, 'side', bounds, tex, sz, sz, false);
-          mountSingleDecalMesh(el, 'rear', bounds, tex, sz, sz, false);
+          mountSingleDecalMesh(el, 'opposite', bounds, tex, sz, sz, false);
         } else {
           mountSingleDecalMesh(el, placement, bounds, tex, sz, sz, false);
         }
@@ -930,9 +942,14 @@
     fanAssemblies = [];
     draggableDecals = [];
 
-    const lenScale = clamp(Number(config.length || 300) / 300, 0.6, 1.4);
-    const widScale = clamp(Number(config.width || 125) / 125, 0.72, 1.44);
-    const thickScale = clamp(Number(config.thickness || 52) / 52, 0.73, 1.46);
+    const safeLength = clamp(Math.round(Number(config.length) || 300), GPU_MIN_LEN, GPU_MAX_LEN);
+    const safeWidth = clampWidthForLength(config.width, safeLength);
+    config.length = safeLength;
+    config.width = safeWidth;
+
+    const lenScale = safeLength / 300;
+    const widScale = safeWidth / 125;
+    const thickScale = clamp(Number(config.thickness || 52) / 52, 0.8, 1.35);
 
     const w = 2.85 * lenScale;
     const d = 1.18 * widScale;
@@ -1114,7 +1131,7 @@
       sizeHudEl.innerHTML =
         '<span class="gpu-size-dot red"></span>Length <b>' + Math.round(config.length) + ' mm</b>' +
         ' · <span class="gpu-size-dot blue"></span>Width <b>' + Math.round(config.width) + ' mm</b>' +
-        ' <small>(Drag Red or Blue arrows)</small>';
+        ' <small>(210–360 × 105–150 mm · Drag Red or Blue arrows)</small>';
     }
   }
 
@@ -1132,7 +1149,6 @@
         '<button type="button" data-gpu-cam="hero" class="active">3/4 Hero</button>' +
         '<button type="button" data-gpu-cam="top">Top</button>' +
         '<button type="button" data-gpu-cam="side">Side</button>' +
-        '<button type="button" data-gpu-cam="rear">Power Side</button>' +
         '<button type="button" data-gpu-cam="end">End</button>' +
         '<button type="button" data-gpu-cam="back">Backplate</button>' +
       '</div>' +
@@ -1183,29 +1199,33 @@
     camTargetLook.x = 0; camTargetLook.y = 0.05; camTargetLook.z = 0;
     if (preset === 'top') {
       camTargetPos.x = 0.01; camTargetPos.y = 4.3; camTargetPos.z = 0.45;
-    } else if (preset === 'side') {
-      camTargetPos.x = 0.08; camTargetPos.y = 0.35; camTargetPos.z = 4.15;
-    } else if (preset === 'rear') {
+    } else if (preset === 'side' || preset === 'rear') {
       camTargetPos.x = -0.08; camTargetPos.y = 0.35; camTargetPos.z = -4.15;
+    } else if (preset === 'opposite') {
+      camTargetPos.x = 0.08; camTargetPos.y = 0.35; camTargetPos.z = 4.15;
     } else if (preset === 'end') {
-      camTargetPos.x = 4.2; camTargetPos.y = 0.5; camTargetPos.z = 0.25;
+      camTargetPos.x = 4.2; camTargetPos.y = 0.5; camTargetPos.z = -0.25;
     } else if (preset === 'io') {
-      camTargetPos.x = -4.2; camTargetPos.y = 0.5; camTargetPos.z = 0.25;
+      camTargetPos.x = -4.2; camTargetPos.y = 0.5; camTargetPos.z = -0.25;
     } else if (preset === 'back') {
       camTargetPos.x = 0.25; camTargetPos.y = -2.35; camTargetPos.z = 2.85;
     } else {
-      camTargetPos.x = 2.9; camTargetPos.y = 2.45; camTargetPos.z = 3.15;
+      // 3/4 Hero on Power Side so Power Side labels/connectors are visible immediately
+      camTargetPos.x = 2.9; camTargetPos.y = 2.45; camTargetPos.z = -3.15;
     }
+    const activeBtnKey = preset === 'rear' ? 'side' : preset;
     dockEl?.querySelectorAll('[data-gpu-cam]').forEach(b => {
-      b.classList.toggle('active', b.dataset.gpuCam === preset);
+      b.classList.toggle('active', b.dataset.gpuCam === activeBtnKey);
     });
   }
 
   function focusPlacement(placement) {
     const map = {
       side: 'side',
+      rear: 'side',
       both_sides: 'side',
-      rear: 'rear',
+      opposite: 'opposite',
+      front: 'opposite',
       top: 'top',
       back: 'back',
       right: 'end',
@@ -1343,7 +1363,8 @@
           if (activeDrag.mode === 'size') {
             if (activeDrag.axis === 'x') {
               const targetHalfW = Math.max(0.45, localPt.x * activeDrag.sign - 0.24);
-              const newLen = clamp(Math.round(((targetHalfW * 2) / 2.85) * 300), 180, 420);
+              const rawLen = ((targetHalfW * 2) / 2.85) * 300;
+              const newLen = clampLengthForWidth(rawLen, config.width);
               if (newLen !== config.length) {
                 config.length = newLen;
                 pendingRebuild = true;
@@ -1351,7 +1372,8 @@
               }
             } else {
               const targetHalfD = Math.max(0.25, localPt.z * activeDrag.sign - 0.24);
-              const newWid = clamp(Math.round(((targetHalfD * 2) / 1.18) * 125), 90, 180);
+              const rawWid = ((targetHalfD * 2) / 1.18) * 125;
+              const newWid = clampWidthForLength(rawWid, config.length);
               if (newWid !== config.width) {
                 config.width = newWid;
                 pendingRebuild = true;
@@ -1530,7 +1552,7 @@
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(34, 16 / 10, 0.1, 80);
-    camera.position.set(2.9, 2.45, 3.15);
+    camera.position.set(2.9, 2.45, -3.15);
 
     pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
@@ -1639,7 +1661,7 @@
       if (gpuRoot) gpuRoot.rotation.y = 0;
       if (sizeGizmoGroup) sizeGizmoGroup.visible = false;
       currentExplode = 0;
-      camera.position.set(2.8, 2.2, 2.98);
+      camera.position.set(2.8, 2.2, -2.98);
       camera.lookAt(0, 0.05, 0);
       camera.updateProjectionMatrix();
       renderer.render(scene, camera);

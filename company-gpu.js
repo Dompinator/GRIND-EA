@@ -438,17 +438,17 @@
     }
 
     const placementOptionsHtml = selected => {
+      const norm = selected === 'rear' ? 'side' : selected;
       const opts = [
-        ['side', 'Side View (Front · NVIDIA)'],
-        ['rear', 'Side View (Power Edge)'],
-        ['both_sides', 'Both Sides'],
+        ['side', 'Side View (Power Side)'],
         ['top', 'Top (Fan Side)'],
         ['back', 'Backplate (Bottom)'],
         ['right', 'End Cap (Right)'],
-        ['left', 'I/O Side (Left)']
+        ['left', 'I/O Side (Left)'],
+        ['both_sides', 'Both Long Sides']
       ];
       return opts.map(([val, label]) =>
-        '<option value="' + val + '"' + (selected === val ? ' selected' : '') + '>' + label + '</option>'
+        '<option value="' + val + '"' + (norm === val ? ' selected' : '') + '>' + label + '</option>'
       ).join('');
     };
 
@@ -792,8 +792,8 @@
         },
         onSizeChange(sz) {
           if (!sz) return;
-          gpuLength = Math.round(sz.length || 300);
-          gpuWidth = Math.round(sz.width || 125);
+          gpuLength = Math.max(210, Math.min(360, Math.round(sz.length || 300)));
+          gpuWidth = Math.max(105, Math.min(150, Math.round(sz.width || 125)));
           updateCostAndReadouts();
         },
         onElementsChange(updated) {
