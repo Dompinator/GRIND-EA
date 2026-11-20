@@ -379,11 +379,13 @@
           id: 'el_' + (++nextElemSeq),
           kind: 'text',
           text: (currentCompany?.company_name || 'CUSTOM').slice(0, 18),
-          color: '#f8fafc',
+          color: '#ffffff',
           placement: 'side',
           position: 0.5,
-          size: 1.0
+          zPosition: 0.88,
+          size: 1.1
         });
+        window.GpuDesigner3D?.focusPlacement?.('side');
       } else if (kindSpec === 'logo') {
         gpuElements.push({
           id: 'el_' + (++nextElemSeq),
@@ -391,8 +393,10 @@
           logoUrl: currentCompany?.logo_data_url || '',
           placement: 'back',
           position: 0.5,
+          zPosition: 0.5,
           size: 1.0
         });
+        window.GpuDesigner3D?.focusPlacement?.('back');
       } else if (kindSpec === 'rgb_strip') {
         if (!researched('gpu_rgb')) { toast('Research RGB first.'); return; }
         gpuElements.push({
@@ -433,6 +437,21 @@
       return;
     }
 
+    const placementOptionsHtml = selected => {
+      const opts = [
+        ['side', 'Side View (Front · NVIDIA)'],
+        ['rear', 'Side View (Power Edge)'],
+        ['both_sides', 'Both Sides'],
+        ['top', 'Top (Fan Side)'],
+        ['back', 'Backplate (Bottom)'],
+        ['right', 'End Cap (Right)'],
+        ['left', 'I/O Side (Left)']
+      ];
+      return opts.map(([val, label]) =>
+        '<option value="' + val + '"' + (selected === val ? ' selected' : '') + '>' + label + '</option>'
+      ).join('');
+    };
+
     let fanNum = 0;
     wrap.innerHTML = gpuElements.map(el => {
       if (el.kind === 'fan') {
@@ -446,37 +465,35 @@
           '</div></div>';
       }
       if (el.kind === 'text') {
+        const showZ = el.placement === 'top' || el.placement === 'back';
+        const zPct = Math.round((el.zPosition ?? (el.placement === 'top' ? 0.88 : 0.5)) * 100);
         return '<div class="ea-elem-card" data-elem-id="' + el.id + '">' +
           '<div class="ea-elem-head"><strong>Text Label</strong>' +
           '<button type="button" class="ea-elem-del" data-remove-elem="' + el.id + '" title="Remove">✕</button></div>' +
           '<div class="ea-elem-grid">' +
             '<input type="text" maxlength="24" value="' + esc(el.text || '') + '" placeholder="Label text" data-elem-text="' + el.id + '">' +
-            '<input type="color" value="' + esc(el.color || '#f8fafc') + '" data-elem-color="' + el.id + '" title="Text color">' +
-            '<select data-elem-place="' + el.id + '">' +
-              '<option value="side"' + (el.placement === 'side' ? ' selected' : '') + '>Side Edge</option>' +
-              '<option value="top"' + (el.placement === 'top' ? ' selected' : '') + '>Top Shroud</option>' +
-              '<option value="back"' + (el.placement === 'back' ? ' selected' : '') + '>Backplate</option>' +
-            '</select>' +
+            '<input type="color" value="' + esc(el.color || '#ffffff') + '" data-elem-color="' + el.id + '" title="Text color">' +
+            '<select data-elem-place="' + el.id + '">' + placementOptionsHtml(el.placement || 'side') + '</select>' +
           '</div>' +
           '<div class="ea-elem-row">' +
-            '<label>Pos <b>' + Math.round((el.position || 0.5) * 100) + '%</b><input type="range" min="12" max="88" value="' + Math.round((el.position || 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
+            '<label>Pos <b>' + Math.round((el.position ?? 0.5) * 100) + '%</b><input type="range" min="12" max="88" value="' + Math.round((el.position ?? 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
+            (showZ ? '<label>Row (Z) <b>' + zPct + '%</b><input type="range" min="8" max="92" value="' + zPct + '" data-elem-zpos="' + el.id + '"></label>' : '') +
             '<label>Scale <b>' + Math.round((el.size || 1) * 100) + '%</b><input type="range" min="55" max="150" value="' + Math.round((el.size || 1) * 100) + '" data-elem-size="' + el.id + '"></label>' +
           '</div></div>';
       }
       if (el.kind === 'logo') {
+        const showZ = el.placement === 'top' || el.placement === 'back';
+        const zPct = Math.round((el.zPosition ?? (el.placement === 'top' ? 0.88 : 0.5)) * 100);
         return '<div class="ea-elem-card" data-elem-id="' + el.id + '">' +
           '<div class="ea-elem-head"><strong>Logo Badge</strong>' +
           '<button type="button" class="ea-elem-del" data-remove-elem="' + el.id + '" title="Remove">✕</button></div>' +
           '<div class="ea-elem-grid">' +
-            '<select data-elem-place="' + el.id + '">' +
-              '<option value="back"' + (el.placement === 'back' ? ' selected' : '') + '>Backplate</option>' +
-              '<option value="top"' + (el.placement === 'top' ? ' selected' : '') + '>Top Shroud</option>' +
-              '<option value="side"' + (el.placement === 'side' ? ' selected' : '') + '>Side Edge</option>' +
-            '</select>' +
+            '<select data-elem-place="' + el.id + '">' + placementOptionsHtml(el.placement || 'back') + '</select>' +
             '<label class="ea-file-mini">Upload Logo<input type="file" accept="image/png,image/jpeg,image/webp" data-elem-upload="' + el.id + '"></label>' +
           '</div>' +
           '<div class="ea-elem-row">' +
-            '<label>Pos <b>' + Math.round((el.position || 0.5) * 100) + '%</b><input type="range" min="12" max="88" value="' + Math.round((el.position || 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
+            '<label>Pos <b>' + Math.round((el.position ?? 0.5) * 100) + '%</b><input type="range" min="12" max="88" value="' + Math.round((el.position ?? 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
+            (showZ ? '<label>Row (Z) <b>' + zPct + '%</b><input type="range" min="8" max="92" value="' + zPct + '" data-elem-zpos="' + el.id + '"></label>' : '') +
             '<label>Scale <b>' + Math.round((el.size || 1) * 100) + '%</b><input type="range" min="50" max="150" value="' + Math.round((el.size || 1) * 100) + '" data-elem-size="' + el.id + '"></label>' +
           '</div></div>';
       }
@@ -513,6 +530,16 @@
       }
     }));
 
+    wrap.querySelectorAll('[data-elem-zpos]').forEach(inp => inp.addEventListener('input', () => {
+      const target = gpuElements.find(x => x.id === inp.dataset.elemZpos);
+      if (target) {
+        target.zPosition = Number(inp.value) / 100;
+        const b = inp.parentElement?.querySelector('b');
+        if (b) b.textContent = inp.value + '%';
+        drawGpu();
+      }
+    }));
+
     wrap.querySelectorAll('[data-elem-size]').forEach(inp => inp.addEventListener('input', () => {
       const target = gpuElements.find(x => x.id === inp.dataset.elemSize);
       if (target) {
@@ -535,7 +562,15 @@
 
     wrap.querySelectorAll('[data-elem-place]').forEach(sel => sel.addEventListener('change', () => {
       const target = gpuElements.find(x => x.id === sel.dataset.elemPlace);
-      if (target) { target.placement = sel.value; drawGpu(); }
+      if (!target) return;
+      target.placement = sel.value;
+      if (target.kind === 'text' || target.kind === 'logo') {
+        if (sel.value === 'top' && target.zPosition == null) target.zPosition = 0.88;
+        if (sel.value === 'back' && target.zPosition == null) target.zPosition = 0.5;
+        renderPlacedElementsManager();
+        window.GpuDesigner3D?.focusPlacement?.(sel.value);
+      }
+      drawGpu();
     }));
 
     wrap.querySelectorAll('[data-elem-upload]').forEach(inp => inp.addEventListener('change', e => {
@@ -767,10 +802,17 @@
           gpuElements.forEach(el => {
             const slider = document.querySelector('[data-elem-pos="' + el.id + '"]');
             if (slider) {
-              const pct = String(Math.round((el.position || 0.5) * 100));
+              const pct = String(Math.round((el.position ?? 0.5) * 100));
               slider.value = pct;
               const b = slider.parentElement?.querySelector('b');
               if (b) b.textContent = pct + '%';
+            }
+            const zSlider = document.querySelector('[data-elem-zpos="' + el.id + '"]');
+            if (zSlider && el.zPosition != null) {
+              const zPct = String(Math.round(el.zPosition * 100));
+              zSlider.value = zPct;
+              const zb = zSlider.parentElement?.querySelector('b');
+              if (zb) zb.textContent = zPct + '%';
             }
           });
         }

@@ -307,21 +307,24 @@
 
   function getTextDecalTexture(text, colorHex) {
     const clean = String(text || 'GPU').trim().slice(0, 24) || 'GPU';
-    const col = colorHex || '#f8fafc';
-    const sig = `txt|${clean}|${col}`;
+    const col = colorHex || '#ffffff';
+    const sig = `txt2|${clean}|${col}`;
     if (decalTexCache.has(sig)) return decalTexCache.get(sig);
 
     const c = document.createElement('canvas');
-    c.width = 512; c.height = 128;
+    c.width = 1024; c.height = 256;
     const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, 512, 128);
-    ctx.fillStyle = col;
-    ctx.font = '800 58px Inter, system-ui, sans-serif';
+    ctx.clearRect(0, 0, 1024, 256);
+
+    ctx.font = '900 118px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 8;
-    ctx.fillText(clean, 256, 66, 470);
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(8, 10, 18, 0.85)';
+    ctx.lineWidth = 14;
+    ctx.strokeText(clean, 512, 132, 950);
+    ctx.fillStyle = col;
+    ctx.fillText(clean, 512, 132, 950);
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -669,112 +672,156 @@
     });
   }
 
-  function buildPlacedDecalsAndStrips(w, h, d, bodyType, accentHex) {
+  function mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, isText, colorHex) {
+    const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+    const zPos = clamp(Number(el.zPosition ?? (placement === 'top' ? 0.88 : 0.5)), 0.08, 0.92);
+    const xCoord = -bounds.w / 2 + bounds.w * pos;
+    const zAcross = (-bounds.d / 2 + bounds.d * zPos) * 0.78;
+    const zAlongEnd = (-bounds.d / 2 + bounds.d * pos) * 0.68;
+
+    const g = new THREE.Group();
+    const col = new THREE.Color(colorHex || '#ffffff');
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: 0.04,
+      roughness: 0.24,
+      metalness: 0.2,
+      emissive: isText ? col : new THREE.Color(0x000000),
+      emissiveMap: isText ? tex : null,
+      emissiveIntensity: isText ? 0.35 : 0,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3
+    });
+
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), mat);
+    mesh.renderOrder = 3;
+
+    let dragPlaneAxis = 'y';
+    let dragPlaneConst = 0;
+
+    if (placement === 'top') {
+      g.position.set(xCoord, bounds.deckTopY + 0.015, zAcross);
+      mesh.rotation.x = -Math.PI / 2;
+      dragPlaneAxis = 'y';
+      dragPlaneConst = g.position.y;
+    } else if (placement === 'back') {
+      g.position.set(xCoord, bounds.backBottomY - 0.015, (-bounds.d / 2 + bounds.d * clamp(Number(el.zPosition ?? 0.5), 0.12, 0.88)) * 0.72);
+      mesh.rotation.x = Math.PI / 2;
+      dragPlaneAxis = 'y';
+      dragPlaneConst = g.position.y;
+    } else if (placement === 'rear') {
+      g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.016);
+      mesh.rotation.y = Math.PI;
+      dragPlaneAxis = 'z';
+      dragPlaneConst = g.position.z;
+    } else if (placement === 'right') {
+      const endW = Math.min(planeW, bounds.d * 0.78);
+      const endH = endW * (planeH / planeW);
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(endW, endH);
+      g.position.set(bounds.rightX + 0.016, bounds.shroudMidY, zAlongEnd);
+      mesh.rotation.y = Math.PI / 2;
+      dragPlaneAxis = 'x';
+      dragPlaneConst = g.position.x;
+    } else if (placement === 'left') {
+      const endW = Math.min(planeW, bounds.d * 0.72);
+      const endH = endW * (planeH / planeW);
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(endW, endH);
+      g.position.set(bounds.leftX - 0.016, bounds.shroudMidY - 0.02, zAlongEnd);
+      mesh.rotation.y = -Math.PI / 2;
+      dragPlaneAxis = 'x';
+      dragPlaneConst = g.position.x;
+    } else {
+      // 'side' (Front Side +Z, classic NVIDIA GEFORCE RTX placement!)
+      g.position.set(xCoord, bounds.shroudMidY, bounds.frontZ + 0.016);
+      // Add subtle sleek NVIDIA-style side nameplate trim plate behind text
+      if (isText) {
+        const badgeBack = new THREE.Mesh(
+          new THREE.BoxGeometry(planeW * 1.06, planeH * 1.12, 0.008),
+          new THREE.MeshStandardMaterial({ color: 0x0b0d14, metalness: 0.7, roughness: 0.25 })
+        );
+        badgeBack.position.z = -0.006;
+        g.add(badgeBack);
+      }
+      dragPlaneAxis = 'z';
+      dragPlaneConst = g.position.z;
+    }
+
+    g.add(mesh);
+
+    const hitW = (placement === 'right' || placement === 'left') ? 0.14 : planeW * 1.15;
+    const hitH = (placement === 'top' || placement === 'back') ? 0.16 : Math.max(0.14, planeH * 1.5);
+    const hitD = (placement === 'right' || placement === 'left') ? planeW * 1.15 : (placement === 'top' || placement === 'back') ? planeH * 1.5 : 0.16;
+    const hitMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(hitW, hitH, hitD),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hitMesh.userData.dragId = el.id;
+    hitMesh.userData.dragKind = 'decal';
+    g.add(hitMesh);
+
+    elementsGroup.add(g);
+    draggableDecals.push({
+      id: el.id,
+      placement,
+      group: g,
+      hitMesh,
+      dragPlaneAxis,
+      dragPlaneConst
+    });
+  }
+
+  function buildPlacedDecalsAndStrips(bounds, accentHex) {
     const elements = Array.isArray(config.elements) ? config.elements : [];
-    const topY = h * 0.56 + 0.006;
 
     for (const el of elements) {
       if (el.kind === 'text') {
-        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
-        const scale = clamp(Number(el.size ?? 1.0), 0.55, 1.5);
-        const placement = el.placement || 'side'; // 'side' | 'top' | 'back'
-        const planeW = Math.min(w * 0.58, 0.92 * scale);
-        const planeH = planeW * 0.25;
-        const mat = new THREE.MeshStandardMaterial({
-          map: getTextDecalTexture(el.text || 'GPU', el.color || '#f8fafc'),
-          transparent: true,
-          roughness: 0.3,
-          metalness: 0.25,
-          depthWrite: false
-        });
-        const g = new THREE.Group();
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), mat);
-        if (placement === 'top') {
-          g.position.set(-w / 2 + w * pos, topY, d * 0.36);
-          mesh.rotation.x = -Math.PI / 2;
-        } else if (placement === 'back') {
-          g.position.set(-w / 2 + w * pos, -h * 0.62 - 0.088, 0);
-          mesh.rotation.x = Math.PI / 2;
+        const scale = clamp(Number(el.size ?? 1.0), 0.55, 1.6);
+        const placement = el.placement || 'side';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const planeH = isEdge ? clamp(bounds.outerShroudH * 0.85 * scale, 0.09, bounds.outerShroudH * 1.1) : Math.min(bounds.d * 0.28 * scale, 0.32);
+        const planeW = Math.min(bounds.w * 0.72, planeH * 3.85);
+        const tex = getTextDecalTexture(el.text || 'GPU', el.color || '#ffffff');
+
+        if (placement === 'both_sides') {
+          mountSingleDecalMesh(el, 'side', bounds, tex, planeW, planeH, true, el.color);
+          mountSingleDecalMesh(el, 'rear', bounds, tex, planeW, planeH, true, el.color);
         } else {
-          g.position.set(-w / 2 + w * pos, h * 0.23, d * 0.506);
+          mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, true, el.color);
         }
-        g.add(mesh);
-
-        const hitMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(planeW * 1.1, Math.max(0.1, planeH * 1.3), 0.1),
-          new THREE.MeshBasicMaterial({ visible: false })
-        );
-        hitMesh.userData.dragId = el.id;
-        hitMesh.userData.dragKind = 'decal';
-        g.add(hitMesh);
-
-        elementsGroup.add(g);
-        draggableDecals.push({
-          id: el.id,
-          group: g,
-          hitMesh,
-          yPlane: g.position.y
-        });
       } else if (el.kind === 'logo') {
-        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
-        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.5);
-        const placement = el.placement || 'back'; // 'top' | 'side' | 'back'
-        const sz = Math.min(d * 0.52, 0.36) * scale;
-        const mat = new THREE.MeshStandardMaterial({
-          map: getLogoDecalTexture(el.logoUrl || '', accentHex),
-          transparent: true,
-          roughness: 0.28,
-          metalness: 0.3,
-          depthWrite: false
-        });
-        const g = new THREE.Group();
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), mat);
-        if (placement === 'side') {
-          const sSize = Math.min(sz, h * 0.66);
-          mesh.geometry.dispose();
-          mesh.geometry = new THREE.PlaneGeometry(sSize, sSize);
-          g.position.set(-w / 2 + w * pos, h * 0.23, d * 0.506);
-        } else if (placement === 'top') {
-          g.position.set(-w / 2 + w * pos, topY, -d * 0.35);
-          mesh.rotation.x = -Math.PI / 2;
+        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.6);
+        const placement = el.placement || 'back';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const sz = isEdge ? clamp(bounds.outerShroudH * 0.92 * scale, 0.1, bounds.outerShroudH * 1.15) : Math.min(bounds.d * 0.52, 0.38) * scale;
+        const tex = getLogoDecalTexture(el.logoUrl || '', accentHex);
+
+        if (placement === 'both_sides') {
+          mountSingleDecalMesh(el, 'side', bounds, tex, sz, sz, false);
+          mountSingleDecalMesh(el, 'rear', bounds, tex, sz, sz, false);
         } else {
-          g.position.set(-w / 2 + w * pos, -h * 0.62 - 0.088, 0);
-          mesh.rotation.x = Math.PI / 2;
+          mountSingleDecalMesh(el, placement, bounds, tex, sz, sz, false);
         }
-        g.add(mesh);
-
-        const hitMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(sz * 1.2, 0.14, sz * 1.2),
-          new THREE.MeshBasicMaterial({ visible: false })
-        );
-        hitMesh.userData.dragId = el.id;
-        hitMesh.userData.dragKind = 'decal';
-        g.add(hitMesh);
-
-        elementsGroup.add(g);
-        draggableDecals.push({
-          id: el.id,
-          group: g,
-          hitMesh,
-          yPlane: g.position.y
-        });
       } else if (el.kind === 'rgb_strip') {
         const col = new THREE.Color(el.color || accentHex || '#a855f7');
         const rgbMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
-          emissiveIntensity: 1.7,
+          emissiveIntensity: 1.75,
           roughness: 0.18,
           metalness: 0.1
         });
-        const mode = el.placement || 'side'; // 'side' | 'top' | 'halo'
+        const mode = el.placement || 'side';
         if (mode === 'top' || mode === 'halo') {
-          makeBox(elementsGroup, w * 0.84, 0.018, 0.018, rgbMat, 0, h * 0.555, d * 0.43);
-          makeBox(elementsGroup, w * 0.84, 0.018, 0.018, rgbMat, 0, h * 0.555, -d * 0.43);
+          makeBox(elementsGroup, bounds.w * 0.84, 0.018, 0.018, rgbMat, 0, bounds.deckTopY + 0.008, bounds.d * 0.43);
+          makeBox(elementsGroup, bounds.w * 0.84, 0.018, 0.018, rgbMat, 0, bounds.deckTopY + 0.008, -bounds.d * 0.43);
         }
         if (mode === 'side' || mode === 'halo') {
-          makeBox(elementsGroup, w * 0.86, 0.022, 0.02, rgbMat, 0, h * 0.41, d * 0.502);
-          makeBox(elementsGroup, w * 0.86, 0.022, 0.02, rgbMat, 0, h * 0.41, -d * 0.502);
+          makeBox(elementsGroup, bounds.w * 0.86, 0.02, 0.018, rgbMat, 0, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.frontZ + 0.006);
+          makeBox(elementsGroup, bounds.w * 0.86, 0.02, 0.018, rgbMat, 0, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.backZ - 0.006);
         }
       }
     }
@@ -1027,8 +1074,29 @@
     const boreDepth = outerShroudH + 0.02;
     fanLayouts.forEach((layout, i) => buildFanInCutout(layout, i, boreCenterY, boreDepth, accentMat));
 
-    // ---- 6. Modular Placed Elements (Text Labels, Logo Badges, RGB Strips) ----
-    buildPlacedDecalsAndStrips(w, h, d, bodyType, accentColor);
+    // ---- 6. Modular Placed Elements (Exact Outer Surface Bounding Boxes) ----
+    mainShroudGeo.computeBoundingBox();
+    deckGeo.computeBoundingBox();
+    const mainBox = mainShroudGeo.boundingBox;
+    const deckBox = deckGeo.boundingBox;
+    let backBottomY = -h * 0.42 - 0.02;
+    if (backplateLayer.children[0]?.geometry) {
+      backplateLayer.children[0].geometry.computeBoundingBox();
+      backBottomY = backplateLayer.children[0].position.y + backplateLayer.children[0].geometry.boundingBox.min.y;
+    }
+    const surfaceBounds = {
+      w,
+      d,
+      outerShroudH,
+      shroudMidY: mainShroudY + (mainBox.min.y + mainBox.max.y) * 0.5,
+      frontZ: mainBox.max.z,
+      backZ: mainBox.min.z,
+      rightX: mainBox.max.x,
+      leftX: -w * 0.5 - 0.045,
+      deckTopY: deckY + deckBox.max.y,
+      backBottomY
+    };
+    buildPlacedDecalsAndStrips(surfaceBounds, accentColor);
 
     // ---- 7. Red & Blue Size Arrows (when Change Size active) ----
     buildSizeGizmos(w, d);
@@ -1063,7 +1131,9 @@
       '<div class="gpu-3d-pills">' +
         '<button type="button" data-gpu-cam="hero" class="active">3/4 Hero</button>' +
         '<button type="button" data-gpu-cam="top">Top</button>' +
-        '<button type="button" data-gpu-cam="side">Front</button>' +
+        '<button type="button" data-gpu-cam="side">Side</button>' +
+        '<button type="button" data-gpu-cam="rear">Power Side</button>' +
+        '<button type="button" data-gpu-cam="end">End</button>' +
         '<button type="button" data-gpu-cam="back">Backplate</button>' +
       '</div>' +
       '<div class="gpu-3d-actions">' +
@@ -1114,12 +1184,34 @@
     if (preset === 'top') {
       camTargetPos.x = 0.01; camTargetPos.y = 4.3; camTargetPos.z = 0.45;
     } else if (preset === 'side') {
-      camTargetPos.x = 0.1; camTargetPos.y = 0.55; camTargetPos.z = 4.15;
+      camTargetPos.x = 0.08; camTargetPos.y = 0.35; camTargetPos.z = 4.15;
+    } else if (preset === 'rear') {
+      camTargetPos.x = -0.08; camTargetPos.y = 0.35; camTargetPos.z = -4.15;
+    } else if (preset === 'end') {
+      camTargetPos.x = 4.2; camTargetPos.y = 0.5; camTargetPos.z = 0.25;
+    } else if (preset === 'io') {
+      camTargetPos.x = -4.2; camTargetPos.y = 0.5; camTargetPos.z = 0.25;
     } else if (preset === 'back') {
-      camTargetPos.x = 2.6; camTargetPos.y = -2.15; camTargetPos.z = -2.8;
+      camTargetPos.x = 0.25; camTargetPos.y = -2.35; camTargetPos.z = 2.85;
     } else {
       camTargetPos.x = 2.9; camTargetPos.y = 2.45; camTargetPos.z = 3.15;
     }
+    dockEl?.querySelectorAll('[data-gpu-cam]').forEach(b => {
+      b.classList.toggle('active', b.dataset.gpuCam === preset);
+    });
+  }
+
+  function focusPlacement(placement) {
+    const map = {
+      side: 'side',
+      both_sides: 'side',
+      rear: 'rear',
+      top: 'top',
+      back: 'back',
+      right: 'end',
+      left: 'io'
+    };
+    setCameraPreset(map[placement] || 'side');
   }
 
   // ---------- Pointer Raycasting (Size Arrows + Elements Dragging) ----------
@@ -1204,10 +1296,22 @@
         return;
       }
 
-      const asm = fanAssemblies.find(f => f.id === target.id) || draggableDecals.find(d => d.id === target.id);
+      const fanAsm = fanAssemblies.find(f => f.id === target.id);
+      const decAsm = draggableDecals.find(d => d.id === target.id);
+      const asm = fanAsm || decAsm;
       if (!asm) return;
-      const worldY = (gpuRoot?.position.y || 0) + (asm.yTop || asm.yPlane || 0.14);
-      dragPlane.set(new THREE.Vector3(0, 1, 0), -worldY);
+
+      const axis = decAsm?.dragPlaneAxis || 'y';
+      const planeConst = decAsm ? decAsm.dragPlaneConst : (asm.yTop || 0.14);
+      const rootPos = gpuRoot?.position || new THREE.Vector3();
+      if (axis === 'z') {
+        dragPlane.set(new THREE.Vector3(0, 0, 1), -(rootPos.z + planeConst));
+      } else if (axis === 'x') {
+        dragPlane.set(new THREE.Vector3(1, 0, 0), -(rootPos.x + planeConst));
+      } else {
+        dragPlane.set(new THREE.Vector3(0, 1, 0), -(rootPos.y + planeConst));
+      }
+
       updatePointerNdc(e);
       raycaster.setFromCamera(pointerNdc, camera);
       if (raycaster.ray.intersectPlane(dragPlane, dragHitPoint)) {
@@ -1216,7 +1320,10 @@
           mode: 'element',
           id: target.id,
           dragKind: target.kind,
-          offsetX: asm.group.position.x - localPt.x
+          planeAxis: axis,
+          placement: decAsm?.placement || 'top',
+          offsetX: asm.group.position.x - localPt.x,
+          offsetZ: asm.group.position.z - localPt.z
         };
         if (controls) controls.enabled = false;
         dom.setPointerCapture?.(e.pointerId);
@@ -1253,17 +1360,21 @@
             }
           } else if (activeDrag.mode === 'element') {
             const w = gpuRoot?.userData?.cardWidth || 2.85;
-            const x = clamp(localPt.x + activeDrag.offsetX, -w * 0.4, w * 0.4);
-            const posNorm = clamp(Number(((x + w / 2) / w).toFixed(3)), 0.1, 0.9);
+            const d = gpuRoot?.userData?.cardDepth || 1.18;
             const el = (config.elements || []).find(item => item.id === activeDrag.id);
-            if (el && el.position !== posNorm) {
-              el.position = posNorm;
-              // Rebuild so fan hole cutout tracks the fan smoothly in real time!
-              if (activeDrag.dragKind === 'fan') {
+            if (el) {
+              if (activeDrag.planeAxis === 'x') {
+                const z = clamp(localPt.z + activeDrag.offsetZ, -d * 0.34, d * 0.34);
+                el.position = clamp(Number(((z / 0.68 + d / 2) / d).toFixed(3)), 0.12, 0.88);
                 pendingRebuild = true;
               } else {
-                const dec = draggableDecals.find(d => d.id === activeDrag.id);
-                if (dec) dec.group.position.x = -w / 2 + w * posNorm;
+                const x = clamp(localPt.x + activeDrag.offsetX, -w * 0.4, w * 0.4);
+                el.position = clamp(Number(((x + w / 2) / w).toFixed(3)), 0.1, 0.9);
+                if (activeDrag.dragKind === 'decal' && (activeDrag.placement === 'top' || activeDrag.placement === 'back')) {
+                  const z = clamp(localPt.z + activeDrag.offsetZ, -d * 0.42, d * 0.42);
+                  el.zPosition = clamp(Number(((z / 0.78 + d / 2) / d).toFixed(3)), 0.08, 0.92);
+                }
+                pendingRebuild = true;
               }
               callbacks.onElementsChange?.(config.elements.map(item => ({ ...item })));
             }
@@ -1575,5 +1686,5 @@
     sizeHudEl = null;
   }
 
-  window.GpuDesigner3D = { mount, update, setSizeMode, captureSnapshot, resize, dispose };
+  window.GpuDesigner3D = { mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, resize, dispose };
 })();
