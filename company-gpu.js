@@ -313,8 +313,9 @@
     }));
     wrap.querySelector('#eaGpuPrimary')?.addEventListener('input', e => {
       gpuPrimary = e.target.value;
-      drawGpu();
+      drawGpu(true);
     });
+    wrap.querySelector('#eaGpuPrimary')?.addEventListener('change', () => drawGpu(false));
     wrap.querySelectorAll('[data-accent-hex]').forEach(btn => btn.addEventListener('click', () => {
       gpuAccent = btn.dataset.accentHex;
       renderBodyTab();
@@ -322,8 +323,9 @@
     }));
     wrap.querySelector('#eaGpuAccent')?.addEventListener('input', e => {
       gpuAccent = e.target.value;
-      drawGpu();
+      drawGpu(true);
     });
+    wrap.querySelector('#eaGpuAccent')?.addEventListener('change', () => drawGpu(false));
     wrap.querySelector('[data-gpu-toggle-backplate]')?.addEventListener('click', () => {
       gpuBackplate = !gpuBackplate;
       renderBodyTab();
@@ -477,7 +479,7 @@
           '<div class="ea-elem-head"><strong>Fan ' + fanNum + ' · ' + esc(researchName(el.fanType)) + '</strong>' +
           '<button type="button" class="ea-elem-del" data-remove-elem="' + el.id + '" title="Remove">✕</button></div>' +
           '<div class="ea-elem-row">' +
-            '<label>Position <b>' + Math.round((el.position || 0.5) * 100) + '%</b><input type="range" min="10" max="90" value="' + Math.round((el.position || 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
+            '<label>Position <b>' + Math.round((el.position || 0.5) * 100) + '%</b><input type="range" min="6" max="94" value="' + Math.round((el.position || 0.5) * 100) + '" data-elem-pos="' + el.id + '"></label>' +
             '<label>Diameter <b>' + Math.round((el.size || 1) * 100) + '%</b><input type="range" min="68" max="122" value="' + Math.round((el.size || 1) * 100) + '" data-elem-size="' + el.id + '"></label>' +
           '</div></div>';
       }
@@ -537,45 +539,57 @@
       drawGpu();
     }));
 
-    wrap.querySelectorAll('[data-elem-pos]').forEach(inp => inp.addEventListener('input', () => {
-      const target = gpuElements.find(x => x.id === inp.dataset.elemPos);
-      if (target) {
-        target.position = Number(inp.value) / 100;
-        const b = inp.parentElement?.querySelector('b');
-        if (b) b.textContent = inp.value + '%';
-        drawGpu();
-      }
-    }));
+    wrap.querySelectorAll('[data-elem-pos]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const target = gpuElements.find(x => x.id === inp.dataset.elemPos);
+        if (target) {
+          target.position = Number(inp.value) / 100;
+          const b = inp.parentElement?.querySelector('b');
+          if (b) b.textContent = inp.value + '%';
+          drawGpu(true);
+        }
+      });
+      inp.addEventListener('change', () => drawGpu(false));
+    });
 
-    wrap.querySelectorAll('[data-elem-zpos]').forEach(inp => inp.addEventListener('input', () => {
-      const target = gpuElements.find(x => x.id === inp.dataset.elemZpos);
-      if (target) {
-        target.zPosition = Number(inp.value) / 100;
-        const b = inp.parentElement?.querySelector('b');
-        if (b) b.textContent = inp.value + '%';
-        drawGpu();
-      }
-    }));
+    wrap.querySelectorAll('[data-elem-zpos]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const target = gpuElements.find(x => x.id === inp.dataset.elemZpos);
+        if (target) {
+          target.zPosition = Number(inp.value) / 100;
+          const b = inp.parentElement?.querySelector('b');
+          if (b) b.textContent = inp.value + '%';
+          drawGpu(true);
+        }
+      });
+      inp.addEventListener('change', () => drawGpu(false));
+    });
 
-    wrap.querySelectorAll('[data-elem-size]').forEach(inp => inp.addEventListener('input', () => {
-      const target = gpuElements.find(x => x.id === inp.dataset.elemSize);
-      if (target) {
-        target.size = Number(inp.value) / 100;
-        const b = inp.parentElement?.querySelector('b');
-        if (b) b.textContent = inp.value + '%';
-        drawGpu();
-      }
-    }));
+    wrap.querySelectorAll('[data-elem-size]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const target = gpuElements.find(x => x.id === inp.dataset.elemSize);
+        if (target) {
+          target.size = Number(inp.value) / 100;
+          const b = inp.parentElement?.querySelector('b');
+          if (b) b.textContent = inp.value + '%';
+          drawGpu(true);
+        }
+      });
+      inp.addEventListener('change', () => drawGpu(false));
+    });
 
     wrap.querySelectorAll('[data-elem-text]').forEach(inp => inp.addEventListener('input', () => {
       const target = gpuElements.find(x => x.id === inp.dataset.elemText);
-      if (target) { target.text = inp.value; drawGpu(); }
+      if (target) { target.text = inp.value; drawGpu(true); }
     }));
 
-    wrap.querySelectorAll('[data-elem-color]').forEach(inp => inp.addEventListener('input', () => {
-      const target = gpuElements.find(x => x.id === inp.dataset.elemColor);
-      if (target) { target.color = inp.value; drawGpu(); }
-    }));
+    wrap.querySelectorAll('[data-elem-color]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const target = gpuElements.find(x => x.id === inp.dataset.elemColor);
+        if (target) { target.color = inp.value; drawGpu(true); }
+      });
+      inp.addEventListener('change', () => drawGpu(false));
+    });
 
     wrap.querySelectorAll('[data-elem-place]').forEach(sel => sel.addEventListener('change', () => {
       const target = gpuElements.find(x => x.id === sel.dataset.elemPlace);
@@ -1044,7 +1058,7 @@
     }
   }
 
-  function drawGpu() {
+  function drawGpu(fast = false) {
     window.GpuDesigner3D?.update({
       length: gpuLength,
       width: gpuWidth,
@@ -1055,7 +1069,7 @@
       accentColor: gpuAccent,
       backplate: gpuBackplate,
       elements: gpuElements.map(e => ({ ...e }))
-    });
+    }, { fast: !!fast });
     updateCostAndReadouts();
   }
 
