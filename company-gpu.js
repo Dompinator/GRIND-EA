@@ -18,6 +18,7 @@
   let gpuWidth = 125;
   let gpuBody = 'plastic';
   let gpuShroud = 'rounded';
+  let gpuPrimary = '#222733';
   let gpuAccent = '#a855f7';
   let gpuBackplate = true;
   let gpuElements = [
@@ -48,6 +49,7 @@
     { key: 'chip_super_powerful', name: 'Super Powerful', cost: 6800, value: 2800, score: 48, group: 'CHIP', pre: 'chip_strong_power' }
   ];
 
+  const PRIMARY_PRESETS = ['#222733', '#8c96a6', '#e6eaf2', '#12141b', '#7f1d1d', '#1e3a8a'];
   const ACCENT_PRESETS = ['#a855f7', '#38bdf8', '#ef4444', '#10b981', '#f59e0b', '#cbd5e1'];
 
   const isGpu = () => !!(currentCompany?.product_lines || []).includes('gpu');
@@ -157,6 +159,7 @@
     gpuWidth = 125;
     gpuBody = 'plastic';
     gpuShroud = 'rounded';
+    gpuPrimary = '#222733';
     gpuAccent = '#a855f7';
     gpuBackplate = true;
     gpuElements = [
@@ -272,15 +275,20 @@
       '<button type="button" class="zoom-btn' + (gpuShroud === s ? ' active' : '') + '" data-gpu-shroud="' + s + '">' + s[0].toUpperCase() + s.slice(1) + '</button>'
     ).join('');
 
+    const primarySwatches = PRIMARY_PRESETS.map(hex =>
+      '<button type="button" class="ea-swatch-btn' + (gpuPrimary.toLowerCase() === hex ? ' active' : '') + '" data-primary-hex="' + hex + '" style="background:' + hex + '"></button>'
+    ).join('');
+
     const swatches = ACCENT_PRESETS.map(hex =>
       '<button type="button" class="ea-swatch-btn' + (gpuAccent.toLowerCase() === hex ? ' active' : '') + '" data-accent-hex="' + hex + '" style="background:' + hex + '"></button>'
     ).join('');
 
     wrap.innerHTML =
       '<h4>Body Material</h4>' + bodyCards +
-      '<h4 style="margin-top:12px">Shroud Style &amp; Finish</h4>' +
+      '<h4 style="margin-top:12px">Shroud Style &amp; Colors</h4>' +
       '<div class="ea-gpu-inline-box"><span>Shroud shape</span><div class="ea-gpu-pill-row">' + shroudPills + '</div></div>' +
-      '<div class="ea-gpu-inline-box"><span>Accent color</span><div class="ea-gpu-swatches">' + swatches + '<input id="eaGpuAccent" type="color" value="' + esc(gpuAccent) + '"></div></div>' +
+      '<div class="ea-gpu-inline-box"><span>Primary color</span><div class="ea-gpu-swatches">' + primarySwatches + '<input id="eaGpuPrimary" type="color" value="' + esc(gpuPrimary) + '"></div></div>' +
+      '<div class="ea-gpu-inline-box"><span>Secondary color</span><div class="ea-gpu-swatches">' + swatches + '<input id="eaGpuAccent" type="color" value="' + esc(gpuAccent) + '"></div></div>' +
       '<div class="cpu-component-option ' + (gpuBackplate ? 'selected' : '') + '">' +
         '<span class="cpu-component-icon">▤</span>' +
         '<span><strong>Ventilated Backplate</strong><small>Flow-through backplate shield</small></span>' +
@@ -298,6 +306,15 @@
       renderBodyTab();
       drawGpu();
     }));
+    wrap.querySelectorAll('[data-primary-hex]').forEach(btn => btn.addEventListener('click', () => {
+      gpuPrimary = btn.dataset.primaryHex;
+      renderBodyTab();
+      drawGpu();
+    }));
+    wrap.querySelector('#eaGpuPrimary')?.addEventListener('input', e => {
+      gpuPrimary = e.target.value;
+      drawGpu();
+    });
     wrap.querySelectorAll('[data-accent-hex]').forEach(btn => btn.addEventListener('click', () => {
       gpuAccent = btn.dataset.accentHex;
       renderBodyTab();
@@ -1034,6 +1051,7 @@
       thickness: 52,
       body: gpuBody,
       shroud: gpuShroud,
+      primaryColor: gpuPrimary,
       accentColor: gpuAccent,
       backplate: gpuBackplate,
       elements: gpuElements.map(e => ({ ...e }))
@@ -1132,6 +1150,7 @@
         width: gpuWidth,
         body: gpuBody,
         shroud: gpuShroud,
+        primary_color: gpuPrimary,
         accent_color: gpuAccent,
         backplate: gpuBackplate,
         rgb: hasRgb,
