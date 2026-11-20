@@ -1,28 +1,21 @@
 /* ============================================================
  * GRIND-EA · Procedural 3D GPU CAD Designer (Three.js PBR)
- * Zero external textures · RoomEnvironment IBL · Smooth Damping
+ * Smooth Fan Cutouts · Red/Blue 3D Size Arrows · Modular Elements
  * ============================================================ */
 (function () {
   'use strict';
 
   const DEFAULT_CONFIG = {
-    length: 300,      // 180..420 mm
-    width: 125,       // 90..180 mm
-    thickness: 52,    // 38..76 mm (2.0..3.8 slot)
-    body: 'plastic',  // plastic | metallic | carbon
-    shroud: 'rounded',// rounded | angular | compact
+    length: 300,       // 180..420 mm
+    width: 125,        // 90..180 mm
+    thickness: 52,     // 38..76 mm
+    body: 'plastic',   // plastic | metallic | carbon
+    shroud: 'rounded', // rounded | angular | compact
     accentColor: '#a855f7',
-    rgb: false,
-    rgbColor: '#a855f7',
     backplate: true,
-    brand: 'GRIND',
-    gpuName: 'New Graphics Card',
-    chipName: '',
-    logoUrl: '',
-    fanScale: 1.0,    // 0.72..1.25
-    fans: [
-      { position: 0.28, type: 'basic' },
-      { position: 0.72, type: 'basic' }
+    elements: [
+      { id: 'fan_1', kind: 'fan', fanType: 'basic', position: 0.28, size: 1.0 },
+      { id: 'fan_2', kind: 'fan', fanType: 'basic', position: 0.72, size: 1.0 }
     ]
   };
 
@@ -35,6 +28,7 @@
 
   let stageEl = null;
   let dockEl = null;
+  let sizeHudEl = null;
   let renderer = null;
   let scene = null;
   let camera = null;
@@ -49,38 +43,42 @@
   let heatsinkLayer = null;
   let shroudLayer = null;
   let fansGroup = null;
+  let elementsGroup = null;
+  let sizeGizmoGroup = null;
   let plinthGroup = null;
 
-  let fanAssemblies = []; // [{ index, group, rotor, hitMesh, ringMesh, ringMat, yTop }]
-  let rgbMaterials = [];
-  let brandTexCache = { sig: '', tex: null };
-  let hubTexCache = { sig: '', tex: null };
-  let loadedLogoUrl = '';
-  let loadedLogoImg = null;
+  let fanAssemblies = [];     // [{ id, group, rotor, hitMesh, ringMat, yTop, baseEmissive, speed }]
+  let draggableDecals = [];   // [{ id, group, hitMesh, minX, maxX, yPlane }]
+  let sizeArrowHandles = [];  // [{ axis: 'x'|'z', sign: 1|-1, hitMesh, visualMat, baseColor }]
+  const logoImageCache = new Map(); // url -> HTMLImageElement | 'loading'
+  const decalTexCache = new Map();  // sig -> THREE.CanvasTexture
   const proceduralTex = {};
 
-  let config = { ...DEFAULT_CONFIG, fans: DEFAULT_CONFIG.fans.map(f => ({ ...f })) };
+  let config = {
+    ...DEFAULT_CONFIG,
+    elements: DEFAULT_CONFIG.elements.map(e => ({ ...e }))
+  };
   let callbacks = {};
 
   // Animation & interaction state
   let rafId = 0;
   let timerId = 0;
   let lastMs = 0;
-  let elapsedSec = 0;
   let autoSpin = false;
+  let sizeMode = false;
   let currentExplode = 0;
   let targetExplode = 0;
   let camAnimActive = false;
-  const camTargetPos = { x: 2.95, y: 2.35, z: 3.15 };
+  const camTargetPos = { x: 2.9, y: 2.45, z: 3.15 };
   const camTargetLook = { x: 0, y: 0.05, z: 0 };
 
-  // Fan 3D raycast drag state
+  // Raycast interaction state
   let raycaster = null;
   let pointerNdc = null;
   let dragPlane = null;
   let dragHitPoint = null;
-  let activeFanDrag = null; // { index, offsetX }
-  let hoveredFanIndex = -1;
+  let activeDrag = null; // { mode: 'size'|'element', axis?, sign?, id?, offsetX?, startLen?, startWid? }
+  let pendingRebuild = false;
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
@@ -90,9 +88,9 @@
       const gl = c.getContext('webgl2') || c.getContext('webgl');
       if (!gl) return true;
       const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const rendererName = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+      const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
       gl.getExtension('WEBGL_lose_context')?.loseContext();
-      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rendererName);
+      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(name);
     } catch (_) {
       return true;
     }
@@ -134,14 +132,14 @@
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(size, size);
     for (let i = 0; i < img.data.length; i += 4) {
-      const n = 118 + Math.floor(Math.random() * 24);
+      const n = 120 + Math.floor(Math.random() * 20);
       img.data[i] = img.data[i + 1] = img.data[i + 2] = n;
       img.data[i + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(6, 3);
+    tex.repeat.set(7, 3.5);
     proceduralTex.plasticBump = tex;
     return tex;
   }
@@ -152,18 +150,18 @@
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#a3adb9';
+    ctx.fillStyle = '#aeb8c4';
     ctx.fillRect(0, 0, w, h);
     for (let y = 0; y < h; y++) {
-      const v = 148 + Math.floor(Math.random() * 44);
-      ctx.fillStyle = `rgb(${v},${v + 4},${v + 10})`;
+      const v = 158 + Math.floor(Math.random() * 38);
+      ctx.fillStyle = `rgb(${v},${v + 3},${v + 8})`;
       ctx.fillRect(0, y, w, 1);
     }
-    for (let i = 0; i < 420; i++) {
+    for (let i = 0; i < 450; i++) {
       const x = Math.random() * w;
       const y = Math.random() * h;
-      const len = 30 + Math.random() * 140;
-      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(15,20,28,0.08)';
+      const len = 35 + Math.random() * 140;
+      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.09)' : 'rgba(12,16,24,0.08)';
       ctx.fillRect(x, y, len, 1);
     }
     const tex = new THREE.CanvasTexture(c);
@@ -187,30 +185,30 @@
     for (let y = 0; y < size; y += cell) {
       for (let x = 0; x < size; x += cell) {
         const shift = ((x / cell + y / cell) % 2) === 0;
-        const g1 = ctxC.createLinearGradient(x, y, x + cell, y + cell);
+        const g = ctxC.createLinearGradient(x, y, x + cell, y + cell);
         if (shift) {
-          g1.addColorStop(0, '#13161e');
-          g1.addColorStop(0.5, '#2b3242');
-          g1.addColorStop(1, '#151821');
+          g.addColorStop(0, '#141820');
+          g.addColorStop(0.5, '#303848');
+          g.addColorStop(1, '#151922');
         } else {
-          g1.addColorStop(0, '#1c212c');
-          g1.addColorStop(0.5, '#0e1118');
-          g1.addColorStop(1, '#262c3a');
+          g.addColorStop(0, '#1f2530');
+          g.addColorStop(0.5, '#0e1118');
+          g.addColorStop(1, '#282f3e');
         }
-        ctxC.fillStyle = g1;
+        ctxC.fillStyle = g;
         ctxC.fillRect(x, y, cell, cell);
-        ctxB.fillStyle = shift ? '#b8b8b8' : '#646464';
+        ctxB.fillStyle = shift ? '#bcbcbc' : '#5e5e5e';
         ctxB.fillRect(x + 1, y + 1, cell - 2, cell - 2);
       }
     }
     const color = new THREE.CanvasTexture(cc);
     color.colorSpace = THREE.SRGBColorSpace;
     color.wrapS = color.wrapT = THREE.RepeatWrapping;
-    color.repeat.set(10, 5);
+    color.repeat.set(11, 5.5);
     color.anisotropy = 8;
     const bump = new THREE.CanvasTexture(cb);
     bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
-    bump.repeat.set(10, 5);
+    bump.repeat.set(11, 5.5);
     proceduralTex.carbonColor = color;
     proceduralTex.carbonBump = bump;
     return { color, bump };
@@ -222,34 +220,51 @@
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#0e221b';
+    ctx.fillStyle = '#0c1c17';
     ctx.fillRect(0, 0, w, h);
-    // Subtle copper trace lines
-    ctx.strokeStyle = 'rgba(42, 128, 92, 0.36)';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 42; i++) {
-      const y = 18 + (i * 220) / 42;
+    ctx.strokeStyle = 'rgba(44, 134, 96, 0.34)';
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 44; i++) {
+      const y = 16 + (i * 224) / 44;
       ctx.beginPath();
-      ctx.moveTo(12, y);
-      ctx.lineTo(140 + (i % 5) * 35, y);
-      ctx.lineTo(175 + (i % 5) * 35, y + (i % 2 === 0 ? 12 : -12));
-      ctx.lineTo(w - 18, y + (i % 2 === 0 ? 12 : -12));
+      ctx.moveTo(10, y);
+      ctx.lineTo(130 + (i % 5) * 32, y);
+      ctx.lineTo(165 + (i % 5) * 32, y + (i % 2 === 0 ? 10 : -10));
+      ctx.lineTo(w - 14, y + (i % 2 === 0 ? 10 : -10));
       ctx.stroke();
     }
-    // Memory pad rings around center die area
-    ctx.strokeStyle = 'rgba(202, 168, 92, 0.48)';
-    ctx.strokeRect(195, 76, 110, 104);
-    for (let i = 0; i < 8; i++) {
+    // GDDR VRAM module silkscreen + pads around die
+    ctx.strokeStyle = 'rgba(212, 175, 95, 0.45)';
+    ctx.strokeRect(188, 72, 114, 112);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
       ctx.fillStyle = '#181c24';
-      const angle = (i / 8) * Math.PI * 2;
-      const rx = 250 + Math.cos(angle) * 74;
-      const ry = 128 + Math.sin(angle) * 62;
-      ctx.fillRect(rx - 10, ry - 7, 20, 14);
+      ctx.fillRect(245 + Math.cos(a) * 76 - 9, 128 + Math.sin(a) * 62 - 7, 18, 14);
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
     proceduralTex.pcb = tex;
+    return tex;
+  }
+
+  function getPcieFingersTexture() {
+    if (proceduralTex.pcie) return proceduralTex.pcie;
+    const w = 512, h = 64;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#12261e';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#eab308';
+    for (let x = 8; x < w - 8; x += 9) {
+      if (x > 96 && x < 114) continue; // x1/x16 key notch visual
+      ctx.fillRect(x, 6, 5, h - 12);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    proceduralTex.pcie = tex;
     return tex;
   }
 
@@ -260,8 +275,8 @@
     c.width = size; c.height = size;
     const ctx = c.getContext('2d');
     const g = ctx.createRadialGradient(size / 2, size / 2, 18, size / 2, size / 2, size / 2);
-    g.addColorStop(0, 'rgba(0,0,0,0.68)');
-    g.addColorStop(0.55, 'rgba(6,4,14,0.32)');
+    g.addColorStop(0, 'rgba(0,0,0,0.72)');
+    g.addColorStop(0.55, 'rgba(6,4,14,0.34)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
@@ -271,154 +286,162 @@
     return tex;
   }
 
-  function ensureLogoImage(url) {
+  function requestLogoImage(url) {
     const clean = String(url || '').trim();
-    if (!clean) {
-      loadedLogoUrl = '';
-      loadedLogoImg = null;
-      return;
-    }
-    if (clean === loadedLogoUrl) return;
-    loadedLogoUrl = clean;
-    loadedLogoImg = null;
+    if (!clean) return null;
+    const existing = logoImageCache.get(clean);
+    if (existing && existing !== 'loading') return existing;
+    if (existing === 'loading') return null;
+    logoImageCache.set(clean, 'loading');
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      if (loadedLogoUrl === clean) {
-        loadedLogoImg = img;
-        brandTexCache.sig = '';
-        hubTexCache.sig = '';
-        if (renderer && gpuRoot) buildModel();
-      }
+      logoImageCache.set(clean, img);
+      decalTexCache.clear();
+      if (renderer && gpuRoot) buildModel();
     };
+    img.onerror = () => { logoImageCache.delete(clean); };
     img.src = clean;
+    return null;
   }
 
-  function getBrandPlateTexture() {
-    const brand = (config.brand || 'GRIND').trim().slice(0, 20) || 'GRIND';
-    const gpuName = (config.gpuName || '').trim().slice(0, 26);
-    const accent = config.accentColor || '#a855f7';
-    const logoKey = loadedLogoImg ? loadedLogoUrl.slice(-32) : '';
-    const sig = `${brand}|${gpuName}|${accent}|${config.body}|${logoKey}`;
-    if (brandTexCache.sig === sig && brandTexCache.tex) return brandTexCache.tex;
+  function getTextDecalTexture(text, colorHex) {
+    const clean = String(text || 'GPU').trim().slice(0, 24) || 'GPU';
+    const col = colorHex || '#f8fafc';
+    const sig = `txt|${clean}|${col}`;
+    if (decalTexCache.has(sig)) return decalTexCache.get(sig);
 
     const c = document.createElement('canvas');
-    c.width = 640; c.height = 140;
+    c.width = 512; c.height = 128;
     const ctx = c.getContext('2d');
-
-    ctx.fillStyle = config.body === 'metallic' ? '#1c212b' : '#10121a';
-    ctx.fillRect(0, 0, 640, 140);
-
-    // Subtle accent bar on left
-    ctx.fillStyle = accent;
-    ctx.fillRect(14, 22, 8, 96);
-
-    let textStartX = 42;
-    if (loadedLogoImg) {
-      try {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect?.(36, 22, 96, 96, 14);
-        if (!ctx.roundRect) ctx.rect(36, 22, 96, 96);
-        ctx.clip();
-        ctx.drawImage(loadedLogoImg, 36, 22, 96, 96);
-        ctx.restore();
-        textStartX = 152;
-      } catch (_) {}
-    }
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 48px Inter, system-ui, sans-serif';
+    ctx.clearRect(0, 0, 512, 128);
+    ctx.fillStyle = col;
+    ctx.font = '800 58px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(brand.toUpperCase(), textStartX, gpuName ? 54 : 70, 620 - textStartX);
-
-    if (gpuName) {
-      ctx.fillStyle = '#c4b5fd';
-      ctx.font = '600 22px Inter, system-ui, sans-serif';
-      ctx.fillText(gpuName, textStartX, 102, 620 - textStartX);
-    }
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(clean, 256, 66, 470);
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
-    brandTexCache.tex?.dispose?.();
-    brandTexCache = { sig, tex };
+    decalTexCache.set(sig, tex);
     return tex;
   }
 
-  function getHubTexture(fanType) {
-    const brand = (config.brand || 'GRIND').trim().slice(0, 10) || 'GRIND';
-    const accent = config.accentColor || '#a855f7';
-    const logoKey = loadedLogoImg ? loadedLogoUrl.slice(-24) : '';
-    const sig = `${brand}|${fanType}|${accent}|${logoKey}`;
-    if (hubTexCache.sig === sig && hubTexCache.tex) return hubTexCache.tex;
+  function getLogoDecalTexture(url, tintHex) {
+    const img = requestLogoImage(url);
+    const sig = `logo|${url || 'none'}|${img ? 'ok' : 'wait'}|${tintHex || ''}`;
+    if (decalTexCache.has(sig)) return decalTexCache.get(sig);
 
     const c = document.createElement('canvas');
     c.width = 256; c.height = 256;
     const ctx = c.getContext('2d');
-    const g = ctx.createRadialGradient(128, 128, 18, 128, 128, 124);
-    g.addColorStop(0, fanType === 'gpu_smart_fans' ? '#2c3142' : '#1b1f29');
-    g.addColorStop(1, '#0d1017');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(128, 128, 124, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.clearRect(0, 0, 256, 256);
 
-    ctx.strokeStyle = fanType === 'gpu_smart_fans' ? accent : '#94a3b8';
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(128, 128, 110, 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (loadedLogoImg) {
-      ctx.save();
+    if (img) {
+      const s = Math.min(220 / img.width, 220 / img.height);
+      ctx.drawImage(img, (256 - img.width * s) / 2, (256 - img.height * s) / 2, img.width * s, img.height * s);
+    } else {
+      ctx.strokeStyle = tintHex || '#c084fc';
+      ctx.lineWidth = 10;
       ctx.beginPath();
       ctx.arc(128, 128, 86, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(loadedLogoImg, 42, 42, 172, 172);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = '#f1f5f9';
-      ctx.font = '800 36px Inter, system-ui, sans-serif';
+      ctx.stroke();
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '900 54px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(brand.toUpperCase(), 128, 128, 175);
+      ctx.fillText('GPU', 128, 130);
     }
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
-    hubTexCache.tex?.dispose?.();
-    hubTexCache = { sig, tex };
+    decalTexCache.set(sig, tex);
     return tex;
   }
 
-  // ---------- Shroud Silhouette Builder ----------
-  function createShroudGeometry(w, h, d, shapeType) {
+  // ---------- Shroud Silhouette with Smooth Fan Cutout Holes ----------
+  function computeSafeFanLayouts(fanElements, w, d) {
+    const hw = w / 2;
+    const hd = d / 2;
+    const count = fanElements.length;
+    if (!count) return [];
+
+    // Sort indices by X position to prevent adjacent cutout hole intersections
+    const items = fanElements.map((f, idx) => {
+      const pos = clamp(Number(f.position ?? ((idx + 0.5) / count)), 0.08, 0.92);
+      const scale = clamp(Number(f.size ?? 1.0), 0.65, 1.25);
+      const baseMax = Math.min(d * 0.40, (w * 0.88) / (Math.max(1, count) * 2.04));
+      const desiredR = clamp(baseMax * scale, 0.13, hd - 0.075);
+      return {
+        id: f.id,
+        fanType: f.fanType || 'basic',
+        pos,
+        fx: -hw + w * pos,
+        desiredR,
+        r: desiredR
+      };
+    });
+
+    // Ensure every fan hole stays strictly inside outer shroud and non-overlapping with neighbors
+    const sorted = [...items].sort((a, b) => a.fx - b.fx);
+    const edgePad = 0.068;
+    for (const item of sorted) {
+      const maxEdgeR = Math.min(hd - edgePad, hw - edgePad - Math.abs(item.fx));
+      item.r = clamp(item.desiredR, 0.09, Math.max(0.09, maxEdgeR));
+      // If user pushed close to left/right edge, clamp fx inside valid hole zone cleanly
+      const maxX = Math.max(0.05, hw - edgePad - item.r);
+      item.fx = clamp(item.fx, -maxX, maxX);
+    }
+
+    // Resolve any adjacent hole overlaps so ExtrudeGeometry triangulation is always 100% clean
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i];
+      const b = sorted[i + 1];
+      const gap = Math.abs(b.fx - a.fx);
+      const minClear = 0.045;
+      if (gap < a.r + b.r + minClear) {
+        const shrinkFactor = Math.max(0.45, (gap - minClear) / Math.max(0.01, a.r + b.r));
+        if (gap < 0.24) {
+          // Separate gently if stacked almost on top of each other
+          const push = (0.24 - gap) * 0.5;
+          a.fx = clamp(a.fx - push, -hw + edgePad + 0.09, hw - edgePad - 0.09);
+          b.fx = clamp(b.fx + push, -hw + edgePad + 0.09, hw - edgePad - 0.09);
+          const newGap = Math.abs(b.fx - a.fx);
+          const f2 = Math.max(0.4, (newGap - minClear) / Math.max(0.01, a.r + b.r));
+          a.r = Math.max(0.085, a.r * f2);
+          b.r = Math.max(0.085, b.r * f2);
+        } else {
+          a.r = Math.max(0.085, a.r * shrinkFactor);
+          b.r = Math.max(0.085, b.r * shrinkFactor);
+        }
+      }
+    }
+
+    return items;
+  }
+
+  function createShroudGeometryWithHoles(w, h, d, shapeType, holesList) {
     const hw = w / 2;
     const hd = d / 2;
     const shape = new THREE.Shape();
 
     if (shapeType === 'angular') {
-      const c1 = Math.min(0.18, w * 0.08, d * 0.16);
-      const notch = Math.min(0.08, d * 0.08);
+      const c1 = Math.min(0.17, w * 0.08, d * 0.16);
       shape.moveTo(-hw + c1, -hd);
-      shape.lineTo(0 - w * 0.12, -hd);
-      shape.lineTo(0, -hd + notch);
-      shape.lineTo(0 + w * 0.12, -hd);
       shape.lineTo(hw - c1 * 1.4, -hd);
       shape.lineTo(hw, -hd + c1 * 1.3);
       shape.lineTo(hw, hd - c1 * 1.3);
       shape.lineTo(hw - c1 * 1.4, hd);
-      shape.lineTo(0 + w * 0.12, hd);
-      shape.lineTo(0, hd - notch);
-      shape.lineTo(0 - w * 0.12, hd);
       shape.lineTo(-hw + c1, hd);
       shape.lineTo(-hw, hd - c1);
       shape.lineTo(-hw, -hd + c1);
       shape.closePath();
     } else if (shapeType === 'compact') {
-      const r = Math.min(0.04, w * 0.02, d * 0.04);
+      const r = Math.min(0.038, w * 0.02, d * 0.04);
       shape.moveTo(-hw + r, -hd);
       shape.lineTo(hw - r, -hd);
       shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
@@ -429,8 +452,7 @@
       shape.lineTo(-hw, -hd + r);
       shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
     } else {
-      // 'rounded': sleek Founder-style curved aerodynamic edges
-      const r = Math.min(0.24, w * 0.12, d * 0.28);
+      const r = Math.min(0.22, w * 0.11, d * 0.25);
       shape.moveTo(-hw + r, -hd);
       shape.lineTo(hw - r, -hd);
       shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
@@ -442,16 +464,26 @@
       shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
     }
 
-    const bevel = shapeType === 'compact' ? 0.015 : 0.032;
+    // Subtract smooth circular fan cutouts directly from the GPU shroud shape!
+    for (const hSpec of holesList) {
+      const holeR = hSpec.r * 1.03;
+      // Ensure hole stays strictly inside shape bounds with safe bevel clearance
+      if (Math.abs(hSpec.fx) + holeR < hw - 0.032 && holeR < hd - 0.032) {
+        const hole = new THREE.Path();
+        hole.absarc(hSpec.fx, 0, holeR, 0, Math.PI * 2, true);
+        shape.holes.push(hole);
+      }
+    }
+
+    const bevel = shapeType === 'compact' ? 0.012 : 0.026;
     const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: Math.max(0.08, h - bevel * 2),
+      depth: Math.max(0.04, h - bevel * 2),
       bevelEnabled: true,
       bevelThickness: bevel,
       bevelSize: bevel,
       bevelSegments: shapeType === 'angular' ? 1 : 4,
-      curveSegments: 16
+      curveSegments: 40
     });
-    // Extrude runs along +Z; rotate -90 deg on X so depth becomes +Y height
     geo.rotateX(-Math.PI / 2);
     geo.computeBoundingBox();
     const minY = geo.boundingBox.min.y;
@@ -463,33 +495,36 @@
   function makeBodyMaterial(bodyType) {
     if (bodyType === 'metallic') {
       const tex = getBrushedMetalTexture();
-      return new THREE.MeshStandardMaterial({
-        color: 0xbec7d4,
+      return new THREE.MeshPhysicalMaterial({
+        color: 0xc2cbd8,
         map: tex,
         bumpMap: tex,
-        bumpScale: 0.008,
-        metalness: 0.88,
-        roughness: 0.24
+        bumpScale: 0.007,
+        metalness: 0.9,
+        roughness: 0.22,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.25
       });
     }
     if (bodyType === 'carbon') {
       const { color, bump } = getCarbonTextures();
-      return new THREE.MeshStandardMaterial({
+      return new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         map: color,
         bumpMap: bump,
-        bumpScale: 0.014,
-        metalness: 0.42,
-        roughness: 0.28
+        bumpScale: 0.012,
+        metalness: 0.38,
+        roughness: 0.32,
+        clearcoat: 0.82,
+        clearcoatRoughness: 0.16
       });
     }
-    // Default unlocked 'plastic'
     return new THREE.MeshStandardMaterial({
-      color: 0x2a2d3a,
+      color: 0x262936,
       bumpMap: getPlasticBumpTexture(),
       bumpScale: 0.006,
-      metalness: 0.14,
-      roughness: 0.54
+      metalness: 0.12,
+      roughness: 0.56
     });
   }
 
@@ -502,145 +537,326 @@
     return mesh;
   }
 
-  function buildFanAssembly(fanSpec, index, x, yTop, radius, shroudMat, accentMat, rgbActive, rgbCol) {
+  function buildFanInCutout(layout, index, yBoreCenter, boreDepth, accentMat) {
     const fGroup = new THREE.Group();
-    fGroup.position.set(x, yTop, 0);
-    fGroup.userData.fanIndex = index;
+    fGroup.position.set(layout.fx, yBoreCenter, 0);
+    fGroup.userData.elementId = layout.id;
 
-    const type = fanSpec.type || 'basic';
+    const r = layout.r;
+    const type = layout.fanType || 'basic';
     const isSmall = type === 'gpu_small_fans';
     const isMedium = type === 'gpu_medium_fans';
     const isSmart = type === 'gpu_smart_fans';
 
-    // Outer recessed fan cowling ring
-    const housingMat = new THREE.MeshStandardMaterial({
-      color: isSmart ? 0x161a24 : 0x0f1219,
-      metalness: isSmart ? 0.65 : 0.35,
-      roughness: 0.36
-    });
-    const housing = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 1.03, radius * 1.06, 0.055, 40, 1, true),
-      housingMat
-    );
-    housing.material.side = THREE.DoubleSide;
-    housing.position.y = -0.012;
-    fGroup.add(housing);
-
-    // Highlight / RGB trim ring
+    // Machined fan bore trim ring framing the subtracted shroud cutout smoothly
     const ringMat = new THREE.MeshStandardMaterial({
-      color: rgbActive ? rgbCol : isSmart ? accentMat.color : isMedium ? 0xaab4c2 : isSmall ? 0x7b8594 : 0x4b5263,
-      metalness: rgbActive ? 0.3 : isSmart || isMedium ? 0.8 : 0.25,
-      roughness: rgbActive ? 0.25 : 0.3,
-      emissive: rgbActive ? rgbCol : (isSmart ? accentMat.color : 0x000000),
-      emissiveIntensity: rgbActive ? 1.15 : isSmart ? 0.22 : 0
+      color: isSmart ? accentMat.color : isMedium ? 0xadb7c6 : isSmall ? 0x768191 : 0x3b4150,
+      metalness: isSmart || isMedium ? 0.85 : 0.3,
+      roughness: isSmart || isMedium ? 0.22 : 0.45,
+      emissive: isSmart ? accentMat.color : new THREE.Color(0x000000),
+      emissiveIntensity: isSmart ? 0.25 : 0
     });
-    if (rgbActive) rgbMaterials.push(ringMat);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.99, Math.max(0.016, radius * 0.065), 14, 48), ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.018;
-    fGroup.add(ring);
-
-    // Inner dark shroud floor underneath blades
-    const well = new THREE.Mesh(
-      new THREE.CircleGeometry(radius * 0.97, 36),
-      new THREE.MeshStandardMaterial({ color: 0x090b10, roughness: 0.7, metalness: 0.2 })
+    const boreBezel = new THREE.Mesh(
+      new THREE.TorusGeometry(r * 1.03, Math.max(0.014, r * 0.048), 14, 48),
+      ringMat
     );
-    well.rotation.x = -Math.PI / 2;
-    well.position.y = -0.032;
-    fGroup.add(well);
+    boreBezel.rotation.x = Math.PI / 2;
+    boreBezel.position.y = boreDepth * 0.5;
+    fGroup.add(boreBezel);
 
-    // Rotor blades & center hub
+    // Smooth cylindrical inner bore sleeve lining the cutout wall cleanly
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: 0x0e1118,
+      metalness: 0.4,
+      roughness: 0.42,
+      side: THREE.DoubleSide
+    });
+    const sleeve = new THREE.Mesh(
+      new THREE.CylinderGeometry(r * 1.03, r * 1.03, boreDepth * 1.02, 48, 1, true),
+      sleeveMat
+    );
+    fGroup.add(sleeve);
+
+    // Three subtle stator struts underneath the rotor connecting hub to bore wall
+    for (let s = 0; s < 3; s++) {
+      const armPivot = new THREE.Group();
+      armPivot.rotation.y = (s * Math.PI * 2) / 3 + 0.35;
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(r * 0.96, 0.012, 0.018), sleeveMat);
+      strut.position.set(r * 0.48, -boreDepth * 0.28, 0);
+      armPivot.add(strut);
+      fGroup.add(armPivot);
+    }
+
+    // Rotor sits RECESSED neatly inside the shroud hole!
     const rotor = new THREE.Group();
-    rotor.position.y = 0.0;
+    rotor.position.y = boreDepth * 0.16;
     fGroup.add(rotor);
 
     const bladeCount = isSmart ? 13 : isMedium ? 11 : isSmall ? 9 : 7;
-    const bladeLen = radius * 0.64;
-    const bladeWid = radius * (isSmart ? 0.22 : isMedium ? 0.24 : 0.26);
-    const bladePitch = isSmart ? 0.44 : isMedium ? 0.4 : 0.36;
+    const bladeLen = r * 0.68;
+    const bladeWid = r * (isSmart ? 0.22 : isMedium ? 0.24 : 0.26);
+    const bladePitch = isSmart ? 0.46 : isMedium ? 0.42 : 0.37;
     const bladeMat = new THREE.MeshStandardMaterial({
-      color: isSmart ? 0x2c3345 : isMedium ? 0x252b38 : isSmall ? 0x1d222c : 0x1a1e26,
-      metalness: isSmart ? 0.58 : isMedium ? 0.45 : 0.22,
-      roughness: isSmart ? 0.26 : 0.38
+      color: isSmart ? 0x2c3447 : isMedium ? 0x232936 : isSmall ? 0x1c212b : 0x171b23,
+      metalness: isSmart ? 0.62 : isMedium ? 0.48 : 0.2,
+      roughness: isSmart ? 0.24 : 0.38
     });
 
-    // Extrude or sculpted curved blade geometry
     const bShape = new THREE.Shape();
-    bShape.moveTo(0, -bladeWid * 0.36);
-    bShape.quadraticCurveTo(bladeLen * 0.55, -bladeWid * (isMedium || isSmart ? 0.65 : 0.45), bladeLen, -bladeWid * 0.25);
+    bShape.moveTo(0, -bladeWid * 0.35);
+    bShape.quadraticCurveTo(bladeLen * 0.55, -bladeWid * (isMedium || isSmart ? 0.64 : 0.44), bladeLen, -bladeWid * 0.22);
     bShape.lineTo(bladeLen, bladeWid * 0.38);
-    bShape.quadraticCurveTo(bladeLen * 0.45, bladeWid * 0.48, 0, bladeWid * 0.32);
+    bShape.quadraticCurveTo(bladeLen * 0.45, bladeWid * 0.46, 0, bladeWid * 0.3);
     bShape.closePath();
-    const bladeGeo = new THREE.ExtrudeGeometry(bShape, { depth: 0.014, bevelEnabled: false });
+    const bladeGeo = new THREE.ExtrudeGeometry(bShape, { depth: 0.012, bevelEnabled: false });
     bladeGeo.rotateX(Math.PI / 2);
 
     for (let i = 0; i < bladeCount; i++) {
-      const a = (i / bladeCount) * Math.PI * 2;
       const pivot = new THREE.Group();
-      pivot.rotation.y = a;
+      pivot.rotation.y = (i / bladeCount) * Math.PI * 2;
       const blade = new THREE.Mesh(bladeGeo, bladeMat);
-      blade.position.set(radius * 0.22, 0.005, 0);
+      blade.position.set(r * 0.24, 0, 0);
       blade.rotation.x = bladePitch;
-      if (isMedium || isSmart) blade.rotation.z = 0.08;
+      if (isMedium || isSmart) blade.rotation.z = 0.07;
       pivot.add(blade);
       rotor.add(pivot);
     }
 
-    // Connected stabilizer barrier ring for Medium/Smart fans
     if (isSmart || isMedium) {
-      const tipRing = new THREE.Mesh(
-        new THREE.TorusGeometry(radius * 0.87, 0.012, 8, 44),
-        bladeMat
-      );
-      tipRing.rotation.x = Math.PI / 2;
-      tipRing.position.y = 0.004;
-      rotor.add(tipRing);
+      const barrier = new THREE.Mesh(new THREE.TorusGeometry(r * 0.93, 0.011, 8, 44), bladeMat);
+      barrier.rotation.x = Math.PI / 2;
+      rotor.add(barrier);
     }
 
-    // Center hub + branded medallion
+    // Center hub + metallic cap
     const hubMat = new THREE.MeshStandardMaterial({
-      color: isSmart || isMedium ? 0xcbd5e1 : 0x2f3542,
-      metalness: isSmart || isMedium ? 0.85 : 0.35,
-      roughness: isSmart || isMedium ? 0.22 : 0.45
+      color: isSmart || isMedium ? 0xd2dbe7 : 0x2a303d,
+      metalness: isSmart || isMedium ? 0.88 : 0.35,
+      roughness: isSmart || isMedium ? 0.2 : 0.45
     });
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.26, radius * 0.28, 0.042, 32), hubMat);
-    hub.position.y = 0.008;
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.26, r * 0.28, 0.038, 32), hubMat);
+    hub.position.y = 0.004;
     rotor.add(hub);
 
-    const cap = new THREE.Mesh(
-      new THREE.CircleGeometry(radius * 0.23, 32),
-      new THREE.MeshStandardMaterial({
-        map: getHubTexture(type),
-        metalness: isSmart ? 0.55 : 0.3,
-        roughness: 0.32
-      })
+    const centerRing = new THREE.Mesh(
+      new THREE.RingGeometry(r * 0.14, r * 0.21, 32),
+      ringMat
     );
-    cap.rotation.x = -Math.PI / 2;
-    cap.position.y = 0.031;
-    rotor.add(cap);
+    centerRing.rotation.x = -Math.PI / 2;
+    centerRing.position.y = 0.025;
+    rotor.add(centerRing);
 
-    // Invisible wide cylinder hit target for super-easy 3D fan dragging
+    // Invisible drag hit volume for easy repositioning
     const hitMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 1.05, radius * 1.05, 0.14, 16),
+      new THREE.CylinderGeometry(r * 1.02, r * 1.02, Math.max(0.14, boreDepth * 1.6), 16),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    hitMesh.position.y = 0.02;
-    hitMesh.userData.fanIndex = index;
+    hitMesh.userData.dragId = layout.id;
+    hitMesh.userData.dragKind = 'fan';
     fGroup.add(hitMesh);
 
     fansGroup.add(fGroup);
     fanAssemblies.push({
+      id: layout.id,
       index,
       group: fGroup,
       rotor,
       hitMesh,
-      ringMesh: ring,
       ringMat,
-      yTop,
-      radius,
-      speed: isSmart ? 3.2 : isMedium ? 2.5 : isSmall ? 2.8 : 2.0,
-      baseEmissive: rgbActive ? 1.15 : isSmart ? 0.22 : 0
+      yTop: yBoreCenter + boreDepth * 0.5,
+      baseEmissive: isSmart ? 0.25 : 0,
+      speed: isSmart ? 3.4 : isMedium ? 2.6 : isSmall ? 2.9 : 2.1
     });
+  }
+
+  function buildPlacedDecalsAndStrips(w, h, d, bodyType, accentHex) {
+    const elements = Array.isArray(config.elements) ? config.elements : [];
+    const topY = h * 0.56 + 0.006;
+
+    for (const el of elements) {
+      if (el.kind === 'text') {
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const scale = clamp(Number(el.size ?? 1.0), 0.55, 1.5);
+        const placement = el.placement || 'side'; // 'side' | 'top' | 'back'
+        const planeW = Math.min(w * 0.58, 0.92 * scale);
+        const planeH = planeW * 0.25;
+        const mat = new THREE.MeshStandardMaterial({
+          map: getTextDecalTexture(el.text || 'GPU', el.color || '#f8fafc'),
+          transparent: true,
+          roughness: 0.3,
+          metalness: 0.25,
+          depthWrite: false
+        });
+        const g = new THREE.Group();
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), mat);
+        if (placement === 'top') {
+          g.position.set(-w / 2 + w * pos, topY, d * 0.36);
+          mesh.rotation.x = -Math.PI / 2;
+        } else if (placement === 'back') {
+          g.position.set(-w / 2 + w * pos, -h * 0.62 - 0.088, 0);
+          mesh.rotation.x = Math.PI / 2;
+        } else {
+          g.position.set(-w / 2 + w * pos, h * 0.23, d * 0.506);
+        }
+        g.add(mesh);
+
+        const hitMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(planeW * 1.1, Math.max(0.1, planeH * 1.3), 0.1),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hitMesh.userData.dragId = el.id;
+        hitMesh.userData.dragKind = 'decal';
+        g.add(hitMesh);
+
+        elementsGroup.add(g);
+        draggableDecals.push({
+          id: el.id,
+          group: g,
+          hitMesh,
+          yPlane: g.position.y
+        });
+      } else if (el.kind === 'logo') {
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.5);
+        const placement = el.placement || 'back'; // 'top' | 'side' | 'back'
+        const sz = Math.min(d * 0.52, 0.36) * scale;
+        const mat = new THREE.MeshStandardMaterial({
+          map: getLogoDecalTexture(el.logoUrl || '', accentHex),
+          transparent: true,
+          roughness: 0.28,
+          metalness: 0.3,
+          depthWrite: false
+        });
+        const g = new THREE.Group();
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), mat);
+        if (placement === 'side') {
+          const sSize = Math.min(sz, h * 0.66);
+          mesh.geometry.dispose();
+          mesh.geometry = new THREE.PlaneGeometry(sSize, sSize);
+          g.position.set(-w / 2 + w * pos, h * 0.23, d * 0.506);
+        } else if (placement === 'top') {
+          g.position.set(-w / 2 + w * pos, topY, -d * 0.35);
+          mesh.rotation.x = -Math.PI / 2;
+        } else {
+          g.position.set(-w / 2 + w * pos, -h * 0.62 - 0.088, 0);
+          mesh.rotation.x = Math.PI / 2;
+        }
+        g.add(mesh);
+
+        const hitMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(sz * 1.2, 0.14, sz * 1.2),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hitMesh.userData.dragId = el.id;
+        hitMesh.userData.dragKind = 'decal';
+        g.add(hitMesh);
+
+        elementsGroup.add(g);
+        draggableDecals.push({
+          id: el.id,
+          group: g,
+          hitMesh,
+          yPlane: g.position.y
+        });
+      } else if (el.kind === 'rgb_strip') {
+        const col = new THREE.Color(el.color || accentHex || '#a855f7');
+        const rgbMat = new THREE.MeshStandardMaterial({
+          color: col,
+          emissive: col,
+          emissiveIntensity: 1.7,
+          roughness: 0.18,
+          metalness: 0.1
+        });
+        const mode = el.placement || 'side'; // 'side' | 'top' | 'halo'
+        if (mode === 'top' || mode === 'halo') {
+          makeBox(elementsGroup, w * 0.84, 0.018, 0.018, rgbMat, 0, h * 0.555, d * 0.43);
+          makeBox(elementsGroup, w * 0.84, 0.018, 0.018, rgbMat, 0, h * 0.555, -d * 0.43);
+        }
+        if (mode === 'side' || mode === 'halo') {
+          makeBox(elementsGroup, w * 0.86, 0.022, 0.02, rgbMat, 0, h * 0.41, d * 0.502);
+          makeBox(elementsGroup, w * 0.86, 0.022, 0.02, rgbMat, 0, h * 0.41, -d * 0.502);
+        }
+      }
+    }
+  }
+
+  // ---------- Red & Blue 3D Size Arrows ----------
+  function buildArrowMesh(colorHex, axis, sign) {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      emissive: colorHex,
+      emissiveIntensity: 0.68,
+      roughness: 0.25,
+      metalness: 0.3
+    });
+
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.24, 16), mat);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.16, 20), mat);
+    head.position.y = 0.18;
+
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.012, 10, 24), mat);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.y = -0.1;
+
+    const arrowGeoGroup = new THREE.Group();
+    arrowGeoGroup.add(shaft, head, collar);
+
+    // Cylinder/cone point +Y by default; rotate to point along +X/-X (Red) or +Z/-Z (Blue)
+    if (axis === 'x') {
+      arrowGeoGroup.rotation.z = sign > 0 ? -Math.PI / 2 : Math.PI / 2;
+    } else {
+      arrowGeoGroup.rotation.x = sign > 0 ? Math.PI / 2 : -Math.PI / 2;
+    }
+    group.add(arrowGeoGroup);
+
+    // Oversized invisible hit box for effortless dragging
+    const hitMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 12, 12),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hitMesh.userData.dragKind = 'size';
+    hitMesh.userData.axis = axis;
+    hitMesh.userData.sign = sign;
+    group.add(hitMesh);
+
+    return { group, hitMesh, mat };
+  }
+
+  function buildSizeGizmos(w, d) {
+    if (!sizeGizmoGroup) return;
+    disposeGroupContents(sizeGizmoGroup);
+    sizeArrowHandles = [];
+    sizeGizmoGroup.visible = sizeMode;
+    if (!sizeMode) return;
+
+    const yLevel = 0.04;
+    const offset = 0.26;
+
+    // Red Arrows (Length along X axis)
+    for (const sign of [-1, 1]) {
+      const a = buildArrowMesh(0xef4444, 'x', sign);
+      a.group.position.set(sign * (w / 2 + offset), yLevel, 0);
+      sizeGizmoGroup.add(a.group);
+      sizeArrowHandles.push({ axis: 'x', sign, hitMesh: a.hitMesh, mat: a.mat, baseColor: 0xef4444 });
+    }
+
+    // Blue Arrows (Width along Z axis)
+    for (const sign of [-1, 1]) {
+      const a = buildArrowMesh(0x3b82f6, 'z', sign);
+      a.group.position.set(0, yLevel, sign * (d / 2 + offset));
+      sizeGizmoGroup.add(a.group);
+      sizeArrowHandles.push({ axis: 'z', sign, hitMesh: a.hitMesh, mat: a.mat, baseColor: 0x3b82f6 });
+    }
+
+    // Subtle wireframe outline guide around card footprint
+    const outlineGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, 0.34, d + 0.06));
+    const outline = new THREE.LineSegments(
+      outlineGeo,
+      new THREE.LineBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.45 })
+    );
+    outline.position.y = 0.02;
+    sizeGizmoGroup.add(outline);
   }
 
   function disposeGroupContents(group) {
@@ -663,8 +879,9 @@
     disposeGroupContents(heatsinkLayer);
     disposeGroupContents(shroudLayer);
     disposeGroupContents(fansGroup);
+    disposeGroupContents(elementsGroup);
     fanAssemblies = [];
-    rgbMaterials = [];
+    draggableDecals = [];
 
     const lenScale = clamp(Number(config.length || 300) / 300, 0.6, 1.4);
     const widScale = clamp(Number(config.width || 125) / 125, 0.72, 1.44);
@@ -672,200 +889,174 @@
 
     const w = 2.85 * lenScale;
     const d = 1.18 * widScale;
-    const h = 0.24 * thickScale;
+    const h = 0.25 * thickScale;
 
     const bodyType = config.body || 'plastic';
     const shapeType = config.shroud || 'rounded';
-    const rgbActive = !!config.rgb;
-    const accentHex = new THREE.Color(config.accentColor || '#a855f7');
-    const rgbHex = new THREE.Color(config.rgbColor || config.accentColor || '#a855f7');
-
-    ensureLogoImage(config.logoUrl);
+    const accentColor = config.accentColor || '#a855f7';
 
     const shroudMat = makeBodyMaterial(bodyType);
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x11141c, metalness: 0.42, roughness: 0.44 });
-    const trimMetal = new THREE.MeshStandardMaterial({ color: 0x9aa5b5, metalness: 0.86, roughness: 0.24 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x10131b, metalness: 0.45, roughness: 0.42 });
+    const trimMetal = new THREE.MeshStandardMaterial({ color: 0xa2adbc, metalness: 0.88, roughness: 0.22 });
     const accentMat = new THREE.MeshStandardMaterial({
-      color: accentHex,
-      metalness: bodyType === 'metallic' ? 0.72 : 0.38,
-      roughness: 0.28,
-      emissive: rgbActive ? rgbHex : accentHex,
-      emissiveIntensity: rgbActive ? 0.55 : 0.06
+      color: new THREE.Color(accentColor),
+      metalness: bodyType === 'metallic' ? 0.72 : 0.36,
+      roughness: 0.28
     });
-    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd9b15f, metalness: 0.9, roughness: 0.22 });
-    const copperMat = new THREE.MeshStandardMaterial({ color: 0xc27a44, metalness: 0.88, roughness: 0.22 });
-    const finMat = new THREE.MeshStandardMaterial({ color: 0xb6c0cc, metalness: 0.84, roughness: 0.28 });
-    const pcbMat = new THREE.MeshStandardMaterial({
-      map: getPcbTexture(),
-      metalness: 0.25,
-      roughness: 0.52
-    });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd9b15f, metalness: 0.92, roughness: 0.2 });
+    const copperMat = new THREE.MeshStandardMaterial({ color: 0xc47b43, metalness: 0.9, roughness: 0.2 });
+    const finMat = new THREE.MeshStandardMaterial({ color: 0xbcc6d4, metalness: 0.86, roughness: 0.26 });
+    const pcbMat = new THREE.MeshStandardMaterial({ map: getPcbTexture(), metalness: 0.24, roughness: 0.52 });
 
-    // ---- 1. Backplate Layer (bottom side, visible when orbiting underneath or exploded) ----
+    // Compute smooth non-overlapping fan cutout layouts
+    const fanElements = (config.elements || []).filter(e => e.kind === 'fan').slice(0, 6);
+    const fanLayouts = computeSafeFanLayouts(fanElements, w, d);
+
+    // ---- 1. Backplate Layer ----
     if (config.backplate !== false) {
       const bpMat = bodyType === 'carbon'
         ? makeBodyMaterial('carbon')
         : bodyType === 'metallic'
           ? makeBodyMaterial('metallic')
-          : new THREE.MeshStandardMaterial({ color: 0x1e222e, metalness: 0.52, roughness: 0.36 });
-      const bpGeo = createShroudGeometry(w * 0.96, 0.04, d * 0.96, shapeType === 'angular' ? 'angular' : 'compact');
+          : new THREE.MeshStandardMaterial({ color: 0x1b1f2b, metalness: 0.5, roughness: 0.38 });
+      const bpGeo = createShroudGeometryWithHoles(w * 0.96, 0.036, d * 0.96, shapeType === 'angular' ? 'angular' : 'compact', []);
       const bp = new THREE.Mesh(bpGeo, bpMat);
-      bp.position.y = -h * 0.62 - 0.065;
+      bp.position.y = -h * 0.62 - 0.062;
       bp.castShadow = !isSoftwareGl;
       bp.receiveShadow = !isSoftwareGl;
       backplateLayer.add(bp);
 
-      // Machined backplate vents + screws
+      // Flow-through cooling vent ribs + precision backplate screws
       for (let i = 0; i < 6; i++) {
-        makeBox(backplateLayer, 0.022, 0.012, d * 0.52, darkMat, -w * 0.34 + i * w * 0.136, -h * 0.62 - 0.082, 0);
+        makeBox(backplateLayer, 0.02, 0.012, d * 0.5, darkMat, w * 0.14 + i * w * 0.048, -h * 0.62 - 0.078, 0);
       }
       for (const sx of [-w * 0.41, w * 0.41]) {
         for (const sz of [-d * 0.38, d * 0.38]) {
-          const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.016, 12), trimMetal);
-          screw.position.set(sx, -h * 0.62 - 0.085, sz);
+          const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.021, 0.015, 12), trimMetal);
+          screw.position.set(sx, -h * 0.62 - 0.08, sz);
           backplateLayer.add(screw);
         }
       }
     }
 
-    // ---- 2. PCB Layer + GPU Die + VRM + PCIe Gold Fingers + I/O Bracket ----
-    makeBox(pcbLayer, w * 0.97, 0.036, d * 0.94, pcbMat, 0, -h * 0.42, 0);
+    // ---- 2. PCB Layer + Die + VRM + PCIe Fingers + 12V-2x6 + I/O Bracket ----
+    makeBox(pcbLayer, w * 0.96, 0.034, d * 0.93, pcbMat, 0, -h * 0.42, 0);
+    makeBox(pcbLayer, 0.34, 0.02, 0.34, new THREE.MeshStandardMaterial({ color: 0x1d3b32, metalness: 0.32, roughness: 0.4 }), -0.05, -h * 0.42 + 0.024, 0);
+    makeBox(pcbLayer, 0.19, 0.022, 0.19, new THREE.MeshStandardMaterial({ color: 0x333c4d, metalness: 0.94, roughness: 0.12 }), -0.05, -h * 0.42 + 0.036, 0);
 
-    // Center GPU Silicon Die on PCB (visible when exploded!)
-    makeBox(pcbLayer, 0.34, 0.022, 0.34, new THREE.MeshStandardMaterial({ color: 0x1d3b32, metalness: 0.3, roughness: 0.4 }), -0.06, -h * 0.42 + 0.026, 0);
-    makeBox(pcbLayer, 0.19, 0.024, 0.19, new THREE.MeshStandardMaterial({ color: 0x2d3444, metalness: 0.92, roughness: 0.12 }), -0.06, -h * 0.42 + 0.038, 0);
-
-    // Instanced VRM Chokes & Capacitors along PCB
-    const chokeCount = Math.max(6, Math.round(lenScale * 10));
-    const chokeMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.055, 0.036, 0.055), darkMat, chokeCount);
+    const chokeCount = Math.max(6, Math.round(lenScale * 11));
+    const chokeMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.032, 0.05), darkMat, chokeCount);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < chokeCount; i++) {
-      dummy.position.set(-w * 0.36 + (i / (chokeCount - 1)) * w * 0.72, -h * 0.42 + 0.032, -d * 0.34);
+      dummy.position.set(-w * 0.36 + (i / (chokeCount - 1)) * w * 0.72, -h * 0.42 + 0.03, -d * 0.33);
       dummy.updateMatrix();
       chokeMesh.setMatrixAt(i, dummy.matrix);
     }
     pcbLayer.add(chokeMesh);
 
-    // PCIe 5.0 x16 Gold Connector (front-bottom edge +z side)
-    makeBox(pcbLayer, w * 0.44, 0.022, 0.11, new THREE.MeshStandardMaterial({ color: 0x162b22, roughness: 0.5 }), -w * 0.12, -h * 0.42, d * 0.49);
-    makeBox(pcbLayer, w * 0.42, 0.026, 0.045, goldMat, -w * 0.12, -h * 0.42, d * 0.535);
+    // Textured Gold PCIe 5.0 x16 Connector (+Z edge)
+    const pcieMat = new THREE.MeshStandardMaterial({ map: getPcieFingersTexture(), metalness: 0.65, roughness: 0.3 });
+    makeBox(pcbLayer, w * 0.45, 0.024, 0.095, pcieMat, -w * 0.12, -h * 0.42, d * 0.5);
 
-    // 12VHPWR Power Header (back edge -z)
-    makeBox(pcbLayer, 0.18, 0.068, 0.08, darkMat, w * 0.22, -h * 0.42 + 0.03, -d * 0.46);
-    makeBox(pcbLayer, 0.14, 0.04, 0.02, goldMat, w * 0.22, -h * 0.42 + 0.03, -d * 0.49);
+    // 12V-2x6 Power Connector (-Z edge)
+    makeBox(pcbLayer, 0.18, 0.065, 0.08, darkMat, w * 0.22, -h * 0.42 + 0.028, -d * 0.46);
+    makeBox(pcbLayer, 0.14, 0.036, 0.022, goldMat, w * 0.22, -h * 0.42 + 0.028, -d * 0.49);
 
-    // Dual-Slot Brushed Steel I/O Bracket (-x end)
-    makeBox(pcbLayer, 0.045, h * 1.15, d * 0.96, trimMetal, -w * 0.5 - 0.02, 0, 0);
-    makeBox(pcbLayer, 0.055, 0.035, d * 0.96, trimMetal, -w * 0.5 - 0.02, -h * 0.55, 0);
+    // Dual-slot Stainless Steel I/O Bracket (-X end) with recessed DisplayPort + HDMI
+    makeBox(pcbLayer, 0.042, h * 1.15, d * 0.95, trimMetal, -w * 0.5 - 0.02, 0, 0);
+    makeBox(pcbLayer, 0.052, 0.034, d * 0.95, trimMetal, -w * 0.5 - 0.02, -h * 0.56, 0);
     for (let i = 0; i < 4; i++) {
-      makeBox(pcbLayer, 0.025, 0.052, 0.11, darkMat, -w * 0.5 - 0.042, h * 0.08, -d * 0.3 + i * d * 0.2);
+      makeBox(pcbLayer, 0.025, 0.048, 0.11, trimMetal, -w * 0.5 - 0.042, h * 0.07, -d * 0.3 + i * d * 0.2);
+      makeBox(pcbLayer, 0.028, 0.026, 0.085, darkMat, -w * 0.5 - 0.046, h * 0.07, -d * 0.3 + i * d * 0.2);
     }
 
-    // ---- 3. Heatsink Layer (Instanced Aluminum Fins + Copper Heatpipes) ----
-    const finCount = clamp(Math.round(w * 20), 26, 72);
-    const finMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.012, h * 0.58, d * 0.84), finMat, finCount);
+    // ---- 3. Dense Aluminum Heatsink Fin Array + Copper Coldplate + Heatpipes ----
+    // Visible right through the circular fan cutout holes AND open side exhaust windows!
+    const finCount = clamp(Math.round(w * 24), 32, 86);
+    const finMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.011, h * 0.62, d * 0.86), finMat, finCount);
     for (let i = 0; i < finCount; i++) {
-      const fx = -w * 0.44 + (i / (finCount - 1)) * w * 0.88;
-      dummy.position.set(fx, -h * 0.05, 0);
+      dummy.position.set(-w * 0.45 + (i / (finCount - 1)) * w * 0.9, -h * 0.04, 0);
       dummy.updateMatrix();
       finMesh.setMatrixAt(i, dummy.matrix);
     }
     finMesh.castShadow = !isSoftwareGl;
     heatsinkLayer.add(finMesh);
 
-    // Copper cold-plate + 4 curved copper heatpipes spanning card length
-    makeBox(heatsinkLayer, 0.42, 0.04, 0.42, copperMat, -0.06, -h * 0.32, 0);
+    makeBox(heatsinkLayer, 0.4, 0.036, 0.4, copperMat, -0.05, -h * 0.33, 0);
     for (let i = 0; i < 4; i++) {
-      const zOff = (-0.33 + i * 0.22) * d;
+      const zOff = (-0.32 + i * 0.215) * d;
       const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-w * 0.42, -h * 0.06, zOff * 0.85),
-        new THREE.Vector3(-w * 0.14, -h * 0.22, zOff * 0.45),
-        new THREE.Vector3(w * 0.14, -h * 0.14, zOff * 0.9),
-        new THREE.Vector3(w * 0.42, -h * 0.02, zOff * 0.85)
+        new THREE.Vector3(-w * 0.42, -h * 0.03, zOff * 0.85),
+        new THREE.Vector3(-w * 0.13, -h * 0.2, zOff * 0.45),
+        new THREE.Vector3(w * 0.15, -h * 0.12, zOff * 0.88),
+        new THREE.Vector3(w * 0.43, -h * 0.01, zOff * 0.82)
       ]);
-      const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.024, 10, false), copperMat);
+      const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.024, 12, false), copperMat);
       heatsinkLayer.add(pipe);
     }
 
-    // ---- 4. Shroud Layer (Beveled ExtrudeGeometry + Side Rails + Branding Plate + RGB) ----
-    const mainShroudGeo = createShroudGeometry(w, h * 0.62, d, shapeType);
+    // ---- 4. Shroud Layer with REAL Smooth Circular Fan Cutout Holes! ----
+    const outerShroudH = h * 0.62;
+    const mainShroudY = h * 0.26;
+    const mainShroudGeo = createShroudGeometryWithHoles(w, outerShroudH, d, shapeType, fanLayouts);
     const mainShroud = new THREE.Mesh(mainShroudGeo, shroudMat);
-    mainShroud.position.y = h * 0.22;
+    mainShroud.position.y = mainShroudY;
     mainShroud.castShadow = !isSoftwareGl;
     mainShroud.receiveShadow = !isSoftwareGl;
     shroudLayer.add(mainShroud);
 
-    // Inner dark shroud deck & beveled accent trim lines
-    const deckGeo = createShroudGeometry(w * 0.91, 0.055, d * 0.86, shapeType);
-    const deck = new THREE.Mesh(deckGeo, darkMat);
-    deck.position.y = h * 0.51;
-    shroudLayer.add(deck);
+    // Top inner sculpted trim deck (also punched with the exact circular fan holes!)
+    const deckH = 0.048;
+    const deckY = mainShroudY + outerShroudH * 0.42;
+    const deckGeo = createShroudGeometryWithHoles(w * 0.92, deckH, d * 0.88, shapeType, fanLayouts);
+    const deckMesh = new THREE.Mesh(deckGeo, darkMat);
+    deckMesh.position.y = deckY;
+    shroudLayer.add(deckMesh);
 
-    // Accent trim rails along long sides
+    // Accent side rails framing the shroud
     for (const side of [-1, 1]) {
-      makeBox(shroudLayer, w * 0.78, 0.032, 0.028, accentMat, 0, h * 0.52, side * d * 0.465);
+      makeBox(shroudLayer, w * 0.78, 0.026, 0.024, accentMat, 0, deckY + 0.01, side * d * 0.472);
     }
     if (shapeType === 'angular') {
-      // Aggressive corner winglets
-      makeBox(shroudLayer, w * 0.14, 0.04, d * 0.92, accentMat, -w * 0.39, h * 0.54, 0);
-      makeBox(shroudLayer, w * 0.14, 0.04, d * 0.92, accentMat, w * 0.39, h * 0.54, 0);
+      makeBox(shroudLayer, w * 0.12, 0.032, d * 0.9, accentMat, -w * 0.4, deckY + 0.02, 0);
+      makeBox(shroudLayer, w * 0.12, 0.032, d * 0.9, accentMat, w * 0.4, deckY + 0.02, 0);
     }
 
-    // Branding Nameplate on visible front side edge (+z side facing user)
-    const plateW = Math.min(w * 0.54, 1.35);
-    const plateH = Math.max(0.11, h * 0.48);
-    makeBox(shroudLayer, plateW + 0.04, plateH + 0.025, 0.03, darkMat, 0, h * 0.26, d * 0.505);
-    const brandSticker = new THREE.Mesh(
-      new THREE.PlaneGeometry(plateW, plateH),
-      new THREE.MeshStandardMaterial({
-        map: getBrandPlateTexture(),
-        roughness: 0.28,
-        metalness: 0.2,
-        emissive: rgbActive ? new THREE.Color(0x221038) : new THREE.Color(0x000000),
-        emissiveIntensity: rgbActive ? 0.5 : 0
-      })
-    );
-    brandSticker.position.set(0, h * 0.26, d * 0.522);
-    shroudLayer.add(brandSticker);
+    // ---- 5. Recessed Fans Seated Inside Their Cutouts ----
+    const boreCenterY = mainShroudY + 0.02;
+    const boreDepth = outerShroudH + 0.02;
+    fanLayouts.forEach((layout, i) => buildFanInCutout(layout, i, boreCenterY, boreDepth, accentMat));
 
-    // Research-gated RGB Edge Glow Bars
-    if (rgbActive) {
-      const rgbMat = new THREE.MeshStandardMaterial({
-        color: rgbHex,
-        emissive: rgbHex,
-        emissiveIntensity: 1.6,
-        roughness: 0.2,
-        metalness: 0.1
-      });
-      rgbMaterials.push(rgbMat);
-      makeBox(shroudLayer, w * 0.86, 0.022, 0.022, rgbMat, 0, h * 0.43, d * 0.505);
-      makeBox(shroudLayer, w * 0.86, 0.022, 0.022, rgbMat, 0, h * 0.43, -d * 0.505);
-      makeBox(shroudLayer, w * 0.56, 0.016, 0.018, rgbMat, 0, h * 0.555, d * 0.41);
-      makeBox(shroudLayer, w * 0.56, 0.016, 0.018, rgbMat, 0, h * 0.555, -d * 0.41);
-    }
+    // ---- 6. Modular Placed Elements (Text Labels, Logo Badges, RGB Strips) ----
+    buildPlacedDecalsAndStrips(w, h, d, bodyType, accentColor);
 
-    // ---- 5. Customizable Fans (1..6 Interactive Raycastable Assemblies) ----
-    const fans = Array.isArray(config.fans) && config.fans.length ? config.fans : [{ position: 0.28, type: 'basic' }, { position: 0.72, type: 'basic' }];
-    const count = clamp(fans.length, 1, 6);
-    const fanScale = clamp(Number(config.fanScale || 1), 0.7, 1.25);
-    const maxSlotR = Math.min(d * 0.41, (w * 0.84) / (count * 2.02));
-    const fanRadius = clamp(maxSlotR * fanScale, 0.14, d * 0.44);
-    const fanYTop = h * 0.545;
+    // ---- 7. Red & Blue Size Arrows (when Change Size active) ----
+    buildSizeGizmos(w, d);
 
-    fans.slice(0, 6).forEach((f, idx) => {
-      const posNorm = clamp(Number(f.position ?? ((idx + 0.5) / count)), 0.1, 0.9);
-      const fx = -w / 2 + w * posNorm;
-      buildFanAssembly(f, idx, fx, fanYTop, fanRadius, shroudMat, accentMat, rgbActive, rgbHex);
-    });
-
-    // Save dimensions for fan dragging bounds
     gpuRoot.userData.cardWidth = w;
-    gpuRoot.userData.fanYTop = fanYTop;
+    gpuRoot.userData.cardDepth = d;
+    updateSizeHud();
   }
 
-  // ---------- Stage UI Dock & Camera Presets ----------
+  // ---------- Stage Dock & Size HUD ----------
+  function updateSizeHud() {
+    if (!sizeHudEl) return;
+    sizeHudEl.classList.toggle('hidden', !sizeMode);
+    if (sizeMode) {
+      sizeHudEl.innerHTML =
+        '<span class="gpu-size-dot red"></span>Length <b>' + Math.round(config.length) + ' mm</b>' +
+        ' · <span class="gpu-size-dot blue"></span>Width <b>' + Math.round(config.width) + ' mm</b>' +
+        ' <small>(Drag Red or Blue arrows)</small>';
+    }
+  }
+
   function createDock() {
     if (!stageEl || dockEl) return;
+
+    sizeHudEl = document.createElement('div');
+    sizeHudEl.className = 'gpu-3d-size-hud hidden';
+    stageEl.appendChild(sizeHudEl);
+
     dockEl = document.createElement('div');
     dockEl.className = 'gpu-3d-dock';
     dockEl.innerHTML =
@@ -876,6 +1067,7 @@
         '<button type="button" data-gpu-cam="back">Backplate</button>' +
       '</div>' +
       '<div class="gpu-3d-actions">' +
+        '<button type="button" data-gpu-act="size">Change Size</button>' +
         '<button type="button" data-gpu-act="spin">Spin</button>' +
         '<button type="button" data-gpu-act="explode">Explode</button>' +
       '</div>';
@@ -892,32 +1084,45 @@
     dockEl.querySelectorAll('[data-gpu-act]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        if (btn.dataset.gpuAct === 'spin') {
+        const act = btn.dataset.gpuAct;
+        if (act === 'spin') {
           autoSpin = !autoSpin;
           btn.classList.toggle('active', autoSpin);
-        } else if (btn.dataset.gpuAct === 'explode') {
+        } else if (act === 'explode') {
           targetExplode = targetExplode > 0.5 ? 0 : 1;
           btn.classList.toggle('active', targetExplode > 0.5);
+        } else if (act === 'size') {
+          setSizeMode(!sizeMode);
         }
       });
     });
+  }
+
+  function setSizeMode(enabled) {
+    sizeMode = !!enabled;
+    dockEl?.querySelector('[data-gpu-act="size"]')?.classList.toggle('active', sizeMode);
+    if (gpuRoot) {
+      buildSizeGizmos(gpuRoot.userData.cardWidth || 2.85, gpuRoot.userData.cardDepth || 1.18);
+    }
+    updateSizeHud();
+    callbacks.onSizeModeChange?.(sizeMode);
   }
 
   function setCameraPreset(preset) {
     camAnimActive = true;
     camTargetLook.x = 0; camTargetLook.y = 0.05; camTargetLook.z = 0;
     if (preset === 'top') {
-      camTargetPos.x = 0.01; camTargetPos.y = 4.25; camTargetPos.z = 0.55;
+      camTargetPos.x = 0.01; camTargetPos.y = 4.3; camTargetPos.z = 0.45;
     } else if (preset === 'side') {
-      camTargetPos.x = 0.12; camTargetPos.y = 0.55; camTargetPos.z = 4.1;
+      camTargetPos.x = 0.1; camTargetPos.y = 0.55; camTargetPos.z = 4.15;
     } else if (preset === 'back') {
-      camTargetPos.x = 2.55; camTargetPos.y = -2.1; camTargetPos.z = -2.75;
+      camTargetPos.x = 2.6; camTargetPos.y = -2.15; camTargetPos.z = -2.8;
     } else {
-      camTargetPos.x = 2.85; camTargetPos.y = 2.35; camTargetPos.z = 3.15;
+      camTargetPos.x = 2.9; camTargetPos.y = 2.45; camTargetPos.z = 3.15;
     }
   }
 
-  // ---------- Pointer / Fan 3D Dragging ----------
+  // ---------- Pointer Raycasting (Size Arrows + Elements Dragging) ----------
   function updatePointerNdc(e) {
     if (!renderer || !pointerNdc) return;
     const rect = renderer.domElement.getBoundingClientRect();
@@ -926,117 +1131,185 @@
     pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  function pickFanHit(e) {
-    if (!raycaster || !camera || !fanAssemblies.length) return null;
+  function pickInteractiveTarget(e) {
+    if (!raycaster || !camera) return null;
     updatePointerNdc(e);
     raycaster.setFromCamera(pointerNdc, camera);
-    const hits = raycaster.intersectObjects(fanAssemblies.map(f => f.hitMesh), false);
-    if (!hits.length) return null;
-    const idx = hits[0].object.userData.fanIndex;
-    return Number.isInteger(idx) ? { index: idx, point: hits[0].point } : null;
+
+    // 1. Prioritize Size Arrows when Change Size is active
+    if (sizeMode && sizeArrowHandles.length) {
+      const arrowHits = raycaster.intersectObjects(sizeArrowHandles.map(h => h.hitMesh), false);
+      if (arrowHits.length) {
+        return { kind: 'size', axis: arrowHits[0].object.userData.axis, sign: arrowHits[0].object.userData.sign };
+      }
+    }
+
+    // 2. Placed decals (Text labels / Logos)
+    if (draggableDecals.length) {
+      const decalHits = raycaster.intersectObjects(draggableDecals.map(d => d.hitMesh), false);
+      if (decalHits.length) {
+        return { kind: 'decal', id: decalHits[0].object.userData.dragId };
+      }
+    }
+
+    // 3. Recessed Fans
+    if (fanAssemblies.length) {
+      const fanHits = raycaster.intersectObjects(fanAssemblies.map(f => f.hitMesh), false);
+      if (fanHits.length) {
+        return { kind: 'fan', id: fanHits[0].object.userData.dragId };
+      }
+    }
+
+    return null;
   }
 
-  function setFanHighlight(activeIdx) {
-    hoveredFanIndex = activeIdx;
-    fanAssemblies.forEach(f => {
-      const lit = f.index === activeIdx || (activeFanDrag && activeFanDrag.index === f.index);
-      if (f.ringMat) {
-        f.ringMat.emissiveIntensity = lit ? Math.max(1.3, f.baseEmissive) : f.baseEmissive;
-      }
-    });
+  function updateHoverStates(target) {
+    for (const h of sizeArrowHandles) {
+      const lit = target?.kind === 'size' && target.axis === h.axis && target.sign === h.sign;
+      h.mat.emissiveIntensity = lit ? 1.55 : 0.68;
+    }
+    for (const f of fanAssemblies) {
+      const lit = (target?.kind === 'fan' && target.id === f.id) || (activeDrag?.mode === 'element' && activeDrag.id === f.id);
+      f.ringMat.emissiveIntensity = lit ? Math.max(1.25, f.baseEmissive) : f.baseEmissive;
+    }
     if (renderer?.domElement) {
-      renderer.domElement.style.cursor = activeFanDrag ? 'grabbing' : activeIdx >= 0 ? 'ew-resize' : 'grab';
+      if (activeDrag) renderer.domElement.style.cursor = 'grabbing';
+      else if (target?.kind === 'size') renderer.domElement.style.cursor = target.axis === 'x' ? 'ew-resize' : 'ns-resize';
+      else if (target) renderer.domElement.style.cursor = 'ew-resize';
+      else renderer.domElement.style.cursor = 'grab';
     }
   }
 
-  function attachFanInteractions() {
+  function attachInteractions() {
     if (!renderer?.domElement) return;
     const dom = renderer.domElement;
 
     dom.addEventListener('pointerdown', e => {
       if (e.button !== 0 || contextLost) return;
       camAnimActive = false;
-      const hit = pickFanHit(e);
-      if (!hit) return;
+      const target = pickInteractiveTarget(e);
+      if (!target) return;
 
-      const fanAsm = fanAssemblies[hit.index];
-      const w = gpuRoot?.userData?.cardWidth || 2.85;
-      const worldY = (gpuRoot?.position.y || 0) + (fanAsm?.yTop || 0.14);
+      if (target.kind === 'size') {
+        dragPlane.set(new THREE.Vector3(0, 1, 0), -(gpuRoot?.position.y || 0) - 0.04);
+        updatePointerNdc(e);
+        raycaster.setFromCamera(pointerNdc, camera);
+        if (raycaster.ray.intersectPlane(dragPlane, dragHitPoint)) {
+          activeDrag = { mode: 'size', axis: target.axis, sign: target.sign };
+          if (controls) controls.enabled = false;
+          dom.setPointerCapture?.(e.pointerId);
+          updateHoverStates(target);
+          e.stopPropagation();
+        }
+        return;
+      }
+
+      const asm = fanAssemblies.find(f => f.id === target.id) || draggableDecals.find(d => d.id === target.id);
+      if (!asm) return;
+      const worldY = (gpuRoot?.position.y || 0) + (asm.yTop || asm.yPlane || 0.14);
       dragPlane.set(new THREE.Vector3(0, 1, 0), -worldY);
       updatePointerNdc(e);
       raycaster.setFromCamera(pointerNdc, camera);
       if (raycaster.ray.intersectPlane(dragPlane, dragHitPoint)) {
-        const localPoint = gpuRoot.worldToLocal(dragHitPoint.clone());
-        activeFanDrag = {
-          index: hit.index,
-          offsetX: (fanAsm.group.position.x - localPoint.x),
-          w
+        const localPt = gpuRoot.worldToLocal(dragHitPoint.clone());
+        activeDrag = {
+          mode: 'element',
+          id: target.id,
+          dragKind: target.kind,
+          offsetX: asm.group.position.x - localPt.x
         };
         if (controls) controls.enabled = false;
         dom.setPointerCapture?.(e.pointerId);
-        setFanHighlight(hit.index);
+        updateHoverStates(target);
         e.stopPropagation();
       }
     }, true);
 
     dom.addEventListener('pointermove', e => {
       if (contextLost) return;
-      if (activeFanDrag) {
+      if (activeDrag) {
         updatePointerNdc(e);
         raycaster.setFromCamera(pointerNdc, camera);
         if (raycaster.ray.intersectPlane(dragPlane, dragHitPoint)) {
-          const localPoint = gpuRoot.worldToLocal(dragHitPoint.clone());
-          const w = activeFanDrag.w || 2.85;
-          const x = clamp(localPoint.x + activeFanDrag.offsetX, -w * 0.4, w * 0.4);
-          const posNorm = clamp((x + w / 2) / w, 0.1, 0.9);
-          const asm = fanAssemblies[activeFanDrag.index];
-          if (asm) asm.group.position.x = -w / 2 + w * posNorm;
-          if (Array.isArray(config.fans) && config.fans[activeFanDrag.index]) {
-            config.fans[activeFanDrag.index].position = Number(posNorm.toFixed(3));
-            callbacks.onFansChange?.(config.fans.map(f => ({ ...f })));
+          const localPt = gpuRoot.worldToLocal(dragHitPoint.clone());
+
+          if (activeDrag.mode === 'size') {
+            if (activeDrag.axis === 'x') {
+              const targetHalfW = Math.max(0.45, localPt.x * activeDrag.sign - 0.24);
+              const newLen = clamp(Math.round(((targetHalfW * 2) / 2.85) * 300), 180, 420);
+              if (newLen !== config.length) {
+                config.length = newLen;
+                pendingRebuild = true;
+                callbacks.onSizeChange?.({ length: config.length, width: config.width });
+              }
+            } else {
+              const targetHalfD = Math.max(0.25, localPt.z * activeDrag.sign - 0.24);
+              const newWid = clamp(Math.round(((targetHalfD * 2) / 1.18) * 125), 90, 180);
+              if (newWid !== config.width) {
+                config.width = newWid;
+                pendingRebuild = true;
+                callbacks.onSizeChange?.({ length: config.length, width: config.width });
+              }
+            }
+          } else if (activeDrag.mode === 'element') {
+            const w = gpuRoot?.userData?.cardWidth || 2.85;
+            const x = clamp(localPt.x + activeDrag.offsetX, -w * 0.4, w * 0.4);
+            const posNorm = clamp(Number(((x + w / 2) / w).toFixed(3)), 0.1, 0.9);
+            const el = (config.elements || []).find(item => item.id === activeDrag.id);
+            if (el && el.position !== posNorm) {
+              el.position = posNorm;
+              // Rebuild so fan hole cutout tracks the fan smoothly in real time!
+              if (activeDrag.dragKind === 'fan') {
+                pendingRebuild = true;
+              } else {
+                const dec = draggableDecals.find(d => d.id === activeDrag.id);
+                if (dec) dec.group.position.x = -w / 2 + w * posNorm;
+              }
+              callbacks.onElementsChange?.(config.elements.map(item => ({ ...item })));
+            }
           }
         }
         return;
       }
-      const hit = pickFanHit(e);
-      setFanHighlight(hit ? hit.index : -1);
+
+      updateHoverStates(pickInteractiveTarget(e));
     });
 
     const releaseDrag = e => {
-      if (!activeFanDrag) return;
-      activeFanDrag = null;
+      if (!activeDrag) return;
+      activeDrag = null;
       if (controls) controls.enabled = true;
-      setFanHighlight(-1);
+      updateHoverStates(null);
       try { dom.releasePointerCapture?.(e.pointerId); } catch (_) {}
     };
     dom.addEventListener('pointerup', releaseDrag);
     dom.addEventListener('pointercancel', releaseDrag);
   }
 
-  // ---------- Frame Loop ----------
+  // ---------- Animation Loop ----------
   function stepAnimation(dt) {
-    elapsedSec += dt;
+    if (pendingRebuild) {
+      pendingRebuild = false;
+      buildModel();
+    }
 
-    // Smooth Explode transition
     currentExplode = THREE.MathUtils.damp(currentExplode, targetExplode, 7.5, dt);
     if (backplateLayer) backplateLayer.position.y = -0.34 * currentExplode;
     if (pcbLayer) pcbLayer.position.y = -0.11 * currentExplode;
     if (heatsinkLayer) heatsinkLayer.position.y = 0.08 * currentExplode;
     if (shroudLayer) shroudLayer.position.y = 0.28 * currentExplode;
-    if (fansGroup) fansGroup.position.y = 0.42 * currentExplode;
+    if (fansGroup) fansGroup.position.y = 0.28 * currentExplode;
+    if (elementsGroup) elementsGroup.position.y = 0.28 * currentExplode;
 
-    // Subtle idle float & optional Spin
     if (gpuRoot) {
-      if (autoSpin) gpuRoot.rotation.y += dt * 0.48;
-      else gpuRoot.rotation.y = THREE.MathUtils.damp(gpuRoot.rotation.y, 0, 3.5, dt);
+      if (autoSpin) gpuRoot.rotation.y += dt * 0.45;
+      else gpuRoot.rotation.y = THREE.MathUtils.damp(gpuRoot.rotation.y, 0, 3.8, dt);
     }
 
-    // Fan blade airflow rotation
     for (const f of fanAssemblies) {
       f.rotor.rotation.y -= dt * f.speed;
     }
 
-    // Smooth camera preset transition
     if (camAnimActive && camera && controls) {
       camera.position.x = THREE.MathUtils.damp(camera.position.x, camTargetPos.x, 6.5, dt);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, camTargetPos.y, 6.5, dt);
@@ -1054,9 +1327,7 @@
   function scheduleNext() {
     if (!renderer) return;
     if (isSoftwareGl) {
-      timerId = setTimeout(() => {
-        rafId = requestAnimationFrame(loop);
-      }, 40);
+      timerId = setTimeout(() => { rafId = requestAnimationFrame(loop); }, 40);
     } else {
       rafId = requestAnimationFrame(loop);
     }
@@ -1068,7 +1339,6 @@
     if (isVisible && stageEl.clientWidth > 10 && stageEl.clientHeight > 10) {
       const dt = lastMs ? clamp((nowMs - lastMs) / 1000, 0.001, 0.05) : 0.016;
       lastMs = nowMs;
-      // Auto-sync canvas size if container recently became visible
       const cw = Math.max(1, stageEl.clientWidth);
       const ch = Math.max(1, stageEl.clientHeight);
       if (Math.abs(renderer.domElement.width - cw * renderer.getPixelRatio()) > 4 ||
@@ -1106,16 +1376,12 @@
       return;
     }
 
-    // Remove initial loading placeholder immediately!
     el.querySelectorAll('.gpu-3d-loading, .gpu-3d-error').forEach(node => node.remove());
 
     if (renderer) {
-      if (renderer.domElement.parentNode !== el) {
-        el.prepend(renderer.domElement);
-      }
-      if (dockEl && dockEl.parentNode !== el) {
-        el.appendChild(dockEl);
-      }
+      if (renderer.domElement.parentNode !== el) el.prepend(renderer.domElement);
+      if (sizeHudEl && sizeHudEl.parentNode !== el) el.appendChild(sizeHudEl);
+      if (dockEl && dockEl.parentNode !== el) el.appendChild(dockEl);
       resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(el);
@@ -1141,37 +1407,28 @@
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = !isSoftwareGl;
     if (!isSoftwareGl) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    renderer.domElement.addEventListener('webglcontextlost', e => {
-      e.preventDefault();
-      contextLost = true;
-      stopLoop();
-    });
-    renderer.domElement.addEventListener('webglcontextrestored', () => {
-      contextLost = false;
-      buildModel();
-      startLoop();
-    });
+    renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true; stopLoop(); });
+    renderer.domElement.addEventListener('webglcontextrestored', () => { contextLost = false; buildModel(); startLoop(); });
 
     el.innerHTML = '';
     el.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(34, 16 / 10, 0.1, 80);
-    camera.position.set(2.85, 2.35, 3.15);
+    camera.position.set(2.9, 2.45, 3.15);
 
     pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
     envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTexture;
-    scene.environmentIntensity = 0.86;
+    scene.environmentIntensity = 0.9;
 
-    // 3-point studio lighting + grounded studio plinth
     scene.add(new THREE.HemisphereLight(0xdce6ff, 0x161224, 1.35));
-    const keyLight = new THREE.DirectionalLight(0xfff6eb, 2.6);
+    const keyLight = new THREE.DirectionalLight(0xfff6eb, 2.55);
     keyLight.position.set(3.5, 5.8, 4.2);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
@@ -1184,7 +1441,6 @@
     rimLight.position.set(-4.2, 2.6, -3.5);
     scene.add(rimLight);
 
-    // Subtle grounded contact shadow & plinth disc
     plinthGroup = new THREE.Group();
     const shadowPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(5.6, 3.6),
@@ -1203,7 +1459,6 @@
     plinthGroup.add(disc);
     scene.add(plinthGroup);
 
-    // GPU root hierarchy
     gpuRoot = new THREE.Group();
     gpuRoot.position.y = 0.05;
     backplateLayer = new THREE.Group();
@@ -1211,7 +1466,9 @@
     heatsinkLayer = new THREE.Group();
     shroudLayer = new THREE.Group();
     fansGroup = new THREE.Group();
-    gpuRoot.add(backplateLayer, pcbLayer, heatsinkLayer, shroudLayer, fansGroup);
+    elementsGroup = new THREE.Group();
+    sizeGizmoGroup = new THREE.Group();
+    gpuRoot.add(backplateLayer, pcbLayer, heatsinkLayer, shroudLayer, fansGroup, elementsGroup, sizeGizmoGroup);
     scene.add(gpuRoot);
 
     controls = new OrbitControls(camera, renderer.domElement);
@@ -1223,7 +1480,7 @@
     controls.target.set(0, 0.05, 0);
     controls.addEventListener('start', () => { camAnimActive = false; });
 
-    attachFanInteractions();
+    attachInteractions();
     createDock();
 
     resizeObserver = new ResizeObserver(resize);
@@ -1248,7 +1505,7 @@
       config = {
         ...config,
         ...next,
-        fans: Array.isArray(next.fans) ? next.fans.map(f => ({ ...f })) : config.fans
+        elements: Array.isArray(next.elements) ? next.elements.map(e => ({ ...e })) : config.elements
       };
     }
     if (!renderer) {
@@ -1266,15 +1523,18 @@
       const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0.05, 0);
       const prevSpin = gpuRoot ? gpuRoot.rotation.y : 0;
       const prevExp = currentExplode;
+      const prevGizmo = sizeGizmoGroup ? sizeGizmoGroup.visible : false;
 
       if (gpuRoot) gpuRoot.rotation.y = 0;
+      if (sizeGizmoGroup) sizeGizmoGroup.visible = false;
       currentExplode = 0;
-      camera.position.set(2.75, 2.15, 2.95);
+      camera.position.set(2.8, 2.2, 2.98);
       camera.lookAt(0, 0.05, 0);
       camera.updateProjectionMatrix();
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL('image/webp', 0.84);
 
+      if (sizeGizmoGroup) sizeGizmoGroup.visible = prevGizmo;
       camera.position.copy(prevPos);
       if (controls) controls.target.copy(prevTarget);
       camera.lookAt(prevTarget);
@@ -1297,10 +1557,12 @@
     disposeGroupContents(heatsinkLayer);
     disposeGroupContents(shroudLayer);
     disposeGroupContents(fansGroup);
+    disposeGroupContents(elementsGroup);
+    disposeGroupContents(sizeGizmoGroup);
     disposeGroupContents(plinthGroup);
     Object.values(proceduralTex).forEach(t => t?.dispose?.());
-    brandTexCache.tex?.dispose?.();
-    hubTexCache.tex?.dispose?.();
+    decalTexCache.forEach(t => t?.dispose?.());
+    decalTexCache.clear();
     envTexture?.dispose?.();
     pmremGenerator?.dispose?.();
     renderer?.dispose?.();
@@ -1310,7 +1572,8 @@
     controls = null;
     gpuRoot = null;
     dockEl = null;
+    sizeHudEl = null;
   }
 
-  window.GpuDesigner3D = { mount, update, captureSnapshot, resize, dispose };
+  window.GpuDesigner3D = { mount, update, setSizeMode, captureSnapshot, resize, dispose };
 })();
