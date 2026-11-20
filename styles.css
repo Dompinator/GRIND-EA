@@ -7741,3 +7741,31 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 #page-company-design .ea-chip-layout .ea-chip-preview{min-height:300px;display:flex;align-items:center;justify-content:center}
 #page-company-design .ea-chip-layout .ea-chip-preview span{min-width:180px;min-height:180px;display:flex;align-items:center;justify-content:center;border:9px solid #aeb5bf;border-radius:18px;background:linear-gradient(145deg,#e3e7ec,#8b929c);color:#171b22;font-weight:900;font-size:24px;letter-spacing:2px;box-shadow:inset 0 0 0 5px #626a75,0 20px 45px #0008}
 @media(max-width:850px){#page-company-design .ea-chip-layout{grid-template-columns:1fr}}
+
+/* GPU 3D studio controls, customization & product thumbnails */
+.gpu-3d-dock{position:absolute;left:10px;right:10px;bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;pointer-events:none;z-index:5}
+.gpu-3d-pills,.gpu-3d-actions{display:flex;gap:5px;flex-wrap:wrap;pointer-events:auto}
+.gpu-3d-dock button{padding:5px 10px;border-radius:8px;border:1px solid rgba(168,85,247,.35);background:rgba(16,12,26,.86);color:#e9e4f5;font-size:11px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
+.gpu-3d-dock button:hover{border-color:#c084fc;background:rgba(48,30,78,.92)}
+.gpu-3d-dock button.active{background:#7e22ce;border-color:#c084fc;color:#fff}
+.ea-gpu-section-title{margin-top:4px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#d8b4fe}
+.ea-chip-select-row{display:flex;align-items:flex-end;gap:8px}
+.ea-chip-select-row>label{flex:1}
+.ea-gpu-accent-row{display:grid;gap:6px;font-size:12px;color:var(--muted)}
+.ea-gpu-swatches{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ea-swatch-btn{width:24px;height:24px;border-radius:7px;border:2px solid rgba(255,255,255,.22);cursor:pointer;padding:0;transition:transform .12s,border-color .12s}
+.ea-swatch-btn:hover{transform:scale(1.1);border-color:#fff}
+.ea-gpu-swatches input[type=color],#eaGpuRgbColor{width:34px;height:26px;padding:1px;border-radius:6px;border:1px solid var(--line);background:#100c1b;cursor:pointer}
+.ea-fan-positions{display:grid;gap:6px;padding:8px;border-radius:9px;background:#100c19;border:1px solid var(--line)}
+.ea-fan-pos-item{display:grid;grid-template-columns:minmax(78px,auto) 1fr 34px;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.ea-fan-pos-item small{opacity:.75;font-size:10px}
+.ea-fan-pos-item b{text-align:right;color:#e9e4f5;font-size:11px}
+.ea-logo-upload-row{display:flex;align-items:flex-end;gap:8px}
+.ea-logo-upload-row>label{flex:1}
+.ea-gpu-research-hint{padding:9px 11px;border-radius:9px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.32);color:#e9d5ff;font-size:11px;line-height:1.45}
+.ea-inline-link{background:none;border:0;padding:0;color:#c084fc;font-weight:800;text-decoration:underline;cursor:pointer;font-size:inherit}
+.ea-gpu-controls input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+.ea-gpu-product-card{gap:8px}
+.ea-gpu-product-thumb{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:8px;background:#090910;border:1px solid rgba(168,85,247,.25)}
+.product-feed-gpu-thumb{width:100%;height:100%;object-fit:cover;position:relative;z-index:2;border-radius:9px}
+
