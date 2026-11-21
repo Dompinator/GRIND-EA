@@ -37,8 +37,8 @@
 
   // Draft CHIP build state (matches CPU designer UX with GPU-specific architecture)
   let activeChipMenuTab = 'package'; // 'package' | 'speed' | 'power' | 'vram'
-  let chipSubstrate = 'green';       // 'green' | 'obsidian' | 'blue'
-  let chipShimStyle = 'steel';       // 'steel' | 'copper' | 'dark'
+  let chipSubstrate = 'obsidian';    // 'obsidian' | 'blue' | 'green'
+  let chipShimStyle = 'steel';       // 'steel' | 'dark' | 'copper'
   let selectedChipSpeed = 'none';
   let selectedChipPower = 'none';
   let selectedChipVram = 'none';
@@ -73,7 +73,22 @@
     { key: 'chip_vram_8gb_advanced', name: '8GB advanced V-RAM', cost: 5400, value: 1800, score: 26, group: 'CHIP', pre: 'chip_vram_6gb_advanced' },
     { key: 'chip_vram_12gb_advanced', name: '12GB advanced V-RAM', cost: 8600, value: 3800, score: 32, group: 'CHIP', pre: 'chip_vram_8gb_advanced' },
     { key: 'chip_vram_16gb_advanced', name: '16GB advanced V-RAM', cost: 9800, value: 4190, score: 34, group: 'CHIP', pre: 'chip_vram_12gb_advanced' },
-    { key: 'chip_vram_32gb_advanced', name: '32GB advanced V-RAM', cost: 12800, value: 6800, score: 48, group: 'CHIP', pre: 'chip_vram_16gb_advanced' }
+    { key: 'chip_vram_32gb_advanced', name: '32GB advanced V-RAM', cost: 12800, value: 6800, score: 48, group: 'CHIP', pre: 'chip_vram_16gb_advanced' },
+    { key: 'chip_custom_pcb_color', name: 'Custom PCB Color', cost: 280, value: 90, score: 4, group: 'CHIP' },
+    { key: 'chip_emerald_pcb', name: 'Emerald Green PCB', cost: 650, value: 180, score: 8, group: 'CHIP', pre: 'chip_custom_pcb_color' },
+    { key: 'chip_anti_crush_color', name: 'Anti-Crush Color', cost: 320, value: 110, score: 5, group: 'CHIP' },
+    { key: 'chip_copper_shim', name: 'Pure Copper Shim', cost: 850, value: 260, score: 10, group: 'CHIP', pre: 'chip_anti_crush_color' }
+  ];
+
+  const CHIP_SUBSTRATE_OPTIONS = [
+    { id: 'obsidian', label: 'Matte Obsidian', swatchClass: 'ea-chip-swatch-obsidian', researchKey: null },
+    { id: 'blue', label: 'Cobalt Blue', swatchClass: 'ea-chip-swatch-blue', researchKey: 'chip_custom_pcb_color' },
+    { id: 'green', label: 'Emerald Green', swatchClass: 'ea-chip-swatch-green', researchKey: 'chip_emerald_pcb' }
+  ];
+  const CHIP_SHIM_OPTIONS = [
+    { id: 'steel', label: 'Brushed Steel', swatchClass: 'ea-chip-swatch-steel', researchKey: null },
+    { id: 'dark', label: 'Anodized Dark', swatchClass: 'ea-chip-swatch-dark', researchKey: 'chip_anti_crush_color' },
+    { id: 'copper', label: 'Pure Copper', swatchClass: 'ea-chip-swatch-copper', researchKey: 'chip_copper_shim' }
   ];
 
   const CHIP_SPEED_KEYS = ['chip_ok_speed', 'chip_decent_speed', 'chip_good_speed', 'chip_fast_speed', 'chip_insane_speed', 'chip_super_speed'];
@@ -328,7 +343,7 @@
     editingGpuProductId = null;
     editingGpuOldName = '';
     activeChipMenuTab = 'package';
-    chipSubstrate = 'green';
+    chipSubstrate = 'obsidian';
     chipShimStyle = 'steel';
     selectedChipSpeed = 'none';
     selectedChipPower = 'none';
@@ -1196,7 +1211,7 @@
       wrap.innerHTML =
         '<div class="ea-research-subtabs"><button type="button" data-ea-research="GPU" class="active">GPU</button><button type="button" data-ea-research="CHIP">CHIP</button></div>' +
         '<div id="eaGpuResearchTree" class="research-tree" data-world-center="560"><div id="eaGpuResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div>' +
-        '<div id="eaChipResearchTree" class="research-tree hidden" data-world-center="610"><div id="eaChipResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div>' +
+        '<div id="eaChipResearchTree" class="research-tree hidden" data-world-center="740"><div id="eaChipResearchWorld" class="research-tree-world"></div><div class="research-tree-controls"><button type="button" data-ea-zoom="out">−</button><button type="button" data-ea-zoom="reset">Reset</button><button type="button" data-ea-zoom="in">+</button></div></div>' +
         '<p id="eaResearchMessage" class="form-message"></p>';
       const tree = $('#cpuResearchTree');
       section.insertBefore(wrap, tree || null);
@@ -1394,20 +1409,24 @@
     };
     const VRAM_ICONS = ['1G', '2G', '4G', '6G', '4A', '6A', '8A', '12A', '16A', '32A'];
     const CHIP_LAYOUT = {
-      __root: [610, 130, 'CHIP', 'Baseline CHIP'],
-      chip_ok_speed: [230, 390, '1×'],
-      chip_decent_speed: [230, 630, '2×'],
-      chip_good_speed: [230, 870, '3×'],
-      chip_fast_speed: [230, 1110, '4×'],
-      chip_insane_speed: [230, 1350, '6×'],
-      chip_super_speed: [230, 1590, '8×'],
-      chip_decent_power: [610, 390, 'P1'],
-      chip_good_power: [610, 630, 'P2'],
-      chip_strong_power: [610, 870, 'P3'],
-      chip_super_powerful: [610, 1110, 'P4']
+      __root: [740, 130, 'CHIP', 'Baseline CHIP'],
+      chip_ok_speed: [180, 390, '1×'],
+      chip_decent_speed: [180, 630, '2×'],
+      chip_good_speed: [180, 870, '3×'],
+      chip_fast_speed: [180, 1110, '4×'],
+      chip_insane_speed: [180, 1350, '6×'],
+      chip_super_speed: [180, 1590, '8×'],
+      chip_decent_power: [460, 390, 'P1'],
+      chip_good_power: [460, 630, 'P2'],
+      chip_strong_power: [460, 870, 'P3'],
+      chip_super_powerful: [460, 1110, 'P4'],
+      chip_custom_pcb_color: [1020, 390, 'PCB'],
+      chip_emerald_pcb: [1020, 630, 'EM'],
+      chip_anti_crush_color: [1300, 390, 'SHIM'],
+      chip_copper_shim: [1300, 630, 'CU']
     };
     CHIP_VRAM_KEYS.forEach((k, idx) => {
-      CHIP_LAYOUT[k] = [990, 390 + idx * 240, VRAM_ICONS[idx] || 'VR'];
+      CHIP_LAYOUT[k] = [740, 390 + idx * 240, VRAM_ICONS[idx] || 'VR'];
     });
 
     const build = (group, worldId) => {
@@ -1416,7 +1435,7 @@
       const defs = GPU_RESEARCH.filter(r => r.group === group);
       const layout = group === 'GPU' ? GPU_LAYOUT : CHIP_LAYOUT;
       const rootInfo = layout.__root;
-      const width = group === 'GPU' ? 1120 : 1220;
+      const width = group === 'GPU' ? 1120 : 1480;
       const height = group === 'GPU' ? 1250 : 2780;
 
       const paths = defs.map(r => {
@@ -1506,41 +1525,63 @@
     });
   }
 
+  function isSubstrateUnlocked(id) {
+    const opt = CHIP_SUBSTRATE_OPTIONS.find(o => o.id === id);
+    return !!opt && (!opt.researchKey || researched(opt.researchKey));
+  }
+
+  function isShimUnlocked(id) {
+    const opt = CHIP_SHIM_OPTIONS.find(o => o.id === id);
+    return !!opt && (!opt.researchKey || researched(opt.researchKey));
+  }
+
   function renderChipPackageMenu() {
     const wrap = $('#eaChipMenu_package');
     if (!wrap) return;
-    const subPills = [
-      ['green', 'Emerald Green'],
-      ['obsidian', 'Matte Obsidian'],
-      ['blue', 'Cobalt Blue']
-    ].map(([id, label]) =>
-      '<button type="button" class="zoom-btn' + (chipSubstrate === id ? ' active' : '') + '" data-chip-substrate="' + id + '">' + label + '</button>'
-    ).join('');
+    if (!isSubstrateUnlocked(chipSubstrate)) chipSubstrate = 'obsidian';
+    if (!isShimUnlocked(chipShimStyle)) chipShimStyle = 'steel';
 
-    const shimPills = [
-      ['steel', 'Brushed Steel'],
-      ['copper', 'Pure Copper'],
-      ['dark', 'Anodized Dark']
-    ].map(([id, label]) =>
-      '<button type="button" class="zoom-btn' + (chipShimStyle === id ? ' active' : '') + '" data-chip-shim="' + id + '">' + label + '</button>'
-    ).join('');
+    const buildPackageCards = (options, currentVal, dataAttr) => options.map(opt => {
+      const rDef = opt.researchKey ? GPU_RESEARCH.find(r => r.key === opt.researchKey) : null;
+      const ok = !opt.researchKey || researched(opt.researchKey);
+      const selected = currentVal === opt.id;
+      const subText = !opt.researchKey
+        ? 'Free · Baseline'
+        : ok
+          ? rDef.score + ' Score · $' + rDef.value.toLocaleString() + ' value'
+          : 'Research required · ' + rDef.name;
+      return '<div class="cpu-component-option ' + (ok ? '' : 'locked') + ' ' + (selected ? 'selected' : '') + '">' +
+        '<span class="cpu-component-icon"><span class="ea-chip-swatch ' + opt.swatchClass + '"></span></span>' +
+        '<span><strong>' + esc(opt.label) + '</strong><small>' + esc(subText) + '</small></span>' +
+        '<button type="button" class="zoom-btn" ' + (ok ? dataAttr + '="' + opt.id + '"' : 'data-chip-go-research="CHIP"') + '>' +
+          (ok ? (selected ? 'Selected' : 'Use') : 'Research') +
+        '</button>' +
+      '</div>';
+    }).join('');
 
     wrap.innerHTML =
       '<h4>GPU Interposer Package</h4>' +
-      '<div class="ea-gpu-inline-box"><span>PCB Substrate Color</span><div class="ea-gpu-pill-row">' + subPills + '</div></div>' +
-      '<div class="ea-gpu-inline-box"><span>Anti-Crush Metal Shim Frame</span><div class="ea-gpu-pill-row">' + shimPills + '</div></div>' +
+      '<div class="ea-chip-pkg-subhead">PCB Substrate Color</div>' +
+      buildPackageCards(CHIP_SUBSTRATE_OPTIONS, chipSubstrate, 'data-chip-substrate') +
+      '<div class="ea-chip-pkg-subhead">Anti-Crush Metal Shim Frame</div>' +
+      buildPackageCards(CHIP_SHIM_OPTIONS, chipShimStyle, 'data-chip-shim') +
       '<p class="muted tiny" style="margin:4px 2px 0">Select Speed, Power Delivery, and V-RAM modules from the tabs above to update the live 3D GPU die, VRMs, and memory array.</p>';
 
     wrap.querySelectorAll('[data-chip-substrate]').forEach(btn => btn.addEventListener('click', () => {
-      chipSubstrate = btn.dataset.chipSubstrate;
+      const id = btn.dataset.chipSubstrate;
+      if (!isSubstrateUnlocked(id)) { goToGpuResearch('CHIP'); return; }
+      chipSubstrate = id;
       renderChipPackageMenu();
       drawChip();
     }));
     wrap.querySelectorAll('[data-chip-shim]').forEach(btn => btn.addEventListener('click', () => {
-      chipShimStyle = btn.dataset.chipShim;
+      const id = btn.dataset.chipShim;
+      if (!isShimUnlocked(id)) { goToGpuResearch('CHIP'); return; }
+      chipShimStyle = id;
       renderChipPackageMenu();
       drawChip();
     }));
+    wrap.querySelectorAll('[data-chip-go-research]').forEach(btn => btn.addEventListener('click', () => goToGpuResearch('CHIP')));
   }
 
   function renderChipSpecMenu(elId, title, icon, baseName, baseDesc, keys, getCurrent, setCurrent) {
@@ -1600,9 +1641,17 @@
     const sDef = GPU_RESEARCH.find(r => r.key === selectedChipSpeed);
     const pDef = GPU_RESEARCH.find(r => r.key === selectedChipPower);
     const vDef = GPU_RESEARCH.find(r => r.key === selectedChipVram);
-    const value = (sDef?.value || 0) + (pDef?.value || 0) + (vDef?.value || 0);
-    const score = (sDef?.score || 0) + (pDef?.score || 0) + (vDef?.score || 0);
-    return { value, score, sDef, pDef, vDef };
+    const subOpt = CHIP_SUBSTRATE_OPTIONS.find(o => o.id === chipSubstrate);
+    const subDef = subOpt?.researchKey && researched(subOpt.researchKey)
+      ? GPU_RESEARCH.find(r => r.key === subOpt.researchKey)
+      : null;
+    const shimOpt = CHIP_SHIM_OPTIONS.find(o => o.id === chipShimStyle);
+    const shimDef = shimOpt?.researchKey && researched(shimOpt.researchKey)
+      ? GPU_RESEARCH.find(r => r.key === shimOpt.researchKey)
+      : null;
+    const value = (sDef?.value || 0) + (pDef?.value || 0) + (vDef?.value || 0) + (subDef?.value || 0) + (shimDef?.value || 0);
+    const score = (sDef?.score || 0) + (pDef?.score || 0) + (vDef?.score || 0) + (subDef?.score || 0) + (shimDef?.score || 0);
+    return { value, score, sDef, pDef, vDef, subDef, shimDef };
   }
 
   function updateChipReadouts() {
@@ -1611,13 +1660,15 @@
     if ($('#eaChipScoreReadout')) $('#eaChipScoreReadout').textContent = score + ' Score · ' + chipVramLabel(selectedChipVram);
     const cap = $('#eaChipCostCaption');
     if (cap) {
-      const subLabel = chipSubstrate === 'obsidian' ? 'Obsidian' : chipSubstrate === 'blue' ? 'Cobalt Blue' : 'Emerald Green';
-      const shimLabel = chipShimStyle === 'copper' ? 'Copper Shim' : chipShimStyle === 'dark' ? 'Dark Shim' : 'Steel Shim';
+      const subLabel = chipSubstrate === 'green' ? 'Emerald Green' : chipSubstrate === 'blue' ? 'Cobalt Blue' : 'Matte Obsidian';
+      const shimLabel = chipShimStyle === 'copper' ? 'Pure Copper Shim' : chipShimStyle === 'dark' ? 'Anodized Dark Shim' : 'Steel Shim';
       cap.textContent = subLabel + ' · ' + shimLabel + ' · ' + researchName(selectedChipSpeed) + ' · ' + researchName(selectedChipPower) + ' · ' + chipVramLabel(selectedChipVram);
     }
   }
 
   function drawChip() {
+    if (!isSubstrateUnlocked(chipSubstrate)) chipSubstrate = 'obsidian';
+    if (!isShimUnlocked(chipShimStyle)) chipShimStyle = 'steel';
     updateChipReadouts();
     const chipName = ($('#eaChipName')?.value || 'Nova GPU Chip').trim();
     window.ChipDesigner3D?.update?.({
@@ -1638,7 +1689,7 @@
     const power = selectedChipPower || 'none';
     const vram = selectedChipVram || 'none';
     if (name.length < 2) { $('#eaChipMessage').textContent = 'Chip name must be at least 2 characters.'; return; }
-    if ((speed !== 'none' && !researched(speed)) || (power !== 'none' && !researched(power)) || (vram !== 'none' && !researched(vram))) {
+    if (!isSubstrateUnlocked(chipSubstrate) || !isShimUnlocked(chipShimStyle) || (speed !== 'none' && !researched(speed)) || (power !== 'none' && !researched(power)) || (vram !== 'none' && !researched(vram))) {
       toast('Research the selected chip component first.');
       return;
     }

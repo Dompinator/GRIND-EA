@@ -9,8 +9,8 @@
     name: 'Nova GPU Chip',
     companyName: '',
     logoUrl: '',
-    substrate: 'green', // green | obsidian | blue
-    shimStyle: 'steel', // steel | copper | dark
+    substrate: 'obsidian', // obsidian | blue | green
+    shimStyle: 'steel',    // steel | dark | copper
     speedLevel: 'none',
     powerLevel: 'none',
     vramLevel: 'none'
@@ -678,7 +678,7 @@
     // 1. Rectangular Chamfered GPU BGA Substrate
     const subW = 2.68;
     const subD = 2.18;
-    const subTex = getSubstrateTextures(state.substrate || 'green');
+    const subTex = getSubstrateTextures(state.substrate || 'obsidian');
     sharedMaterials.pcb.map = subTex.map;
     sharedMaterials.pcb.bumpMap = subTex.bump;
     sharedMaterials.pcb.needsUpdate = true;
