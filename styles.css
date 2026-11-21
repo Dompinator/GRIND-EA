@@ -7817,3 +7817,45 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .ea-chip-swatch-steel{background:linear-gradient(135deg,#dbe3ee,#7d8899)}
 .ea-chip-swatch-dark{background:linear-gradient(135deg,#333a4c,#151822)}
 .ea-chip-swatch-copper{background:linear-gradient(135deg,#eab08a,#b35927)}
+
+/* PC Manufacturing Company: Case Designer, PC Builder, Public Component Search & Hex Research Tree */
+#page-company-design #eaPcPanel.hidden{display:none}
+#eaPcResearchWrap.hidden,#eaPcResearchTree.hidden{display:none}
+#eaPcResearchTree{height:560px;max-width:900px;margin:24px auto;background:radial-gradient(ellipse at 50% 25%,#844cbe20,transparent 62%);border:1px solid #a855f722;border-radius:18px;overflow:hidden;cursor:grab;touch-action:none;user-select:none;position:relative}
+#eaPcResearchWorld{position:absolute;left:0;top:0;transform-origin:top left;will-change:transform}
+#eaPcResearchTree .research-tree-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#eaPcResearchTree .research-tree-lines path{fill:none;stroke:#7951a5;stroke-width:3;stroke-dasharray:7 7}
+
+#page-company-design .ea-pc-3d-stage{height:490px;min-height:420px;width:100%;margin-top:0;border-radius:14px;overflow:hidden;position:relative;border:1px solid rgba(168,85,247,.22);background:radial-gradient(circle at 50% 42%,#191229 0%,#0d0919 78%);touch-action:none;cursor:grab}
+#page-company-design .ea-pc-3d-stage:active{cursor:grabbing}
+#page-company-design .ea-pc-3d-stage canvas{display:block;width:100%;height:100%}
+#page-company-design .ea-pc-case-menu-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ea-pc-case-pick-list{display:grid;gap:7px;max-height:175px;overflow-y:auto;padding-right:2px}
+.ea-pc-part-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:8px}
+.ea-pc-part-buttons .primary-btn,.ea-pc-part-buttons .zoom-btn{padding:8px 10px;font-size:12px}
+#eaPcPickPsuBtn{grid-column:1 / -1}
+.ea-pc-picked-slot{padding:9px 11px;border-radius:10px;border:1px solid rgba(168,85,247,.24);background:#120d1e;margin-bottom:7px}
+.ea-pc-picked-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ea-pc-picked-row>div{display:grid;gap:2px;min-width:0}
+.ea-pc-picked-row strong{font-size:12px;color:#f3e8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ea-pc-picked-row small{font-size:11px;color:var(--muted)}
+.ea-pc-specs-panel{display:grid;gap:5px;padding:10px 12px;border-radius:11px;border:1px solid rgba(148,163,184,.18);background:#120e1c;font-size:12px;color:var(--muted);line-height:1.4}
+.ea-pc-specs-panel b{color:#e9d5ff;margin-right:4px}
+.ea-pc-fit-warn{margin-top:4px;padding:6px 8px;border-radius:8px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.42);color:#fde68a;font-size:11px;font-weight:700}
+
+.ea-pc-comp-modal{width:min(860px,calc(100vw - 24px));max-height:86vh;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:12px}
+.ea-pc-comp-filters{display:grid;grid-template-columns:1fr auto;gap:10px}
+.ea-pc-comp-filters input,.ea-pc-comp-filters select{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0f0b19;color:var(--text)}
+.ea-pc-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:11px;overflow-y:auto;padding-right:4px;max-height:58vh}
+.ea-pc-comp-card{display:grid;gap:8px;padding:11px;border-radius:12px;border:1px solid var(--line);background:#161024;align-content:space-between}
+.ea-pc-comp-meta{display:grid;gap:3px}
+.ea-pc-comp-meta strong{font-size:13px;color:#f5f0ff}
+.ea-pc-comp-meta small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.ea-pc-comp-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:#d8b4fe}
+.ea-pc-comp-foot .primary-btn{padding:6px 11px;font-size:11px;white-space:nowrap}
+.ea-pc-cpu-thumb-box{height:110px;border-radius:9px;background:radial-gradient(circle at 50% 35%,#2b1d4a,#100b1d);border:1px solid rgba(168,85,247,.25);display:grid;place-items:center;padding:10px;text-align:center;gap:4px}
+.ea-pc-cpu-thumb-box strong{font-size:13px;color:#f5f0ff}
+.ea-pc-cpu-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#581c87;color:#f3e8ff;font-size:10px;font-weight:800;letter-spacing:.3px}
+#page-company-products #eaPcProductList{margin-top:16px}
+@media(max-width:640px){.ea-pc-comp-filters{grid-template-columns:1fr}.ea-pc-part-buttons{grid-template-columns:1fr}}
+

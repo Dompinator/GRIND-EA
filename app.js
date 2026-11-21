@@ -1840,7 +1840,8 @@ function showPage(page) {
   if (page === 'feed') renderFeed();
   if (page === 'company' || page === 'company-design' || page === 'company-products') {
     loadCompanyDashboard().then(() => {
-      if (page === 'company-products' && !(currentCompany?.product_lines || []).includes('gpu')) {
+      const lines = currentCompany?.product_lines || [];
+      if (page === 'company-products' && !lines.includes('gpu') && !lines.includes('pc')) {
         renderSidebarCpuProductsPage();
       }
     });
@@ -2091,6 +2092,11 @@ function editCpuDraftProduct(id) {
   const p = companyProducts.find(x => x.id === id);
   if (!p || !isProductDraft(p)) {
     toast('Only Draft products can be edited.');
+    return;
+  }
+  const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p.product_line === 'pc');
+  if (isPc) {
+    window.editPcDraftProduct?.(id);
     return;
   }
   const isGpu = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p.product_line === 'gpu');
@@ -2596,33 +2602,42 @@ function renderCompanyProducts(){
  if(!selectedCompanyProductId || !companyProducts.some(p=>p.id===selectedCompanyProductId)){
    selectedCompanyProductId = companyProducts[0].id;
  }
- const specsById = new Map();
- const gpuById = new Map();
- list.innerHTML=companyProducts.map(p=>{
-   const isGpu = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu');
-   const draft = isProductDraft(p);
-   if (isGpu) {
-     gpuById.set(p.id, p);
-     const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
-     const gpuSpec = typeof window.formatGpuSpecLine === 'function' ? window.formatGpuSpecLine(p) : 'GPU';
-     return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(gpuSpec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
-   }
-   const spec = resolveCpuProductSpec(p);
-   specsById.set(p.id, spec);
-   return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(formatCpuSpecLine(spec))+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
- }).join('');
- list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{
-   selectedCompanyProductId=b.dataset.companyProduct;
-   renderCompanyProducts();
-   loadCompanyProductDetails(selectedCompanyProductId);
- }));
- hydrateCpuThumbElements(list, specsById, 240);
- window.hydrateGpuThumbElements?.(list, gpuById, 360, 270);
- if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){
-   loadCompanyProductDetails(selectedCompanyProductId);
- } else {
-   $('#companyProductDetails')?.classList.add('hidden');
- }
+  const specsById = new Map();
+  const gpuById = new Map();
+  const pcById = new Map();
+  list.innerHTML=companyProducts.map(p=>{
+    const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
+    const isGpu = !isPc && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
+    const draft = isProductDraft(p);
+    if (isPc) {
+      pcById.set(p.id, p);
+      const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+      const pcSpec = typeof window.formatPcSpecLine === 'function' ? window.formatPcSpecLine(p) : 'PC';
+      return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(pcSpec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Build: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+    }
+    if (isGpu) {
+      gpuById.set(p.id, p);
+      const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+      const gpuSpec = typeof window.formatGpuSpecLine === 'function' ? window.formatGpuSpecLine(p) : 'GPU';
+      return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(gpuSpec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+    }
+    const spec = resolveCpuProductSpec(p);
+    specsById.set(p.id, spec);
+    return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(formatCpuSpecLine(spec))+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+  }).join('');
+  list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{
+    selectedCompanyProductId=b.dataset.companyProduct;
+    renderCompanyProducts();
+    loadCompanyProductDetails(selectedCompanyProductId);
+  }));
+  hydrateCpuThumbElements(list, specsById, 240);
+  window.hydrateGpuThumbElements?.(list, gpuById, 360, 270);
+  window.hydratePcThumbElements?.(list, pcById, 360, 270);
+  if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){
+    loadCompanyProductDetails(selectedCompanyProductId);
+  } else {
+    $('#companyProductDetails')?.classList.add('hidden');
+  }
 }
 async function produceMoreProduct(id, quantity, msgEl) {
   if (!currentCompany || !currentUser || !sb) return false;
@@ -2644,9 +2659,21 @@ async function produceMoreProduct(id, quantity, msgEl) {
     return false;
   }
   if (msgEl) msgEl.textContent = '';
-  let res = await sb.rpc('produce_more_product', { p_product_id: id, p_quantity: q });
-  if (res.error && (res.error.code === 'PGRST202' || /could not find the function/i.test(res.error.message || ''))) {
-    res = await sb.rpc('produce_more_cpu', { p_product_id: id, p_quantity: q });
+  const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
+  let res;
+  if (isPc) {
+    res = await sb.rpc('produce_pc_product', { p_product_id: id, p_quantity: q });
+    if (res.error && (res.error.code === 'PGRST202' || /could not find the function/i.test(res.error.message || ''))) {
+      const err = 'Missing Supabase RPC produce_pc_product. Run pc_company_migration.sql in Supabase SQL Editor so PC part creators get paid.';
+      if (msgEl) msgEl.textContent = err;
+      toast(err);
+      return false;
+    }
+  } else {
+    res = await sb.rpc('produce_more_product', { p_product_id: id, p_quantity: q });
+    if (res.error && (res.error.code === 'PGRST202' || /could not find the function/i.test(res.error.message || ''))) {
+      res = await sb.rpc('produce_more_cpu', { p_product_id: id, p_quantity: q });
+    }
   }
   if (res.error) {
     if (msgEl) msgEl.textContent = res.error.message;
@@ -2658,11 +2685,13 @@ async function produceMoreProduct(id, quantity, msgEl) {
   renderCompanyProducts();
   if (selectedCompanyProductId === id) await loadCompanyProductDetails(id);
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
-  if (currentPage === 'company-products' && !(currentCompany?.product_lines || []).includes('gpu')) {
+  if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
+  const lines = currentCompany?.product_lines || [];
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc')) {
     renderSidebarCpuProductsPage();
   }
   if (typeof loadProfile === 'function') await loadProfile();
-  toast('Produced ' + q + ' unit' + (q === 1 ? '' : 's') + ' for ' + money(totalCost) + '!');
+  toast(isPc ? ('Produced ' + q + ' PC' + (q === 1 ? '' : 's') + ' & paid part makers!') : ('Produced ' + q + ' unit' + (q === 1 ? '' : 's') + ' for ' + money(totalCost) + '!'));
   return true;
 }
 
@@ -2707,6 +2736,7 @@ async function deleteDraftProduct(id, msgEl) {
     persistCpuThumbsMap();
   }
   window.clearGpuDraftArtifacts?.(id, p.product_name);
+  window.clearPcDraftArtifacts?.(id, p.product_name);
   if (editingCpuProductId === id) {
     cancelCpuDraftEdit();
   }
@@ -2722,7 +2752,9 @@ async function deleteDraftProduct(id, msgEl) {
   renderCompanyDashboard();
   renderCompanyProducts();
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
-  if (currentPage === 'company-products' && !(currentCompany?.product_lines || []).includes('gpu')) {
+  if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
+  const lines = currentCompany?.product_lines || [];
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc')) {
     renderSidebarCpuProductsPage();
   }
   toast('Draft deleted.');
@@ -2742,7 +2774,9 @@ async function liquidateProductStock(id, msgEl) {
   renderCompanyProducts();
   if (selectedCompanyProductId === id) await loadCompanyProductDetails(id);
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
-  if (currentPage === 'company-products' && !(currentCompany?.product_lines || []).includes('gpu')) {
+  if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
+  const lines = currentCompany?.product_lines || [];
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc')) {
     renderSidebarCpuProductsPage();
   }
   if (typeof loadProfile === 'function') await loadProfile();
@@ -2771,13 +2805,30 @@ function bindProduceMoreControls(qtyInput, btnEl, unitValue, id, msgEl) {
 async function loadCompanyProductDetails(id){
  const p=companyProducts.find(x=>x.id===id),d=$('#companyProductDetails');if(!p||!d)return;
  d.dataset.productId=id;d.classList.remove('hidden');
- const isGpu = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu');
+ const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
+ const isGpu = !isPc && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
  const draft = isProductDraft(p);
  const unitValue = Math.max(0, Number(p.product_value ?? p.production_cost ?? 0));
  const stockCount = Number(p.stock || 0);
  const produceBlock = draft
    ? '<p class="muted tiny" style="margin:4px 0 0;">Publish this draft before producing units.</p>'
    : '<label>Produce quantity (costs '+money(unitValue)+' each)<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProduceMore">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div>';
+ if (isPc) {
+   const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+   const pcBadges = typeof window.formatPcHardwareBadges === 'function' ? window.formatPcHardwareBadges(p) : 'PC';
+   d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(pcBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Build cost / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Listed price</span><strong>'+money(Number(p.listed_price||0))+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
+   window.hydratePcThumbElements?.(d, new Map([[p.id, p]]), 360, 270);
+   const msgEl = $('#companyProductDetailMessage');
+   if (!draft) {
+     bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
+     $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+   }
+   $('#companyProductEditDraft')?.addEventListener('click',()=>editCpuDraftProduct(id));
+   $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
+   $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+   $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
+   return;
+ }
  if (isGpu) {
    const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
    const gpuBadges = typeof window.formatGpuHardwareBadges === 'function' ? window.formatGpuHardwareBadges(p) : 'GPU';
@@ -2814,7 +2865,7 @@ function renderSidebarCpuProductsPage(){
    page.innerHTML='<div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">▦</div><h3>No Company</h3><p class="muted">Select or create a company to view products.</p><button type="button" class="primary-btn" data-goto="company">Go to Company</button></div>';
    return;
  }
- if((currentCompany.product_lines||[]).includes('gpu')) return;
+ if((currentCompany.product_lines||[]).includes('gpu')||(currentCompany.product_lines||[]).includes('pc')) return;
  if(!selectedCompanyProductId && companyProducts.length) selectedCompanyProductId = companyProducts[0].id;
  const specsById = new Map();
  page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">CPU MANUFACTURING</div><h3>Products</h3><p class="muted">Select a CPU to inspect details, edit or delete drafts, publish, or produce stock.</p></div><span class="company-count-chip">'+companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S')+'</span></div><div id="eaCpuProductList" class="company-product-list">'+(companyProducts.length?companyProducts.map(p=>{
@@ -2879,8 +2930,16 @@ async function loadPublishedProductFeed(){
  if(!data?.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">▦</div><h3>No published products yet</h3><p>Products published by companies will appear here.</p></div>';return;}
  const specsById = new Map();
  const gpuById = new Map();
+ const pcById = new Map();
  grid.innerHTML=data.map(p=>{
-  const isGpu = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu');
+  const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
+  const isGpu = !isPc && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
+  if (isPc) {
+    pcById.set(p.id, p);
+    const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+    const pcSpec = typeof window.formatPcSpecLine === 'function' ? window.formatPcSpecLine(p) : 'PC';
+    return '<article class="published-product-card"><div class="product-feed-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+escapeHtml(pcSpec)+'</p><p>Custom PC · Specs Build</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
+  }
   if (isGpu) {
     gpuById.set(p.id, p);
     const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
@@ -2894,6 +2953,7 @@ async function loadPublishedProductFeed(){
  }).join('');
  hydrateCpuThumbElements(grid, specsById, 300);
  window.hydrateGpuThumbElements?.(grid, gpuById, 360, 270);
+ window.hydratePcThumbElements?.(grid, pcById, 360, 270);
 }
 async function respondToCompanyTransfer(requestId, accept) {
   if (!currentUser || !sb) return;
