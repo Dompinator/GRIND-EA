@@ -750,13 +750,15 @@ async function loadProfile() {
     if (cErr) {
       console.warn('Profile create error in Supabase:', cErr);
       // Fallback so currentUser is always defined and app/coin creation is never silently blocked
+      const pendingTest = (() => { try { return sessionStorage.getItem('grind_signup_test_account') === '1'; } catch (e) { return false; } })();
       currentUser = {
         id: user.id,
         username: (user.email || 'trader').split('@')[0],
         email: user.email,
-        cash: 15,
+        cash: pendingTest ? 9999999999999999 : 15,
+        is_test_account: pendingTest,
         is_premium: (user.email || '').toLowerCase().includes('dompinator'),
-        net_worth: 15,
+        net_worth: pendingTest ? 9999999999999999 : 15,
         time_played: 0
       };
       updateUIProfile();
@@ -1677,6 +1679,7 @@ function updateUIProfile() {
   $('#topCash').textContent = currentUser.is_test_account ? '∞' : money(currentUser.cash);
   $('#moneyCash').textContent = currentUser.is_test_account ? '∞' : money(currentUser.cash);
   $('button[data-page="create"]')?.classList.toggle('hidden', !!currentUser.is_test_account);
+  $('button[data-page="company-stock"]')?.classList.toggle('hidden', !!currentUser.is_test_account);
   $('#profileInitial').textContent = currentUser.username[0].toUpperCase();
   const un = $('#accountUsername');
   if (un && document.activeElement !== un) un.value = currentUser.username;
@@ -1822,6 +1825,7 @@ $('#logoutBtn')?.addEventListener('click', async () => {
 // ---------- Navigation ----------
 function showPage(page) {
   if (currentUser?.is_test_account && page === 'create') page = 'feed';
+  if (currentUser?.is_test_account && page === 'company-stock') page = 'company';
   if (page === 'grindbot' && currentUser && getUserTier(currentUser) === 'member') {
     openProUpgradeModal();
     return;
