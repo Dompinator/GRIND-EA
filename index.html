@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0c0916">
   <title>GRIND — Grind your way through the market</title>
-  <link rel="stylesheet" href="styles.css?v=80">
+  <link rel="stylesheet" href="styles.css?v=81">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="importmap">
   {
@@ -104,6 +104,7 @@
           <div id="feedTypeSwitch" class="feed-type-switch" role="group" aria-label="Feed type">
             <button type="button" class="feed-type-btn active" data-feed-type="coin">Coin</button>
             <button type="button" class="feed-type-btn" data-feed-type="product">Product</button>
+            <button type="button" class="feed-type-btn" data-feed-type="company">Companies</button>
           </div>
         </div>
         <div class="top-right">
@@ -161,6 +162,23 @@
           </div>
         </div>
           <div id="productFeedContent" class="product-feed-placeholder hidden"><div class="product-feed-heading"><div class="eyebrow purple-text">COMMUNITY MARKET</div><h3>Product Feed</h3><p class="muted">Discover products designed by GRIND companies. Purchases are not enabled yet.</p></div><div id="publishedProductFeed" class="published-product-grid"><div class="empty-state"><div class="empty-icon">▦</div><h3>No published products yet</h3><p>Products published by companies will appear here.</p></div></div></div>
+          <div id="companyFeedContent" class="hidden">
+            <div class="feed-toolbar">
+              <div class="feed-tabs">
+                <button type="button" class="feed-tab active" data-company-sort="top_price">Top Price</button>
+                <button type="button" class="feed-tab" data-company-sort="top_sales">Top Sales</button>
+                <button type="button" class="feed-tab" data-company-sort="most_owned">Most Owned</button>
+                <button type="button" class="feed-tab" data-company-sort="newest">Newest</button>
+              </div>
+              <input id="companyFeedSearch" class="feed-search" type="search" placeholder="Search companies or line (CPU/GPU/PC)...">
+            </div>
+            <div id="companyFeedGrid" class="coin-grid"></div>
+            <div id="emptyCompanyFeed" class="empty-state hidden">
+              <div class="empty-icon">▣</div>
+              <h3>No companies on the market yet</h3>
+              <p>Create a company or search with another keyword.</p>
+            </div>
+          </div>
           <div class="feed-tabs" id="liveFilterTabs">
             <button type="button" class="feed-tab active" data-live="all">All</button>
             <button type="button" class="feed-tab" data-live="personal">Personal</button>
@@ -368,6 +386,7 @@
             </div>
             <div class="company-dashboard-tabs">
               <button type="button" class="company-dashboard-tab active" data-company-tab="money">Money</button>
+              <button type="button" class="company-dashboard-tab" data-company-tab="stocks">Stocks</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="research">Research</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="products">Products</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="logo">Logo</button>
@@ -385,6 +404,7 @@
                 <p class="muted">Your company's revenue, costs and performance will be tracked here as products are designed and sold.</p>
               </div>
             </div>
+            <div class="company-dashboard-panel hidden" id="companyPanelStocks"></div>
             <div class="company-dashboard-panel hidden" id="companyPanelResearch"><div class="company-dashboard-section research-section"><div class="company-section-heading"><div><div class="eyebrow purple-text">CPU DEVELOPMENT</div><h4>Research tree</h4><p class="muted">Unlock components before using them in your designs.</p></div><span class="company-count-chip">CPU RESEARCH</span></div><div class="research-tree" id="cpuResearchTree"><div class="research-tree-world" id="cpuResearchWorld" style="width:1550px;height:2500px"><svg class="research-tree-lines" viewBox="0 0 1550 2500" preserveAspectRatio="none">
 <path d="M650 210 L650 240 L150 240 L150 231 M650 240 L400 240 L400 231 M650 240 L650 231 M650 240 L900 240 L900 231 M650 240 L1150 240 L1150 231 M650 240 L1375 240 L1375 231 M650 240 L1375 240 L1375 381 M1375 381 L1375 470 M650 240 L1441 240 L1441 712 M1441 862 L1441 951 M1441 1101 L1441 1190 M1441 1340 L1441 1431 M150 381 L150 470 M150 620 L150 712 M400 381 L400 470 M400 620 L400 712 M400 862 L400 951 M400 1101 L400 1190 M400 1340 L400 1431 M650 381 L650 470 M650 620 L650 712 M650 862 L650 951 M650 1101 L650 1190 M900 381 L900 470 M900 620 L900 712 M900 862 L900 951 M1150 381 L1150 470 M1375 381 L1375 470 M400 2092 L400 2250 L400 2425 M650 1757 L650 2000 L650 2150 L650 2300 L650 2450"/>
 </svg>
@@ -1030,6 +1050,12 @@
         <section id="page-coin" class="page hidden">
           <button class="back-link" id="backToFeed">← Back to feed</button>
           <div id="coinDetail"></div>
+        </section>
+
+        <!-- COMPANY STOCK DETAIL -->
+        <section id="page-company-stock" class="page hidden">
+          <button type="button" class="back-link" id="backToCompaniesFeed">← Back to companies</button>
+          <div id="companyStockDetail"></div>
         </section>
       </div>
     </section>
@@ -1979,7 +2005,8 @@
   <script defer src="gpu-designer-3d.js?v=10"></script>
   <script defer src="chip-designer-3d.js?v=2"></script>
   <script defer src="pc-designer-3d.js?v=1"></script>
-  <script defer src="app.js?v=109"></script>
+  <script defer src="app.js?v=110"></script>
+  <script defer src="company-stocks.js?v=1"></script>
   <script defer src="company-pc.js?v=1"></script>
   <script defer src="company-gpu.js?v=25"></script>
 </body>

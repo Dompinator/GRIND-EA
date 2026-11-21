@@ -1833,11 +1833,15 @@ function showPage(page) {
     report: 'Report player or bug',
     notifications: 'Notifications',
     admin: 'Admin',
-    coin: 'Currency'
+    coin: 'Currency',
+    'company-stock': 'Company Stock'
   };
   $('#pageTitle').textContent = titles[page] || 'GRIND';
   $('#feedTypeSwitch')?.classList.toggle('hidden', page !== 'feed');
-  if (page === 'feed') renderFeed();
+  if (page === 'feed') {
+    if (feedType === 'company') window.CompanyStocks?.loadCompanyStocks?.();
+    else renderFeed();
+  }
   if (page === 'company' || page === 'company-design' || page === 'company-products') {
     loadCompanyDashboard().then(() => {
       const lines = currentCompany?.product_lines || [];
@@ -1957,13 +1961,20 @@ function renderCompanyDashboard() {
   if (settingsLogo) settingsLogo.innerHTML = currentCompany.logo_data_url
     ? '<img src="' + escapeHtml(currentCompany.logo_data_url) + '" alt="Company logo">' : '＋';
   loadOutgoingCompanyTransfer();
+  window.CompanyStocks?.checkAndClaimDailyPayouts?.(false);
+  if (!$('#companyPanelStocks')?.classList.contains('hidden')) {
+    window.CompanyStocks?.renderDashboardStocksTab?.();
+  }
 }
 
 function switchCompanyDashboardTab(tab) {
-  ['money','research','products','logo','settings'].forEach(name => {
+  ['money','stocks','research','products','logo','settings'].forEach(name => {
     $('#companyPanel' + name[0].toUpperCase() + name.slice(1))?.classList.toggle('hidden', name !== tab);
     document.querySelector('[data-company-tab="' + name + '"]')?.classList.toggle('active', name === tab);
   });
+  if (tab === 'stocks') {
+    window.CompanyStocks?.renderDashboardStocksTab?.();
+  }
   if (tab === 'logo' && typeof window.CompanyLogoStudio?.open === 'function') {
     window.CompanyLogoStudio.open(currentCompany);
   }
@@ -3136,11 +3147,32 @@ $('#companyDeleteBtn')?.addEventListener('click', async () => {
   renderCompanyDashboard();
 });
 $$('.feed-type-btn').forEach(btn => btn.addEventListener('click', () => {
-  feedType = btn.dataset.feedType === 'product' ? 'product' : 'coin';
+  const nextType = btn.dataset.feedType;
+  feedType = nextType === 'product' ? 'product' : nextType === 'company' ? 'company' : 'coin';
   $$('.feed-type-btn').forEach(x => x.classList.toggle('active', x === btn));
   $('#coinFeedContent')?.classList.toggle('hidden', feedType !== 'coin');
   $('#productFeedContent')?.classList.toggle('hidden', feedType !== 'product');
-  if(feedType==='product')loadPublishedProductFeed();
+  $('#companyFeedContent')?.classList.toggle('hidden', feedType !== 'company');
+  if (typeof renderFeaturedSection === 'function') renderFeaturedSection();
+  const hero = $('#page-feed .hero-panel');
+  if (hero) {
+    const eb = hero.querySelector('.eyebrow'), h3 = hero.querySelector('h3'), p = hero.querySelector('p');
+    if (feedType === 'company') {
+      if (eb) eb.textContent = 'COMPANY EXCHANGE';
+      if (h3) h3.textContent = 'Invest in GRIND companies';
+      if (p) p.textContent = 'Company sales drive stock prices up. Gentle investor swing. Owners earn 100% of owned stock value at 00:00 UTC!';
+    } else if (feedType === 'product') {
+      if (eb) eb.textContent = 'COMMUNITY MARKET';
+      if (h3) h3.textContent = 'Discover company products';
+      if (p) p.textContent = 'Explore CPUs, GPUs, and custom PCs designed by GRIND companies.';
+    } else {
+      if (eb) eb.textContent = 'LIVE MARKET';
+      if (h3) h3.textContent = 'Trade community coins';
+      if (p) p.textContent = 'Everyone sees the same prices in real time. Always starts at $1. Infinite supply.';
+    }
+  }
+  if (feedType === 'product') loadPublishedProductFeed();
+  if (feedType === 'company') window.CompanyStocks?.loadCompanyStocks?.();
 }));
 $$('.feed-tab').forEach(b => {
   if (b.dataset.feed) {
@@ -3264,6 +3296,10 @@ function renderFeaturedSection() {
   const grid = $('#featuredGrid');
   const editBtn = $('#editFeaturedBtn');
   if (!sec || !grid) return;
+  if (typeof feedType !== 'undefined' && feedType !== 'coin') {
+    sec.classList.add('hidden');
+    return;
+  }
 
   const isAdmin = isDompinator();
   if (editBtn) editBtn.classList.toggle('hidden', !isAdmin);
@@ -5120,12 +5156,17 @@ async function updateNetWorth() {
   if (srvResetTs > 0) {
     coinsQ = coinsQ.gt('created_at', new Date(srvResetTs).toISOString());
   }
-  const [{ data: holds }, { data: myCoins }] = await Promise.all([holdsQ, coinsQ]);
+  const [{ data: holds }, { data: myCoins }, stockSum] = await Promise.all([
+    holdsQ,
+    coinsQ,
+    window.CompanyStocks?.getMyStockHoldingsSummary ? window.CompanyStocks.getMyStockHoldingsSummary() : Promise.resolve({ totalValue: 0 })
+  ]);
   const validHolds = (holds || []).filter(h => !delCoins.has(String(h.coin_id)) && (!srvResetTs || (h.coins?.created_at && new Date(h.coins.created_at).getTime() > srvResetTs)));
   const validCoins = (myCoins || []).filter(c => !delCoins.has(String(c.id)));
   const holdingsValue = validHolds.reduce((s, h) => s + calcHoldingsValue(h.coins?.price, h.shares), 0);
   const createdValue = validCoins.reduce((s, c) => s + Number(c.price || 0), 0);
-  const portValue = holdingsValue + createdValue;
+  const stockHoldValue = Number(stockSum?.totalValue || 0);
+  const portValue = holdingsValue + createdValue + stockHoldValue;
   const nw = Number(currentUser.cash || 0) + portValue;
   currentUser.net_worth = nw;
   await sb.from('profiles').update({ net_worth: nw }).eq('id', currentUser.id);
@@ -5402,12 +5443,18 @@ async function renderMoney() {
     coinsQ = coinsQ.gt('created_at', srvIso);
     tradesQ = tradesQ.gt('created_at', srvIso);
   }
-  const [{ data: holds }, { data: myCoins }, { data: myTrades }] = await Promise.all([holdsQ, coinsQ, tradesQ]);
+  const [{ data: holds }, { data: myCoins }, { data: myTrades }, stockSummary] = await Promise.all([
+    holdsQ,
+    coinsQ,
+    tradesQ,
+    window.CompanyStocks?.getMyStockHoldingsSummary ? window.CompanyStocks.getMyStockHoldingsSummary() : Promise.resolve({ totalValue: 0, totalSpent: 0, totalReturned: 0, items: [] })
+  ]);
   const list = (holds || []).filter(h => !delCoins.has(String(h.coin_id)) && (!srvResetTs || (h.coins?.created_at && new Date(h.coins.created_at).getTime() > srvResetTs)));
   const created = (myCoins || []).filter(c => !delCoins.has(String(c.id)));
   const holdingsValue = list.reduce((s, h) => s + calcHoldingsValue(h.coins?.price, h.shares), 0);
   const createdValue = created.reduce((s, c) => s + Number(c.price || 0), 0);
-  const value = holdingsValue + createdValue;
+  const stockHoldValue = Number(stockSummary?.totalValue || 0);
+  const value = holdingsValue + createdValue + stockHoldValue;
   const nw = Number(currentUser.cash || 0) + value;
   currentUser.net_worth = nw;
   await sb.from('profiles').update({ net_worth: nw }).eq('id', currentUser.id);
@@ -5487,9 +5534,33 @@ async function renderMoney() {
     </div>`;
   }).join('');
 
-  $('#holdingsList').innerHTML = createdHtml + holdsHtml;
-  $('#emptyHoldings').classList.toggle('hidden', created.length > 0 || list.length > 0);
-  $$('.holding').forEach(el => el.addEventListener('click', () => openCoin(el.dataset.coin)));
+  const stockHoldsHtml = (stockSummary?.items || []).map(st => {
+    const pnl = (st.val + st.ret) - st.spent;
+    const cls = pnl >= 0 ? 'pnl-up' : 'pnl-down';
+    const sign = pnl >= 0 ? '+' : '−';
+    const pnlLine = (st.spent > 0 || st.ret > 0)
+      ? `<div class="tiny"><span class="muted">Spent ${money(st.spent)} · Sold ${money(st.ret)} · </span><span class="${cls}">${sign}${money(Math.abs(pnl))}</span></div>`
+      : '';
+    return `
+    <div class="holding ea-stock-holding" data-stock-company="${escapeHtml(st.companyId)}">
+      <div class="holding-left">
+        <div class="coin-logo">${st.logoUrl ? `<img src="${escapeHtml(st.logoUrl)}">` : escapeHtml((st.companyName || 'C')[0].toUpperCase())}</div>
+        <div>
+          <strong>${escapeHtml(st.companyName)} <span class="muted tiny">(${escapeHtml(st.line)} STOCK)</span></strong>
+          <div class="muted tiny">${st.shares.toFixed(4)} shares · ${priceFmt(st.sharePrice)}/sh</div>
+          ${pnlLine}
+        </div>
+      </div>
+      <div class="holding-right">
+        <strong>${money(st.val)}</strong>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('#holdingsList').innerHTML = createdHtml + holdsHtml + stockHoldsHtml;
+  $('#emptyHoldings').classList.toggle('hidden', created.length > 0 || list.length > 0 || (stockSummary?.items?.length || 0) > 0);
+  $$('.holding[data-coin]').forEach(el => el.addEventListener('click', () => openCoin(el.dataset.coin)));
+  $$('.holding[data-stock-company]').forEach(el => el.addEventListener('click', () => window.CompanyStocks?.openCompanyStock?.(el.dataset.stockCompany)));
 }
 
 // ---------- Currency & Global Leaderboards ----------

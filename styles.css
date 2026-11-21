@@ -7859,3 +7859,17 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 #page-company-products #eaPcProductList{margin-top:16px}
 @media(max-width:640px){.ea-pc-comp-filters{grid-template-columns:1fr}.ea-pc-part-buttons{grid-template-columns:1fr}}
 
+/* Company Stock Market ("Companies" Feed + Dashboard Stocks + 00:00 Payouts) */
+.ea-stock-owned-chip{padding:3px 9px;border-radius:999px;background:rgba(168,85,247,.18);border:1px solid rgba(168,85,247,.38);color:#e9d5ff;font-size:10px;font-weight:800;white-space:nowrap}
+.ea-stock-card-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--muted);margin-bottom:8px}
+.ea-stock-card-meta b{color:#f3e8ff}
+.ea-stock-rule-pill{padding:3px 10px;border-radius:999px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.32);color:#fde68a;font-size:11px;font-weight:700}
+.ea-stock-metrics-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin:14px 0 18px}
+.ea-stock-metric{display:grid;gap:4px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#151021}
+.ea-stock-metric span{font-size:11px;color:var(--muted);font-weight:600}
+.ea-stock-metric strong{font-size:19px;color:#f5f0ff}
+.ea-stock-metric small{font-size:10px;color:#c4b5fd}
+.ea-stock-owner-note{padding:12px 14px;border-radius:12px;border:1px solid rgba(168,85,247,.32);background:rgba(124,58,237,.1);display:grid;gap:4px}
+.ea-stock-owner-note strong{color:#f3e8ff;font-size:13px}
+
+

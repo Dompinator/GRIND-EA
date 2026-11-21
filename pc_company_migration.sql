@@ -1,13 +1,13 @@
 -- =====================================================================
--- GRIND-EA · PC Manufacturing Company Migration
+-- GRIND-EA · PC Company + Company Stock Investing Migration
 -- Run once in your Supabase SQL Editor
--- Adds:
---   1. product_company_pc_cases table + RLS
---   2. product_companies.product_lines & product_company_products.product_line check updates (allowing 'pc')
---   3. product_company_research check constraint including CPU + GPU + CHIP + PC keys
---   4. unlock_company_research RPC (with PC research keys & costs)
---   5. save_pc_product_draft RPC (creates/updates draft PC with Specs, no tiers)
---   6. produce_pc_product RPC (pays every component maker's company + owner listed_price * qty!)
+-- Includes:
+--   A) Fixes product_companies.product_lines check constraint (adds 'pc')
+--   B) PC Cases table + PC Research Keys + PC Draft & Producer Payout RPCs
+--   C) Company Investing ("Companies" Stock Market):
+--      - company_stocks, company_stock_holdings, company_stock_trades, company_stock_payouts
+--      - Sales-driven price multiplier + gentle investor curve (STOCK_K = 0.002)
+--      - buy_company_stock, sell_company_stock, claim_company_stock_payout (00:00 UTC daily owner payout)
 -- =====================================================================
 
 -- 1) Saved PC Cases table
@@ -47,7 +47,7 @@ CREATE POLICY "pc_cases_delete_own"
   FOR DELETE
   USING (auth.uid() = owner_id);
 
--- 2) Allow 'pc' in product_companies & product_company_products check constraints if they exist
+-- 2) Allow 'pc' in product_companies & product_company_products check constraints
 ALTER TABLE public.product_companies
   DROP CONSTRAINT IF EXISTS product_companies_product_lines_check;
 ALTER TABLE public.product_companies
@@ -324,7 +324,6 @@ BEGIN
 
   v_case_cost := GREATEST(0, COALESCE((v_pc.design_data->>'case_build_cost')::numeric, 0));
 
-  -- Compute live prices from every component referenced in design_data->'component_ids'
   IF jsonb_typeof(v_pc.design_data->'component_ids') = 'array' THEN
     FOR v_part_id IN
       SELECT (elem #>> '{}')::uuid
@@ -355,13 +354,11 @@ BEGIN
     RAISE EXCEPTION 'Not enough cash ($% required to produce %)', v_total_cost, v_qty;
   END IF;
 
-  -- Deduct PC build cost from producing player's cash
   UPDATE public.profiles
   SET cash = ROUND((COALESCE(cash, 0) - v_total_cost)::numeric, 2)
   WHERE id = v_uid
   RETURNING cash INTO v_buyer_cash;
 
-  -- Credit every included component maker company & owner + record sale
   IF jsonb_typeof(v_pc.design_data->'component_ids') = 'array' THEN
     FOR v_part_id IN
       SELECT (elem #>> '{}')::uuid
@@ -403,7 +400,6 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- Update PC stock & builder company total_costs
   UPDATE public.product_company_products
   SET stock = COALESCE(stock, 0) + v_qty
   WHERE id = v_pc.id
@@ -413,7 +409,6 @@ BEGIN
   SET total_costs = COALESCE(total_costs, 0) + v_total_cost
   WHERE id = v_pc.company_id;
 
-  -- Refresh buyer cash in case any own component was paid back to self
   SELECT cash INTO v_buyer_cash FROM public.profiles WHERE id = v_uid;
 
   RETURN jsonb_build_object(
@@ -426,7 +421,422 @@ BEGIN
 END;
 $$;
 
+-- =====================================================================
+-- 7) COMPANY STOCK MARKET ("Companies" Feed + 00:00 Daily Owner Payouts)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.company_stocks (
+  company_id uuid PRIMARY KEY REFERENCES public.product_companies(id) ON DELETE CASCADE,
+  curve_price numeric NOT NULL DEFAULT 1.00,
+  open_price_today numeric NOT NULL DEFAULT 1.00,
+  open_price_date date NOT NULL DEFAULT ((now() AT TIME ZONE 'UTC')::date),
+  last_payout_date date NOT NULL DEFAULT ((now() AT TIME ZONE 'UTC')::date),
+  last_payout_amount numeric NOT NULL DEFAULT 0,
+  total_stock_payouts numeric NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.company_stock_holdings (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  company_id uuid NOT NULL REFERENCES public.product_companies(id) ON DELETE CASCADE,
+  shares numeric NOT NULL DEFAULT 0,
+  total_spent_usd numeric NOT NULL DEFAULT 0,
+  total_returned_usd numeric NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, company_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.company_stock_trades (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES public.product_companies(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type text NOT NULL CHECK (type IN ('buy', 'sell', 'sales')),
+  amount_usd numeric NOT NULL DEFAULT 0,
+  shares numeric NOT NULL DEFAULT 0,
+  price_after numeric NOT NULL DEFAULT 1.00,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.company_stock_payouts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES public.product_companies(id) ON DELETE CASCADE,
+  owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  payout_date date NOT NULL,
+  owned_stock_usd numeric NOT NULL DEFAULT 0,
+  payout_amount numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (company_id, payout_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_company_stock_trades_company_time
+  ON public.company_stock_trades (company_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_company_stock_payouts_company_date
+  ON public.company_stock_payouts (company_id, payout_date DESC);
+
+ALTER TABLE public.company_stocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_stock_holdings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_stock_trades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_stock_payouts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "company_stocks_select_all" ON public.company_stocks;
+CREATE POLICY "company_stocks_select_all"
+  ON public.company_stocks FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "company_stock_holdings_select_all" ON public.company_stock_holdings;
+CREATE POLICY "company_stock_holdings_select_all"
+  ON public.company_stock_holdings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "company_stock_trades_select_all" ON public.company_stock_trades;
+CREATE POLICY "company_stock_trades_select_all"
+  ON public.company_stock_trades FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "company_stock_payouts_select_all" ON public.company_stock_payouts;
+CREATE POLICY "company_stock_payouts_select_all"
+  ON public.company_stock_payouts FOR SELECT USING (true);
+
+-- Sales/revenue multiplier: sales drive share prices up cleanly while investor impact stays 4x softer than Coins
+CREATE OR REPLACE FUNCTION public.calc_company_sales_multiplier(p_revenue numeric)
+RETURNS numeric
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT 1.00 + GREATEST(0, COALESCE(p_revenue, 0)) * 0.0025;
+$$;
+
+-- Trigger to auto-create stock rows for new companies & log sales milestones onto the stock chart
+CREATE OR REPLACE FUNCTION public.trg_sync_company_stock()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_today date := (now() AT TIME ZONE 'UTC')::date;
+  v_curve numeric := 1.00;
+  v_price numeric := 1.00;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO public.company_stocks (company_id, curve_price, open_price_today, open_price_date, last_payout_date)
+    VALUES (NEW.id, 1.00, 1.00, v_today, v_today)
+    ON CONFLICT (company_id) DO NOTHING;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND COALESCE(NEW.total_revenue, 0) > COALESCE(OLD.total_revenue, 0) THEN
+    INSERT INTO public.company_stocks (company_id, curve_price, open_price_today, open_price_date, last_payout_date)
+    VALUES (NEW.id, 1.00, 1.00, v_today, v_today)
+    ON CONFLICT (company_id) DO NOTHING;
+
+    SELECT curve_price INTO v_curve FROM public.company_stocks WHERE company_id = NEW.id;
+    v_price := ROUND((COALESCE(v_curve, 1.00) * public.calc_company_sales_multiplier(NEW.total_revenue))::numeric, 4);
+
+    INSERT INTO public.company_stock_trades (company_id, user_id, type, amount_usd, shares, price_after)
+    VALUES (NEW.id, NEW.owner_id, 'sales', ROUND((NEW.total_revenue - OLD.total_revenue)::numeric, 2), 0, v_price);
+
+    UPDATE public.company_stocks SET updated_at = now() WHERE company_id = NEW.id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_product_companies_stock_sync ON public.product_companies;
+CREATE TRIGGER trg_product_companies_stock_sync
+  AFTER INSERT OR UPDATE OF total_revenue ON public.product_companies
+  FOR EACH ROW
+  EXECUTE FUNCTION public.trg_sync_company_stock();
+
+-- Backfill stock rows for existing companies
+INSERT INTO public.company_stocks (company_id, curve_price, open_price_today, open_price_date, last_payout_date)
+SELECT id, 1.00, ROUND(public.calc_company_sales_multiplier(total_revenue)::numeric, 4), (now() AT TIME ZONE 'UTC')::date, (now() AT TIME ZONE 'UTC')::date
+FROM public.product_companies
+ON CONFLICT (company_id) DO NOTHING;
+
+-- Buy Company Stock RPC (STOCK_K = 0.002 — 4x gentler trade price swing than Coins)
+CREATE OR REPLACE FUNCTION public.buy_company_stock(
+  p_company_id uuid,
+  p_amount numeric
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_amt numeric := ROUND(COALESCE(p_amount, 0)::numeric, 2);
+  v_today date := (now() AT TIME ZONE 'UTC')::date;
+  v_comp record;
+  v_stock public.company_stocks;
+  v_mult numeric;
+  v_old_price numeric;
+  v_curve_delta numeric;
+  v_new_curve numeric;
+  v_shares numeric;
+  v_new_price numeric;
+  v_cash numeric;
+  v_owned_usd numeric;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+  IF v_amt < 0.01 THEN
+    RAISE EXCEPTION 'Minimum investment is $0.01';
+  END IF;
+
+  SELECT id, owner_id, company_name, total_revenue
+  INTO v_comp
+  FROM public.product_companies
+  WHERE id = p_company_id;
+
+  IF v_comp.id IS NULL THEN
+    RAISE EXCEPTION 'Company not found';
+  END IF;
+  IF v_comp.owner_id = v_uid THEN
+    RAISE EXCEPTION 'Company owners cannot buy their own stock. Grow sales to attract investors!';
+  END IF;
+
+  SELECT cash INTO v_cash FROM public.profiles WHERE id = v_uid FOR UPDATE;
+  IF COALESCE(v_cash, 0) < v_amt THEN
+    RAISE EXCEPTION 'Not enough cash';
+  END IF;
+
+  INSERT INTO public.company_stocks (company_id, curve_price, open_price_today, open_price_date, last_payout_date)
+  VALUES (p_company_id, 1.00, 1.00, v_today, v_today)
+  ON CONFLICT (company_id) DO NOTHING;
+
+  SELECT * INTO v_stock FROM public.company_stocks WHERE company_id = p_company_id FOR UPDATE;
+
+  v_mult := public.calc_company_sales_multiplier(v_comp.total_revenue);
+  v_old_price := GREATEST(0.01, v_stock.curve_price * v_mult);
+  IF v_stock.open_price_date < v_today THEN
+    v_stock.open_price_today := v_old_price;
+    v_stock.open_price_date := v_today;
+  END IF;
+
+  -- STOCK_K = 0.002
+  v_curve_delta := (v_amt / v_mult) * 0.002;
+  v_new_curve := v_stock.curve_price + v_curve_delta;
+  v_shares := ln(v_new_curve / v_stock.curve_price) / 0.002;
+  v_new_price := ROUND((v_new_curve * v_mult)::numeric, 4);
+  v_owned_usd := ROUND((((v_new_curve - 1.0) / 0.002) * v_mult)::numeric, 2);
+
+  UPDATE public.profiles
+  SET cash = ROUND((COALESCE(cash, 0) - v_amt)::numeric, 2)
+  WHERE id = v_uid
+  RETURNING cash INTO v_cash;
+
+  UPDATE public.company_stocks
+  SET curve_price = v_new_curve,
+      open_price_today = v_stock.open_price_today,
+      open_price_date = v_stock.open_price_date,
+      updated_at = now()
+  WHERE company_id = p_company_id;
+
+  INSERT INTO public.company_stock_holdings (user_id, company_id, shares, total_spent_usd, updated_at)
+  VALUES (v_uid, p_company_id, v_shares, v_amt, now())
+  ON CONFLICT (user_id, company_id) DO UPDATE
+  SET shares = public.company_stock_holdings.shares + v_shares,
+      total_spent_usd = public.company_stock_holdings.total_spent_usd + v_amt,
+      updated_at = now();
+
+  INSERT INTO public.company_stock_trades (company_id, user_id, type, amount_usd, shares, price_after)
+  VALUES (p_company_id, v_uid, 'buy', v_amt, v_shares, v_new_price);
+
+  RETURN jsonb_build_object(
+    'new_price', v_new_price,
+    'curve_price', v_new_curve,
+    'shares_bought', v_shares,
+    'cash_remaining', v_cash,
+    'owned_stock_usd', v_owned_usd
+  );
+END;
+$$;
+
+-- Sell Company Stock RPC
+CREATE OR REPLACE FUNCTION public.sell_company_stock(
+  p_company_id uuid,
+  p_shares numeric
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_today date := (now() AT TIME ZONE 'UTC')::date;
+  v_comp record;
+  v_stock public.company_stocks;
+  v_hold public.company_stock_holdings;
+  v_sell_shares numeric;
+  v_mult numeric;
+  v_old_price numeric;
+  v_new_curve numeric;
+  v_raw_proceeds numeric;
+  v_proceeds numeric;
+  v_new_price numeric;
+  v_remaining numeric;
+  v_cash numeric;
+  v_owned_usd numeric;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+  IF COALESCE(p_shares, 0) <= 0 THEN
+    RAISE EXCEPTION 'No shares to sell';
+  END IF;
+
+  SELECT id, owner_id, company_name, total_revenue
+  INTO v_comp
+  FROM public.product_companies
+  WHERE id = p_company_id;
+
+  IF v_comp.id IS NULL THEN
+    RAISE EXCEPTION 'Company not found';
+  END IF;
+
+  SELECT * INTO v_stock FROM public.company_stocks WHERE company_id = p_company_id FOR UPDATE;
+  SELECT * INTO v_hold FROM public.company_stock_holdings
+  WHERE user_id = v_uid AND company_id = p_company_id FOR UPDATE;
+
+  IF v_stock.company_id IS NULL OR v_hold.user_id IS NULL OR COALESCE(v_hold.shares, 0) <= 0 THEN
+    RAISE EXCEPTION 'You do not own shares in this company';
+  END IF;
+
+  v_sell_shares := LEAST(p_shares, v_hold.shares);
+  v_mult := public.calc_company_sales_multiplier(v_comp.total_revenue);
+  v_old_price := GREATEST(0.01, v_stock.curve_price * v_mult);
+  IF v_stock.open_price_date < v_today THEN
+    v_stock.open_price_today := v_old_price;
+    v_stock.open_price_date := v_today;
+  END IF;
+
+  v_new_curve := GREATEST(1.00, v_stock.curve_price * exp(-0.002 * v_sell_shares));
+  v_raw_proceeds := GREATEST(0, (v_stock.curve_price - v_new_curve) / 0.002) * v_mult;
+  v_proceeds := FLOOR((v_raw_proceeds + 0.000000001) * 100) / 100;
+  v_new_price := ROUND((v_new_curve * v_mult)::numeric, 4);
+  v_remaining := CASE WHEN (v_hold.shares - v_sell_shares) < 0.00000001 THEN 0 ELSE (v_hold.shares - v_sell_shares) END;
+  v_owned_usd := ROUND((((v_new_curve - 1.0) / 0.002) * v_mult)::numeric, 2);
+
+  UPDATE public.profiles
+  SET cash = ROUND((COALESCE(cash, 0) + v_proceeds)::numeric, 2)
+  WHERE id = v_uid
+  RETURNING cash INTO v_cash;
+
+  UPDATE public.company_stocks
+  SET curve_price = v_new_curve,
+      open_price_today = v_stock.open_price_today,
+      open_price_date = v_stock.open_price_date,
+      updated_at = now()
+  WHERE company_id = p_company_id;
+
+  UPDATE public.company_stock_holdings
+  SET shares = v_remaining,
+      total_returned_usd = public.company_stock_holdings.total_returned_usd + v_proceeds,
+      updated_at = now()
+  WHERE user_id = v_uid AND company_id = p_company_id;
+
+  INSERT INTO public.company_stock_trades (company_id, user_id, type, amount_usd, shares, price_after)
+  VALUES (p_company_id, v_uid, 'sell', v_proceeds, v_sell_shares, v_new_price);
+
+  RETURN jsonb_build_object(
+    'new_price', v_new_price,
+    'curve_price', v_new_curve,
+    'proceeds', v_proceeds,
+    'remaining_shares', v_remaining,
+    'cash_remaining', v_cash,
+    'owned_stock_usd', v_owned_usd
+  );
+END;
+$$;
+
+-- Daily 00:00 UTC Owner Payout RPC: pays company owner 100% of total investor-owned stock value every day!
+CREATE OR REPLACE FUNCTION public.claim_company_stock_payout(
+  p_company_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_today date := (now() AT TIME ZONE 'UTC')::date;
+  v_comp record;
+  v_stock public.company_stocks;
+  v_mult numeric;
+  v_owned_usd numeric := 0;
+  v_cash numeric := 0;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  SELECT id, owner_id, company_name, total_revenue
+  INTO v_comp
+  FROM public.product_companies
+  WHERE id = p_company_id;
+
+  IF v_comp.id IS NULL OR v_comp.owner_id <> v_uid THEN
+    RAISE EXCEPTION 'Not authorized for this company';
+  END IF;
+
+  INSERT INTO public.company_stocks (company_id, curve_price, open_price_today, open_price_date, last_payout_date)
+  VALUES (p_company_id, 1.00, 1.00, v_today, v_today)
+  ON CONFLICT (company_id) DO NOTHING;
+
+  SELECT * INTO v_stock FROM public.company_stocks WHERE company_id = p_company_id FOR UPDATE;
+  v_mult := public.calc_company_sales_multiplier(v_comp.total_revenue);
+  v_owned_usd := ROUND((GREATEST(0, (v_stock.curve_price - 1.0) / 0.002) * v_mult)::numeric, 2);
+
+  IF v_stock.last_payout_date >= v_today THEN
+    SELECT cash INTO v_cash FROM public.profiles WHERE id = v_uid;
+    RETURN jsonb_build_object(
+      'claimed', false,
+      'already_claimed', true,
+      'payout_amount', 0,
+      'next_payout_estimate', v_owned_usd,
+      'cash_remaining', COALESCE(v_cash, 0)
+    );
+  END IF;
+
+  IF v_owned_usd > 0 THEN
+    UPDATE public.profiles
+    SET cash = ROUND((COALESCE(cash, 0) + v_owned_usd)::numeric, 2)
+    WHERE id = v_uid
+    RETURNING cash INTO v_cash;
+
+    INSERT INTO public.company_stock_payouts (company_id, owner_id, payout_date, owned_stock_usd, payout_amount)
+    VALUES (p_company_id, v_uid, v_today, v_owned_usd, v_owned_usd)
+    ON CONFLICT (company_id, payout_date) DO NOTHING;
+  ELSE
+    SELECT cash INTO v_cash FROM public.profiles WHERE id = v_uid;
+  END IF;
+
+  UPDATE public.company_stocks
+  SET last_payout_date = v_today,
+      last_payout_amount = v_owned_usd,
+      total_stock_payouts = COALESCE(total_stock_payouts, 0) + v_owned_usd,
+      open_price_today = ROUND((v_stock.curve_price * v_mult)::numeric, 4),
+      open_price_date = v_today,
+      updated_at = now()
+  WHERE company_id = p_company_id;
+
+  RETURN jsonb_build_object(
+    'claimed', v_owned_usd > 0,
+    'already_claimed', false,
+    'payout_amount', v_owned_usd,
+    'next_payout_estimate', v_owned_usd,
+    'cash_remaining', COALESCE(v_cash, 0)
+  );
+END;
+$$;
+
 GRANT EXECUTE ON FUNCTION public.unlock_company_research(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.save_pc_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.produce_pc_product(uuid, integer) TO authenticated;
-
+GRANT EXECUTE ON FUNCTION public.buy_company_stock(uuid, numeric) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.sell_company_stock(uuid, numeric) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_company_stock_payout(uuid) TO authenticated;
