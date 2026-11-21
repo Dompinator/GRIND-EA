@@ -548,10 +548,6 @@ $('#authForm')?.addEventListener('submit', async (e) => {
   const submitBtn = $('#authSubmit');
   if (mode === 'signup') {
     const isTestAccount = !!$('#authTestAccount')?.checked;
-    try {
-      if (isTestAccount) sessionStorage.setItem('grind_signup_test_account', '1');
-      else sessionStorage.removeItem('grind_signup_test_account');
-    } catch (e) {}
     if (!password || password.length < 6) return authMsg('Password must be at least 6 characters.');
     const requiresEmailOtp = /\d/.test(email);
     if (submitBtn) {
@@ -562,9 +558,15 @@ $('#authForm')?.addEventListener('submit', async (e) => {
       // Prevent duplicate/OTP overwrite on emails that already have a GRIND account
       const { data: existingProf } = await sb.from('profiles').select('id').ilike('email', email).maybeSingle();
       if (existingProf) {
+        try { sessionStorage.removeItem('grind_signup_test_account'); } catch (e) {}
         authMsg('An account with this email already exists. Please log in instead.');
         return;
       }
+
+      try {
+        if (isTestAccount) sessionStorage.setItem('grind_signup_test_account', '1');
+        else sessionStorage.removeItem('grind_signup_test_account');
+      } catch (e) {}
 
       if (!requiresEmailOtp) {
         // Emails with no numbers skip email code confirmation and create directly
@@ -615,6 +617,7 @@ $('#authForm')?.addEventListener('submit', async (e) => {
       }
     }
   } else {
+    try { sessionStorage.removeItem('grind_signup_test_account'); } catch (e) {}
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) return authMsg('Wrong email or password.');
     await loadProfile();
