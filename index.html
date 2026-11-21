@@ -30,6 +30,10 @@
       <form id="authForm">
         <label>Email<input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com"></label>
         <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Password (min 6)"></label>
+        <label id="testAccountOption" class="hidden" style="display:flex;align-items:flex-start;gap:10px;margin:4px 0 12px;padding:12px;border:1px solid rgba(168,85,247,.35);border-radius:12px;background:rgba(168,85,247,.07);">
+          <input id="authTestAccount" type="checkbox" style="width:17px;height:17px;flex:0 0 auto;margin-top:2px;">
+          <span><strong style="display:block;color:#f5f0ff;">Create a Test Account</strong><small class="muted" style="display:block;line-height:1.4;">Private testing account with unlimited cash. Hidden from public lists and leaderboards. Cannot create coins or invest.</small></span>
+        </label>
         <button class="primary-btn full" id="authSubmit" type="submit">Log in</button>
       </form>
       <div id="signupVerifyBox" class="verify-box hidden">
