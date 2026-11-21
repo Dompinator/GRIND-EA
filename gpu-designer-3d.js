@@ -10,10 +10,16 @@
     width: 125,        // 105..150 mm
     thickness: 52,     // 38..76 mm
     body: 'plastic',   // plastic | metallic | carbon
-    shroud: 'rounded', // rounded | angular | compact
+    finish: 'satin',   // satin | matte | gloss
+    shroud: 'rounded', // rounded | angular | compact | founders | stealth | triple
     primaryColor: '#222733',
     accentColor: '#a855f7',
     backplate: true,
+    backplateStyle: 'flow_through', // off | solid | flow_through | louvered
+    finStyle: 'silver',    // silver | black | copper
+    pipeStyle: 'copper',   // copper | nickel | black
+    powerType: '12v2x6',   // 1x8pin | 2x8pin | 3x8pin | 12v2x6
+    ioStyle: 'steel',      // steel | black
     elements: [
       { id: 'fan_1', kind: 'fan', fanType: 'basic', position: 0.28, size: 1.0 },
       { id: 'fan_2', kind: 'fan', fanType: 'basic', position: 0.72, size: 1.0 }
@@ -28,6 +34,8 @@
   let contextLost = false;
 
   let stageEl = null;
+  let offscreenHostEl = null;
+  let offscreenPromise = null;
   let dockEl = null;
   let sizeHudEl = null;
   let renderer = null;
@@ -37,6 +45,8 @@
   let pmremGenerator = null;
   let envTexture = null;
   let resizeObserver = null;
+  let thumbQueueBusy = false;
+  const gpuThumbQueue = [];
 
   let gpuRoot = null;
   let backplateLayer = null;
@@ -51,6 +61,7 @@
   let fanAssemblies = [];     // [{ id, index, group, rotor, hitMesh, ringMat, yTop, baseEmissive, speed, fanType, r, pos }]
   let draggableDecals = [];   // [{ id, group, hitMesh, dragPlaneAxis, dragPlaneConst }]
   let sizeArrowHandles = [];  // [{ axis: 'x'|'z', sign: 1|-1, hitMesh, mat, baseColor }]
+  let rainbowRgbMats = [];    // [{ mat, offset }]
   const logoImageCache = new Map(); // url -> HTMLImageElement | 'loading'
   const decalTexCache = new Map();  // sig -> THREE.CanvasTexture
   const proceduralTex = {};
@@ -71,6 +82,7 @@
   let sizeMode = false;
   let currentExplode = 0;
   let targetExplode = 0;
+  let rainbowPhase = 0;
   let camAnimActive = false;
   const camTargetPos = { x: 2.9, y: 2.45, z: -3.15 };
   const camTargetLook = { x: 0, y: 0.05, z: 0 };
@@ -459,9 +471,9 @@
     const hdDeck = deckD / 2;
     const mainBevel = shapeType === 'compact' ? 0.011 : 0.018;
     const deckBevel = shapeType === 'compact' ? 0.008 : 0.011;
-    const cornerCutZ = shapeType === 'angular'
+    const cornerCutZ = (shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple')
       ? Math.min(0.14, deckW * 0.065, deckD * 0.14) * 1.3
-      : shapeType === 'rounded'
+      : (shapeType === 'rounded')
         ? Math.min(0.18, deckW * 0.085, deckD * 0.22)
         : 0.025;
     const edgeMargin = 0.022;
@@ -496,6 +508,9 @@
       return {
         id: f.id,
         fanType: f.fanType || 'basic',
+        bladeColor: f.bladeColor || 'dark',
+        hubStyle: f.hubStyle || 'auto',
+        rgbRing: !!f.rgbRing,
         pos,
         fx: -hw + w * pos,
         desiredR,
@@ -507,7 +522,6 @@
     const minFanR = 0.115;
     const absMaxX = maxXForR(minFanR);
 
-    // 1. Place each fan up near the requested edge while smoothly adapting radius if tucked into the outer tip
     for (const item of sorted) {
       item.fx = clamp(item.fx, -absMaxX, absMaxX);
       const roomR = maxRForX(item.fx);
@@ -516,7 +530,6 @@
       item.fx = clamp(item.fx, -safeX, safeX);
     }
 
-    // 2. Resolve any adjacent hole overlaps across 2 passes so ExtrudeGeometry never self-intersects
     const minClear = 0.042;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < sorted.length - 1; i++) {
@@ -539,7 +552,6 @@
       }
     }
 
-    // 3. Final strict clamp against inner deck perimeter so EVERY fan cuts through ALL shroud layers!
     for (const item of sorted) {
       const safeX = maxXForR(item.r);
       item.fx = clamp(item.fx, -safeX, safeX);
@@ -551,24 +563,25 @@
     return items;
   }
 
-  function createShroudGeometryWithHoles(w, h, d, shapeType, holesList, fastMode = false, isDeck = false) {
+  function createShroudGeometryWithHoles(w, h, d, shapeType, holesList, fastMode = false, isDeck = false, rectCutout = null) {
     const hw = w / 2;
     const hd = d / 2;
     const shape = new THREE.Shape();
 
-    if (shapeType === 'angular') {
+    if (shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple') {
       const c1 = isDeck ? Math.min(0.14, w * 0.065, d * 0.14) : Math.min(0.16, w * 0.075, d * 0.15);
+      const asym = shapeType === 'triple' ? 1.55 : shapeType === 'founders' ? 1.15 : 1.35;
       shape.moveTo(-hw + c1, -hd);
-      shape.lineTo(hw - c1 * 1.35, -hd);
+      shape.lineTo(hw - c1 * asym, -hd);
       shape.lineTo(hw, -hd + c1 * 1.3);
       shape.lineTo(hw, hd - c1 * 1.3);
-      shape.lineTo(hw - c1 * 1.35, hd);
+      shape.lineTo(hw - c1 * (shapeType === 'triple' ? 0.9 : asym), hd);
       shape.lineTo(-hw + c1, hd);
       shape.lineTo(-hw, hd - c1);
       shape.lineTo(-hw, -hd + c1);
       shape.closePath();
-    } else if (shapeType === 'compact') {
-      const r = Math.min(0.036, w * 0.02, d * 0.04);
+    } else if (shapeType === 'compact' || shapeType === 'stealth') {
+      const r = shapeType === 'stealth' ? Math.min(0.06, w * 0.03, d * 0.06) : Math.min(0.036, w * 0.02, d * 0.04);
       shape.moveTo(-hw + r, -hd);
       shape.lineTo(hw - r, -hd);
       shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
@@ -592,8 +605,8 @@
     }
 
     const bevel = isDeck
-      ? (shapeType === 'compact' ? 0.008 : 0.011)
-      : (shapeType === 'compact' ? 0.011 : 0.018);
+      ? ((shapeType === 'compact' || shapeType === 'stealth') ? 0.008 : 0.011)
+      : ((shapeType === 'compact' || shapeType === 'stealth') ? 0.011 : 0.018);
 
     // Always bore smooth circular fan cutouts directly through both main shroud & deck!
     for (const hSpec of holesList) {
@@ -603,6 +616,30 @@
         const hole = new THREE.Path();
         hole.absarc(hSpec.fx, 0, holeR, 0, Math.PI * 2, true);
         shape.holes.push(hole);
+      }
+    }
+
+    // Optional rectangular flow-through radiator cutout window (used by Flow-Through Backplate)
+    if (rectCutout && rectCutout.rw > 0.08 && rectCutout.rd > 0.08) {
+      const cx = rectCutout.cx || 0;
+      const rx = rectCutout.rw / 2;
+      const rz = rectCutout.rd / 2;
+      const rr = Math.min(0.05, rx * 0.25, rz * 0.25);
+      if (cx + rx < hw - 0.04 && cx - rx > -hw + 0.04 && rz < hd - 0.04) {
+        const win = new THREE.Path();
+        win.moveTo(cx - rx + rr, -rz);
+        win.lineTo(cx + rx - rr, -rz);
+        win.quadraticCurveTo(cx + rx, -rz, cx + rx, -rz + rr);
+        win.lineTo(cx + rx, rz - rr);
+        win.quadraticCurveTo(cx + rx, rz, cx + rx - rr, rz);
+        win.lineTo(cx - rx + rr, rz);
+        win.quadraticCurveTo(cx - rx, rz, cx - rx, rz - rr);
+        win.lineTo(cx - rx, -rz + rr);
+        win.quadraticCurveTo(cx - rx, -rz, cx - rx + rr, -rz);
+        // Ensure clockwise winding for hole
+        const pts = win.getPoints(16).reverse();
+        const cwWin = new THREE.Path(pts);
+        shape.holes.push(cwWin);
       }
     }
 
@@ -621,7 +658,6 @@
     geo.translate(0, -(minY + maxY) / 2, 0);
     geo.computeVertexNormals();
 
-    // Triplanar UV mapping so brushed metal & CPU carbon twill stay crisp without stretching
     const pos = geo.attributes.position;
     const norm = geo.attributes.normal;
     const uvs = new Float32Array(pos.count * 2);
@@ -646,9 +682,12 @@
     return geo;
   }
 
-  function makeBodyMaterial(bodyType, primaryHex, darkenFactor = 1.0) {
+  function makeBodyMaterial(bodyType, primaryHex, darkenFactor = 1.0, finish = 'satin') {
     const baseCol = new THREE.Color(primaryHex || '#222733');
     if (darkenFactor !== 1.0) baseCol.multiplyScalar(darkenFactor);
+
+    const isMatte = finish === 'matte';
+    const isGloss = finish === 'gloss';
 
     if (bodyType === 'metallic') {
       const tex = getBrushedMetalTexture();
@@ -657,16 +696,15 @@
         map: tex,
         bumpMap: tex,
         bumpScale: 0.005,
-        metalness: 0.86,
-        roughness: 0.22,
-        clearcoat: 0.3,
-        clearcoatRoughness: 0.22,
+        metalness: isMatte ? 0.72 : 0.88,
+        roughness: isMatte ? 0.40 : isGloss ? 0.14 : 0.22,
+        clearcoat: isMatte ? 0.08 : isGloss ? 0.78 : 0.30,
+        clearcoatRoughness: isGloss ? 0.08 : 0.24,
         anisotropy: 0.72
       });
     }
     if (bodyType === 'carbon') {
       const { color, bump } = getCarbonTextures();
-      // Keep deep CPU-style obsidian weave visible even on near-black primary colors
       const lum = baseCol.getHSL({ h: 0, s: 0, l: 0 }).l;
       const carbonTint = lum < 0.14
         ? baseCol.clone().lerp(new THREE.Color(0x282f3e), 0.35)
@@ -676,20 +714,20 @@
         map: color,
         bumpMap: bump,
         bumpScale: 0.0085,
-        metalness: 0.22,
-        roughness: 0.44,
-        clearcoat: 0.26,
-        clearcoatRoughness: 0.30
+        metalness: isGloss ? 0.28 : 0.20,
+        roughness: isMatte ? 0.58 : isGloss ? 0.26 : 0.44,
+        clearcoat: isMatte ? 0.06 : isGloss ? 0.68 : 0.26,
+        clearcoatRoughness: isGloss ? 0.12 : 0.30
       });
     }
     return new THREE.MeshPhysicalMaterial({
       color: baseCol,
       bumpMap: getPlasticBumpTexture(),
       bumpScale: 0.0045,
-      metalness: 0.14,
-      roughness: 0.44,
-      clearcoat: 0.18,
-      clearcoatRoughness: 0.36
+      metalness: isGloss ? 0.20 : 0.14,
+      roughness: isMatte ? 0.62 : isGloss ? 0.18 : 0.44,
+      clearcoat: isMatte ? 0.04 : isGloss ? 0.72 : 0.18,
+      clearcoatRoughness: isGloss ? 0.10 : 0.36
     });
   }
 
@@ -753,15 +791,18 @@
     const isSmall = type === 'gpu_small_fans';
     const isMedium = type === 'gpu_medium_fans';
     const isSmart = type === 'gpu_smart_fans';
+    const rgbHalo = !!layout.rgbRing;
+    const bladeChoice = layout.bladeColor || 'dark';
+    const hubChoice = layout.hubStyle || 'auto';
 
-    // Precision CNC-chamfered thin metallic fan cowl ring
+    // Precision CNC-chamfered thin metallic fan cowl ring (supports RGB ring glow!)
     const ringMat = new THREE.MeshPhysicalMaterial({
-      color: isSmart ? accentMat.color : isMedium ? 0xbec7d5 : isSmall ? 0x8691a2 : 0x454d5e,
+      color: (isSmart || rgbHalo) ? accentMat.color : isMedium ? 0xbec7d5 : isSmall ? 0x8691a2 : 0x454d5e,
       metalness: isSmart || isMedium ? 0.9 : 0.48,
       roughness: isSmart || isMedium ? 0.2 : 0.36,
       clearcoat: 0.3,
-      emissive: isSmart ? accentMat.color : new THREE.Color(0x000000),
-      emissiveIntensity: isSmart ? 0.28 : 0
+      emissive: (isSmart || rgbHalo) ? accentMat.color : new THREE.Color(0x000000),
+      emissiveIntensity: rgbHalo ? 1.15 : (isSmart ? 0.28 : 0)
     });
 
     const cowlPts = [
@@ -802,10 +843,19 @@
 
     const bladeCount = isSmart ? 13 : isMedium ? 11 : isSmall ? 9 : 7;
     const bladePitch = isSmart ? 0.46 : isMedium ? 0.42 : 0.36;
+    const bladeHex = bladeChoice === 'white'
+      ? 0xe2e8f0
+      : bladeChoice === 'silver'
+        ? 0x9aa4b5
+        : bladeChoice === 'graphite'
+          ? 0x3b4456
+          : bladeChoice === 'accent'
+            ? accentMat.color
+            : (isSmart ? 0x262d3d : isMedium ? 0x1e2432 : isSmall ? 0x181c26 : 0x141720);
     const bladeMat = new THREE.MeshPhysicalMaterial({
-      color: isSmart ? 0x262d3d : isMedium ? 0x1e2432 : isSmall ? 0x181c26 : 0x141720,
-      metalness: isSmart ? 0.48 : 0.26,
-      roughness: isSmart ? 0.24 : 0.32,
+      color: bladeHex,
+      metalness: bladeChoice === 'silver' ? 0.82 : isSmart ? 0.48 : 0.26,
+      roughness: bladeChoice === 'white' ? 0.28 : isSmart ? 0.24 : 0.32,
       clearcoat: 0.58,
       clearcoatRoughness: 0.2
     });
@@ -830,10 +880,19 @@
       ));
     }
 
+    const hubCol = hubChoice === 'chrome'
+      ? 0xd8e0eb
+      : hubChoice === 'gold'
+        ? 0xe2bc5e
+        : hubChoice === 'dark'
+          ? 0x1c212c
+          : hubChoice === 'accent'
+            ? accentMat.color
+            : ((isSmart || isMedium) ? 0xcfd7e3 : 0x2f3646);
     const hubMat = new THREE.MeshPhysicalMaterial({
-      color: isSmart || isMedium ? 0xcfd7e3 : 0x2f3646,
-      metalness: isSmart || isMedium ? 0.9 : 0.55,
-      roughness: 0.22,
+      color: hubCol,
+      metalness: (hubChoice === 'chrome' || hubChoice === 'gold' || (hubChoice === 'auto' && (isSmart || isMedium))) ? 0.92 : 0.55,
+      roughness: 0.20,
       clearcoat: 0.35,
       anisotropy: 0.7
     });
@@ -869,12 +928,12 @@
       hitMesh,
       ringMat,
       yTop: yBoreCenter + boreDepth * 0.5,
-      baseEmissive: isSmart ? 0.28 : 0,
+      baseEmissive: rgbHalo ? 1.15 : (isSmart ? 0.28 : 0),
       speed: isSmart ? 3.4 : isMedium ? 2.6 : isSmall ? 2.9 : 2.1
     });
   }
 
-  function mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, isText, colorHex) {
+  function mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, isText, colorHex, glowText = false) {
     const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
     const zPos = clamp(Number(el.zPosition ?? (placement === 'top' ? 0.88 : 0.5)), 0.08, 0.92);
     const xCoord = -bounds.w / 2 + bounds.w * pos;
@@ -891,7 +950,7 @@
       metalness: 0.2,
       emissive: isText ? col : new THREE.Color(0x000000),
       emissiveMap: isText ? tex : null,
-      emissiveIntensity: isText ? 0.35 : 0,
+      emissiveIntensity: isText ? (glowText ? 1.35 : 0.35) : 0,
       polygonOffset: true,
       polygonOffsetFactor: -3,
       polygonOffsetUnits: -3
@@ -936,7 +995,6 @@
       dragPlaneAxis = 'x';
       dragPlaneConst = g.position.x;
     } else {
-      // 'side' / 'rear' -> Main Power Side (-Z edge) with no black box backing
       g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.016);
       mesh.rotation.y = Math.PI;
       dragPlaneAxis = 'z';
@@ -948,10 +1006,8 @@
     const hitW = (placement === 'right' || placement === 'left') ? 0.14 : planeW * 1.15;
     const hitH = (placement === 'top' || placement === 'back') ? 0.16 : Math.max(0.14, planeH * 1.5);
     const hitD = (placement === 'right' || placement === 'left') ? planeW * 1.15 : (placement === 'top' || placement === 'back') ? planeH * 1.5 : 0.16;
-    const hitMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(hitW, hitH, hitD),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
+    const hitMesh = new THREE.Mesh(getSharedHitBoxGeo(), getSharedHitMaterial());
+    hitMesh.scale.set(hitW, hitH, hitD);
     hitMesh.userData.dragId = el.id;
     hitMesh.userData.dragKind = 'decal';
     g.add(hitMesh);
@@ -967,7 +1023,16 @@
     });
   }
 
+  function getSharedHitBoxGeo() {
+    if (proceduralGeo.hitBox) return proceduralGeo.hitBox;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    sharedAssets.add(geo);
+    proceduralGeo.hitBox = geo;
+    return geo;
+  }
+
   function buildPlacedDecalsAndStrips(bounds, accentHex) {
+    rainbowRgbMats = [];
     const elements = Array.isArray(config.elements) ? config.elements : [];
 
     for (const el of elements) {
@@ -978,12 +1043,13 @@
         const planeH = isEdge ? clamp(bounds.outerShroudH * 0.85 * scale, 0.09, bounds.outerShroudH * 1.1) : Math.min(bounds.d * 0.28 * scale, 0.32);
         const planeW = Math.min(bounds.w * 0.72, planeH * 3.85);
         const tex = getTextDecalTexture(el.text || 'GPU', el.color || '#ffffff');
+        const glow = !!el.glow;
 
         if (placement === 'both_sides') {
-          mountSingleDecalMesh(el, 'side', bounds, tex, planeW, planeH, true, el.color);
-          mountSingleDecalMesh(el, 'opposite', bounds, tex, planeW, planeH, true, el.color);
+          mountSingleDecalMesh(el, 'side', bounds, tex, planeW, planeH, true, el.color, glow);
+          mountSingleDecalMesh(el, 'opposite', bounds, tex, planeW, planeH, true, el.color, glow);
         } else {
-          mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, true, el.color);
+          mountSingleDecalMesh(el, placement, bounds, tex, planeW, planeH, true, el.color, glow);
         }
       } else if (el.kind === 'logo') {
         const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.6);
@@ -998,23 +1064,122 @@
         } else {
           mountSingleDecalMesh(el, placement, bounds, tex, sz, sz, false);
         }
-      } else if (el.kind === 'rgb_strip') {
-        const col = new THREE.Color(el.color || accentHex || '#a855f7');
-        const rgbMat = new THREE.MeshStandardMaterial({
-          color: col,
-          emissive: col,
-          emissiveIntensity: 1.75,
-          roughness: 0.18,
-          metalness: 0.1
+      } else if (el.kind === 'accent_bar') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.4, 2.0);
+        const placement = el.placement || 'top';
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const zPos = clamp(Number(el.zPosition ?? 0.86), 0.08, 0.92);
+        const xCoord = -bounds.w / 2 + bounds.w * pos;
+        const zAcross = (-bounds.d / 2 + bounds.d * zPos) * 0.78;
+        const barW = Math.min(bounds.w * 0.75, 0.52 * scale);
+        const barMat = new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(el.color || accentHex || '#a855f7'),
+          metalness: 0.78,
+          roughness: 0.22,
+          clearcoat: 0.45
         });
+        const g = new THREE.Group();
+        let dragPlaneAxis = 'y', dragPlaneConst = 0;
+        if (placement === 'side' || placement === 'rear') {
+          makeBox(g, barW, Math.max(0.02, bounds.outerShroudH * 0.22), 0.018, barMat, 0, 0, 0);
+          g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.012);
+          dragPlaneAxis = 'z'; dragPlaneConst = g.position.z;
+        } else if (placement === 'back') {
+          makeBox(g, barW, 0.014, 0.042, barMat, 0, 0, 0);
+          g.position.set(xCoord, bounds.backBottomY - 0.01, zAcross);
+          dragPlaneAxis = 'y'; dragPlaneConst = g.position.y;
+        } else {
+          makeBox(g, barW, 0.015, 0.046, barMat, 0, 0, 0);
+          g.position.set(xCoord, bounds.deckTopY + 0.008, zAcross);
+          dragPlaneAxis = 'y'; dragPlaneConst = g.position.y;
+        }
+        const hitMesh = new THREE.Mesh(getSharedHitBoxGeo(), getSharedHitMaterial());
+        hitMesh.scale.set(barW * 1.15, 0.14, 0.16);
+        hitMesh.userData.dragId = el.id;
+        hitMesh.userData.dragKind = 'decal';
+        g.add(hitMesh);
+        elementsGroup.add(g);
+        draggableDecals.push({ id: el.id, placement, group: g, hitMesh, dragPlaneAxis, dragPlaneConst });
+      } else if (el.kind === 'vent_grille') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.8);
+        const placement = el.placement || 'top';
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const zPos = clamp(Number(el.zPosition ?? 0.86), 0.08, 0.92);
+        const xCoord = -bounds.w / 2 + bounds.w * pos;
+        const zAcross = (-bounds.d / 2 + bounds.d * zPos) * 0.78;
+        const gw = Math.min(bounds.w * 0.55, 0.36 * scale);
+        const gd = Math.min(bounds.d * 0.42, 0.16 * scale);
+        const frameMat = new THREE.MeshPhysicalMaterial({ color: 0x1a1f2b, metalness: 0.72, roughness: 0.32 });
+        const slotMat = new THREE.MeshStandardMaterial({ color: 0x090b10, metalness: 0.25, roughness: 0.75 });
+        const g = new THREE.Group();
+        makeBox(g, gw, 0.012, gd, frameMat, 0, 0, 0);
+        const slats = 6;
+        for (let s = 0; s < slats; s++) {
+          const sx = -gw * 0.38 + (s / (slats - 1)) * gw * 0.76;
+          makeBox(g, gw * 0.07, 0.016, gd * 0.76, slotMat, sx, 0.002, 0);
+        }
+        let dragPlaneAxis = 'y', dragPlaneConst = 0;
+        if (placement === 'back') {
+          g.position.set(xCoord, bounds.backBottomY - 0.009, zAcross);
+          dragPlaneAxis = 'y'; dragPlaneConst = g.position.y;
+        } else if (placement === 'side' || placement === 'rear') {
+          g.rotation.x = Math.PI / 2;
+          g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.010);
+          dragPlaneAxis = 'z'; dragPlaneConst = g.position.z;
+        } else {
+          g.position.set(xCoord, bounds.deckTopY + 0.006, zAcross);
+          dragPlaneAxis = 'y'; dragPlaneConst = g.position.y;
+        }
+        const hitMesh = new THREE.Mesh(getSharedHitBoxGeo(), getSharedHitMaterial());
+        hitMesh.scale.set(gw * 1.15, 0.14, Math.max(0.16, gd * 1.3));
+        hitMesh.userData.dragId = el.id;
+        hitMesh.userData.dragKind = 'decal';
+        g.add(hitMesh);
+        elementsGroup.add(g);
+        draggableDecals.push({ id: el.id, placement, group: g, hitMesh, dragPlaneAxis, dragPlaneConst });
+      } else if (el.kind === 'rgb_strip') {
+        const isRainbow = el.colorMode === 'rainbow' || el.color === 'rainbow' || !!el.rainbow;
         const mode = el.placement || 'side';
+        const col = new THREE.Color(isRainbow ? '#a855f7' : (el.color || accentHex || '#a855f7'));
+        const makeRgbMat = (offset = 0) => {
+          const startCol = isRainbow ? new THREE.Color().setHSL((rainbowPhase + offset) % 1, 0.95, 0.54) : col;
+          const m = new THREE.MeshStandardMaterial({
+            color: startCol,
+            emissive: startCol.clone(),
+            emissiveIntensity: 1.75,
+            roughness: 0.18,
+            metalness: 0.1
+          });
+          if (isRainbow) rainbowRgbMats.push({ mat: m, offset });
+          return m;
+        };
+
+        const addSegmentedRail = (spanW, hBar, dBar, yPos, zPos) => {
+          if (!isRainbow) {
+            makeBox(elementsGroup, spanW, hBar, dBar, makeRgbMat(0), 0, yPos, zPos);
+            return;
+          }
+          const segs = 14;
+          const segW = spanW / segs;
+          for (let i = 0; i < segs; i++) {
+            const xPos = -spanW / 2 + segW * (i + 0.5);
+            makeBox(elementsGroup, segW + 0.002, hBar, dBar, makeRgbMat(i / segs), xPos, yPos, zPos);
+          }
+        };
+
         if (mode === 'top' || mode === 'halo') {
-          makeBox(elementsGroup, bounds.w * 0.84, 0.018, 0.018, rgbMat, 0, bounds.deckTopY + 0.008, bounds.d * 0.43);
-          makeBox(elementsGroup, bounds.w * 0.84, 0.018, 0.018, rgbMat, 0, bounds.deckTopY + 0.008, -bounds.d * 0.43);
+          addSegmentedRail(bounds.w * 0.84, 0.018, 0.018, bounds.deckTopY + 0.008, bounds.d * 0.43);
+          addSegmentedRail(bounds.w * 0.84, 0.018, 0.018, bounds.deckTopY + 0.008, -bounds.d * 0.43);
         }
         if (mode === 'side' || mode === 'halo') {
-          makeBox(elementsGroup, bounds.w * 0.86, 0.02, 0.018, rgbMat, 0, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.frontZ + 0.006);
-          makeBox(elementsGroup, bounds.w * 0.86, 0.02, 0.018, rgbMat, 0, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.backZ - 0.006);
+          addSegmentedRail(bounds.w * 0.86, 0.02, 0.018, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.frontZ + 0.006);
+          addSegmentedRail(bounds.w * 0.86, 0.02, 0.018, bounds.shroudMidY + bounds.outerShroudH * 0.25, bounds.backZ - 0.006);
+        }
+        if (mode === 'slash') {
+          for (let s = 0; s < 3; s++) {
+            const bar = makeBox(elementsGroup, 0.022, 0.016, bounds.d * 0.22, makeRgbMat(s * 0.22), bounds.w * 0.31 + s * 0.065, bounds.deckTopY + 0.008, -bounds.d * 0.30);
+            bar.rotation.y = 0.46;
+          }
         }
       }
     }
@@ -1126,17 +1291,24 @@
 
     const lenScale = safeLength / 300;
     const widScale = safeWidth / 125;
-    const thickScale = clamp(Number(config.thickness || 52) / 52, 0.8, 1.35);
+    const safeThickMm = clamp(Math.round(Number(config.thickness) || 52), 38, 76);
+    config.thickness = safeThickMm;
+    const thickScale = clamp(safeThickMm / 52, 0.72, 1.48);
 
     const w = 2.85 * lenScale;
     const d = 1.18 * widScale;
     const h = 0.25 * thickScale;
 
     const bodyType = config.body || 'plastic';
+    const finishType = config.finish || 'satin';
     const shapeType = config.shroud || 'rounded';
     const primaryColor = config.primaryColor || '#222733';
     const accentColor = config.accentColor || '#a855f7';
-    const hasBackplate = config.backplate !== false;
+    const backplateStyle = config.backplate === false ? 'off' : (config.backplateStyle || 'flow_through');
+    const finStyle = config.finStyle || 'silver';
+    const pipeStyle = config.pipeStyle || 'copper';
+    const powerType = config.powerType || '12v2x6';
+    const ioStyle = config.ioStyle || 'steel';
 
     const fanElements = (config.elements || []).filter(e => e.kind === 'fan').slice(0, 6);
     const fanLayouts = computeSafeFanLayouts(fanElements, w, d, shapeType);
@@ -1148,11 +1320,11 @@
     const boreCenterY = mainShroudY + 0.02;
     const boreDepth = outerShroudH + 0.02;
 
-    const structSig = `${safeLength}|${safeWidth}|${thickScale.toFixed(3)}|${bodyType}|${shapeType}|${primaryColor}|${accentColor}|${hasBackplate ? 1 : 0}`;
-    const shroudSig = `${safeLength}|${safeWidth}|${thickScale.toFixed(3)}|${bodyType}|${shapeType}|${primaryColor}|${accentColor}|${fastMode ? 1 : 0}|` +
+    const structSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${backplateStyle}|${finStyle}|${pipeStyle}|${powerType}|${ioStyle}`;
+    const shroudSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${fastMode ? 1 : 0}|` +
       fanLayouts.map(l => `${l.fx.toFixed(4)}:${l.r.toFixed(4)}`).join(',');
-    const fanGeomSig = `${safeLength}|${safeWidth}|${thickScale.toFixed(3)}|${bodyType}|${primaryColor}|${accentColor}|` +
-      fanLayouts.map(l => `${l.id}:${l.fanType}:${l.r.toFixed(4)}`).join('|');
+    const fanGeomSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${primaryColor}|${accentColor}|` +
+      fanLayouts.map(l => `${l.id}:${l.fanType}:${l.bladeColor}:${l.hubStyle}:${l.rgbRing ? 1 : 0}:${l.r.toFixed(4)}`).join('|');
     const nonFanElements = (config.elements || []).filter(e => e.kind !== 'fan');
     const decalsSig = `${structSig}|` + JSON.stringify(nonFanElements);
     const gizmoSig = `${safeLength}|${safeWidth}|${sizeMode ? 1 : 0}`;
@@ -1176,14 +1348,26 @@
 
       const goldMat = new THREE.MeshStandardMaterial({ color: 0xe2bc5e, metalness: 0.94, roughness: 0.18 });
       const copperMat = new THREE.MeshPhysicalMaterial({ color: 0xd47a45, metalness: 0.95, roughness: 0.18, anisotropy: 0.55 });
-      const nickelPipeMat = new THREE.MeshPhysicalMaterial({ color: 0xcfd7e4, metalness: 0.95, roughness: 0.16, clearcoat: 0.25 });
-      const finMat = new THREE.MeshPhysicalMaterial({ color: 0xc8d2df, metalness: 0.92, roughness: 0.24, anisotropy: 0.72 });
+      const pipeColor = pipeStyle === 'nickel' ? 0xcfd7e4 : pipeStyle === 'black' ? 0x1d222e : 0xd47a45;
+      const pipeMat = new THREE.MeshPhysicalMaterial({ color: pipeColor, metalness: pipeStyle === 'black' ? 0.75 : 0.95, roughness: pipeStyle === 'black' ? 0.32 : 0.17, clearcoat: 0.25 });
+      const finColor = finStyle === 'black' ? 0x1e2430 : finStyle === 'copper' ? 0xd47a45 : 0xc8d2df;
+      const finMat = new THREE.MeshPhysicalMaterial({ color: finColor, metalness: 0.90, roughness: finStyle === 'black' ? 0.34 : 0.24, anisotropy: 0.72 });
+      const ioBracketMat = ioStyle === 'black'
+        ? new THREE.MeshPhysicalMaterial({ color: 0x1a1e28, metalness: 0.85, roughness: 0.28, anisotropy: 0.5 })
+        : trimMetal;
       const pcbMat = new THREE.MeshPhysicalMaterial({ map: getPcbTexture(), metalness: 0.2, roughness: 0.48, clearcoat: 0.14 });
 
       let backBottomY = -h * 0.42 - 0.02;
-      if (hasBackplate) {
-        const bpMat = makeBodyMaterial(bodyType, primaryColor, 0.92);
-        const bpGeo = createShroudGeometryWithHoles(w * 0.96, 0.032, d * 0.95, shapeType === 'angular' ? 'angular' : 'compact', [], false, false);
+      if (backplateStyle !== 'off') {
+        const bpMat = makeBodyMaterial(bodyType, primaryColor, 0.92, finishType);
+        const flowCutout = backplateStyle === 'flow_through'
+          ? { cx: w * 0.26, rw: w * 0.27, rd: d * 0.62 }
+          : null;
+        const bpGeo = createShroudGeometryWithHoles(
+          w * 0.96, 0.032, d * 0.95,
+          shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple' ? 'angular' : 'compact',
+          [], false, false, flowCutout
+        );
         const bp = new THREE.Mesh(bpGeo, bpMat);
         bp.position.y = -h * 0.62 - 0.058;
         bp.castShadow = !isSoftwareGl;
@@ -1193,10 +1377,19 @@
         backBottomY = bp.position.y + bpGeo.boundingBox.min.y;
 
         const bpUndersideY = bp.position.y - 0.017;
-        for (let i = 0; i < 7; i++) {
-          makeBox(backplateLayer, 0.016, 0.008, d * 0.48, darkMat, w * 0.15 + i * w * 0.038, bpUndersideY, 0);
+        if (backplateStyle === 'louvered') {
+          for (let i = 0; i < 11; i++) {
+            const rib = makeBox(backplateLayer, 0.022, 0.01, d * 0.56, darkMat, -w * 0.02 + i * w * 0.04, bpUndersideY, 0);
+            rib.rotation.y = 0.32;
+          }
+        } else if (backplateStyle === 'solid') {
+          makeBox(backplateLayer, w * 0.72, 0.01, 0.018, trimMetal, 0, bpUndersideY, 0);
+        } else {
+          // Machined frame collar around flow-through exhaust cutout
+          makeBox(backplateLayer, w * 0.29, 0.01, 0.018, accentMat, w * 0.26, bpUndersideY, d * 0.31);
+          makeBox(backplateLayer, w * 0.29, 0.01, 0.018, accentMat, w * 0.26, bpUndersideY, -d * 0.31);
         }
-        makeBox(backplateLayer, w * 0.64, 0.009, 0.016, accentMat, -w * 0.06, bpUndersideY, -d * 0.36);
+        makeBox(backplateLayer, w * 0.58, 0.009, 0.016, accentMat, -w * 0.10, bpUndersideY, -d * 0.37);
 
         const xBrk1 = makeBox(backplateLayer, 0.32, 0.012, 0.036, trimMetal, -0.05, bpUndersideY - 0.003, 0);
         xBrk1.rotation.y = Math.PI / 4;
@@ -1206,6 +1399,7 @@
           for (const sz of [-d * 0.36, d * 0.36]) {
             const isBracket = (sx === -0.17 || sx === 0.07);
             if (isBracket && Math.abs(sz) > d * 0.25) continue;
+            if (backplateStyle === 'flow_through' && sx > w * 0.12 && Math.abs(sz) < d * 0.34) continue;
             const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.012, 6), trimMetal);
             screw.position.set(sx, bpUndersideY - 0.002, sz);
             backplateLayer.add(screw);
@@ -1213,7 +1407,7 @@
         }
       }
 
-      // High-Density 12-Layer PCB + Iridescent Die + GDDR6X + VRM + 12V-2x6 + Slotted I/O
+      // High-Density 12-Layer PCB + Iridescent Die + GDDR6X + VRM + Power Connectors + I/O
       makeBox(pcbLayer, w * 0.96, 0.032, d * 0.92, pcbMat, 0, -h * 0.42, 0);
       const dieX = -0.05;
       const dieY = -h * 0.42 + 0.022;
@@ -1268,31 +1462,41 @@
       const pcieMat = new THREE.MeshStandardMaterial({ map: getPcieFingersTexture(), metalness: 0.72, roughness: 0.25 });
       makeBox(pcbLayer, w * 0.44, 0.022, 0.088, pcieMat, -w * 0.13, -h * 0.42, d * 0.485);
 
-      const pwrX = w * 0.22;
+      // Configurable Power Connectors (1x 8-Pin | 2x 8-Pin | 3x 8-Pin | 12V-2x6)
       const pwrZ = -d * 0.462;
-      makeBox(pcbLayer, 0.2, 0.068, 0.085, darkMat, pwrX, -h * 0.42 + 0.032, pwrZ);
-      makeBox(pcbLayer, 0.16, 0.044, 0.02, new THREE.MeshStandardMaterial({ color: 0x07090e, roughness: 0.7 }), pwrX, -h * 0.42 + 0.034, pwrZ - 0.036);
-      const pinMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.012, 0.012, 0.024), goldMat, 12);
+      const pwrCount = powerType === '3x8pin' ? 3 : powerType === '2x8pin' ? 2 : 1;
+      const sockW = powerType === '12v2x6' ? 0.20 : 0.145;
+      const sockGap = 0.165;
+      const pwrCenterX = powerType === '3x8pin' ? w * 0.15 : w * 0.21;
+      const cavityMat = new THREE.MeshStandardMaterial({ color: 0x07090e, roughness: 0.7 });
+      const cols = powerType === '12v2x6' ? 6 : 4;
+      const pinMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.012, 0.012, 0.024), goldMat, pwrCount * cols * 2);
       let pi = 0;
-      for (let r = 0; r < 2; r++) {
-        for (let c = 0; c < 6; c++) {
-          dummy.position.set(pwrX - 0.055 + c * 0.022, -h * 0.42 + 0.026 + r * 0.018, pwrZ - 0.04);
-          dummy.rotation.set(0, 0, 0);
-          dummy.updateMatrix();
-          pinMesh.setMatrixAt(pi++, dummy.matrix);
+      for (let s = 0; s < pwrCount; s++) {
+        const sx = pwrCenterX + (s - (pwrCount - 1) / 2) * sockGap;
+        makeBox(pcbLayer, sockW, 0.068, 0.085, darkMat, sx, -h * 0.42 + 0.032, pwrZ);
+        makeBox(pcbLayer, sockW * 0.80, 0.044, 0.02, cavityMat, sx, -h * 0.42 + 0.034, pwrZ - 0.036);
+        const stepX = (sockW * 0.65) / Math.max(1, cols - 1);
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < cols; c++) {
+            dummy.position.set(sx - (sockW * 0.325) + c * stepX, -h * 0.42 + 0.026 + r * 0.018, pwrZ - 0.04);
+            dummy.rotation.set(0, 0, 0);
+            dummy.updateMatrix();
+            pinMesh.setMatrixAt(pi++, dummy.matrix);
+          }
         }
       }
       pcbLayer.add(pinMesh);
 
       const ioX = -w * 0.5 - 0.018;
-      makeBox(pcbLayer, 0.026, h * 1.12, d * 0.94, trimMetal, ioX, 0, 0);
-      makeBox(pcbLayer, 0.065, 0.028, d * 0.94, trimMetal, ioX + 0.01, -h * 0.55, 0);
+      makeBox(pcbLayer, 0.026, h * 1.12, d * 0.94, ioBracketMat, ioX, 0, 0);
+      makeBox(pcbLayer, 0.065, 0.028, d * 0.94, ioBracketMat, ioX + 0.01, -h * 0.55, 0);
       for (let v = 0; v < 5; v++) {
         makeBox(pcbLayer, 0.032, 0.016, d * 0.12, darkMat, ioX - 0.002, h * 0.28, -d * 0.34 + v * d * 0.17);
       }
       for (let i = 0; i < 4; i++) {
         const pz = -d * 0.3 + i * d * 0.2;
-        makeBox(pcbLayer, 0.038, 0.042, 0.105, trimMetal, ioX - 0.012, -h * 0.1, pz);
+        makeBox(pcbLayer, 0.038, 0.042, 0.105, ioBracketMat, ioX - 0.012, -h * 0.1, pz);
         makeBox(pcbLayer, 0.042, 0.022, 0.082, darkMat, ioX - 0.015, -h * 0.1, pz);
       }
 
@@ -1321,12 +1525,12 @@
         ]);
         heatsinkLayer.add(new THREE.Mesh(
           new THREE.TubeGeometry(curve, 24, 0.019, 12, false),
-          i % 2 === 0 ? copperMat : nickelPipeMat
+          pipeMat
         ));
       }
 
-      const mainBevel = shapeType === 'compact' ? 0.011 : 0.018;
-      const deckBevel = shapeType === 'compact' ? 0.008 : 0.011;
+      const mainBevel = (shapeType === 'compact' || shapeType === 'stealth') ? 0.011 : 0.018;
+      const deckBevel = (shapeType === 'compact' || shapeType === 'stealth') ? 0.008 : 0.011;
       cachedSurfaceBounds = {
         w,
         d,
@@ -1346,9 +1550,9 @@
       lastShroudSig = shroudSig;
       disposeGroupContents(shroudLayer);
 
-      const shroudMat = makeBodyMaterial(bodyType, primaryColor, 1.0);
+      const shroudMat = makeBodyMaterial(bodyType, primaryColor, 1.0, finishType);
       const primaryLuminance = new THREE.Color(primaryColor).getHSL({ h: 0, s: 0, l: 0 }).l;
-      const deckMat = makeBodyMaterial(bodyType, primaryColor, primaryLuminance > 0.45 ? 0.78 : 0.76);
+      const deckMat = makeBodyMaterial(bodyType, primaryColor, primaryLuminance > 0.45 ? 0.78 : 0.76, finishType);
 
       const mainShroudGeo = createShroudGeometryWithHoles(w, outerShroudH, d, shapeType, fanLayouts, fastMode, false);
       const mainShroud = new THREE.Mesh(mainShroudGeo, shroudMat);
@@ -1364,6 +1568,22 @@
 
       for (const side of [-1, 1]) {
         makeBox(shroudLayer, w * 0.72, 0.014, 0.014, accentMat, 0, deckY + 0.012, side * d * 0.462);
+      }
+
+      // Signature shroud architecture trim per style
+      if (shapeType === 'founders') {
+        const railY = deckY + deckH * 0.5 + 0.008;
+        makeBox(shroudLayer, w * 0.88, 0.012, 0.026, trimMetal, 0, railY, d * 0.415);
+        makeBox(shroudLayer, w * 0.88, 0.012, 0.026, trimMetal, 0, railY, -d * 0.415);
+        makeBox(shroudLayer, 0.028, 0.012, d * 0.84, trimMetal, w * 0.44, railY, 0);
+        makeBox(shroudLayer, 0.028, 0.012, d * 0.84, trimMetal, -w * 0.44, railY, 0);
+      } else if (shapeType === 'stealth') {
+        makeBox(shroudLayer, w * 0.82, 0.008, 0.022, darkMat, 0, deckY + deckH * 0.5 + 0.005, -d * 0.40);
+      } else if (shapeType === 'triple') {
+        const brow1 = makeBox(shroudLayer, w * 0.24, 0.014, 0.022, accentMat, -w * 0.30, deckY + deckH * 0.5 + 0.008, d * 0.40);
+        brow1.rotation.y = 0.2;
+        const brow2 = makeBox(shroudLayer, w * 0.24, 0.014, 0.022, accentMat, w * 0.30, deckY + deckH * 0.5 + 0.008, -d * 0.40);
+        brow2.rotation.y = 0.2;
       }
 
       const screwX = w * 0.44;
@@ -1422,7 +1642,8 @@
       sizeHudEl.innerHTML =
         '<span class="gpu-size-dot red"></span>Length <b>' + Math.round(config.length) + ' mm</b>' +
         ' · <span class="gpu-size-dot blue"></span>Width <b>' + Math.round(config.width) + ' mm</b>' +
-        ' <small>(210–360 × 105–150 mm · Drag Red or Blue arrows)</small>';
+        ' · Thickness <b>' + Math.round(config.thickness || 52) + ' mm</b>' +
+        ' <small>(Drag Red or Blue arrows)</small>';
     }
   }
 
@@ -1743,6 +1964,15 @@
       f.rotor.rotation.y -= dt * f.speed;
     }
 
+    if (rainbowRgbMats.length) {
+      rainbowPhase = (rainbowPhase + dt * 0.32) % 1;
+      for (const entry of rainbowRgbMats) {
+        const hue = (rainbowPhase + entry.offset) % 1;
+        entry.mat.color.setHSL(hue, 0.96, 0.56);
+        entry.mat.emissive.setHSL(hue, 0.96, 0.52);
+      }
+    }
+
     if (camAnimActive && camera && controls) {
       camera.position.x = THREE.MathUtils.damp(camera.position.x, camTargetPos.x, 6.5, dt);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, camTargetPos.y, 6.5, dt);
@@ -1812,14 +2042,20 @@
     el.querySelectorAll('.gpu-3d-loading, .gpu-3d-error').forEach(node => node.remove());
 
     if (renderer) {
+      if (offscreenHostEl && el !== offscreenHostEl) {
+        if (offscreenHostEl.parentNode) offscreenHostEl.remove();
+        offscreenHostEl = null;
+      }
       if (renderer.domElement.parentNode !== el) el.prepend(renderer.domElement);
       if (sizeHudEl && sizeHudEl.parentNode !== el) el.appendChild(sizeHudEl);
       if (dockEl && dockEl.parentNode !== el) el.appendChild(dockEl);
+      renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
       resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(el);
       resize();
       buildModel();
+      if (!rafId && !timerId) startLoop();
       return;
     }
 
@@ -1976,40 +2212,170 @@
     }
   }
 
-  function captureSnapshot() {
+  async function ensureOffscreenMounted() {
+    if (renderer && scene && camera && !contextLost) return true;
+    if (offscreenPromise) return offscreenPromise;
+    offscreenPromise = (async () => {
+      try {
+        if (!stageEl || !document.body.contains(stageEl)) {
+          if (!offscreenHostEl) {
+            offscreenHostEl = document.createElement('div');
+            offscreenHostEl.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:360px;height:270px;opacity:0;pointer-events:none;overflow:hidden;';
+            document.body.appendChild(offscreenHostEl);
+          }
+          await mount(offscreenHostEl);
+        }
+        return !!(renderer && scene && camera && !contextLost);
+      } finally {
+        offscreenPromise = null;
+      }
+    })();
+    return offscreenPromise;
+  }
+
+  function renderSnapshotSync(configOverride = null, width = 360, height = 270) {
     if (!renderer || !scene || !camera || contextLost) return '';
+    let prevConfig = null;
     try {
-      if (pendingRebuild || pendingFastMode) {
+      const outW = Math.max(160, Math.min(640, Math.round(Number(width) || 360)));
+      const outH = Math.max(120, Math.min(480, Math.round(Number(height) || 270)));
+
+      const prevPos = camera.position.clone();
+      const prevQuat = camera.quaternion.clone();
+      const prevAspect = camera.aspect;
+      const prevFov = camera.fov;
+      const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0.05, 0);
+      const prevCtrlEnabled = controls ? controls.enabled : true;
+      const prevSpin = gpuRoot ? gpuRoot.rotation.y : 0;
+      const prevExp = currentExplode;
+      const prevGizmo = sizeGizmoGroup ? sizeGizmoGroup.visible : false;
+      const prevPR = renderer.getPixelRatio();
+
+      if (configOverride && typeof configOverride === 'object') {
+        prevConfig = {
+          ...config,
+          elements: Array.isArray(config.elements) ? config.elements.map(e => ({ ...e })) : []
+        };
+        config = {
+          ...DEFAULT_CONFIG,
+          ...configOverride,
+          elements: Array.isArray(configOverride.elements) ? configOverride.elements.map(e => ({ ...e })) : []
+        };
+        pendingRebuild = false;
+        pendingFastMode = false;
+        buildModel(false);
+      } else if (pendingRebuild || pendingFastMode) {
         pendingRebuild = false;
         pendingFastMode = false;
         buildModel(false);
       }
-      const prevPos = camera.position.clone();
-      const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0.05, 0);
-      const prevSpin = gpuRoot ? gpuRoot.rotation.y : 0;
-      const prevExp = currentExplode;
-      const prevGizmo = sizeGizmoGroup ? sizeGizmoGroup.visible : false;
 
-      if (gpuRoot) gpuRoot.rotation.y = 0;
+      if (controls) controls.enabled = false;
+      if (gpuRoot) gpuRoot.rotation.set(0, 0, 0);
       if (sizeGizmoGroup) sizeGizmoGroup.visible = false;
       currentExplode = 0;
+      if (backplateLayer) backplateLayer.position.y = 0;
+      if (pcbLayer) pcbLayer.position.y = 0;
+      if (heatsinkLayer) heatsinkLayer.position.y = 0;
+      if (shroudLayer) shroudLayer.position.y = 0;
+      if (fansGroup) fansGroup.position.y = 0;
+      if (elementsGroup) elementsGroup.position.y = 0;
+
+      camera.fov = 34;
+      camera.aspect = outW / outH;
       camera.position.set(2.8, 2.2, -2.98);
       camera.lookAt(0, 0.05, 0);
       camera.updateProjectionMatrix();
-      renderer.render(scene, camera);
-      const dataUrl = renderer.domElement.toDataURL('image/webp', 0.84);
 
+      renderer.setPixelRatio(1);
+      renderer.setSize(outW, outH, false);
+      renderer.render(scene, camera);
+
+      let dataUrl = '';
+      try {
+        const snapCanvas = document.createElement('canvas');
+        snapCanvas.width = outW;
+        snapCanvas.height = outH;
+        const ctx = snapCanvas.getContext('2d');
+        ctx.drawImage(renderer.domElement, 0, 0, outW, outH);
+        dataUrl = snapCanvas.toDataURL('image/webp', 0.84);
+        if (!dataUrl || !dataUrl.startsWith('data:image/webp')) {
+          dataUrl = snapCanvas.toDataURL('image/png');
+        }
+      } catch (_) {
+        dataUrl = renderer.domElement.toDataURL('image/webp', 0.84);
+      }
+
+      if (prevConfig) {
+        config = prevConfig;
+        buildModel(false);
+      }
       if (sizeGizmoGroup) sizeGizmoGroup.visible = prevGizmo;
-      camera.position.copy(prevPos);
-      if (controls) controls.target.copy(prevTarget);
-      camera.lookAt(prevTarget);
       if (gpuRoot) gpuRoot.rotation.y = prevSpin;
       currentExplode = prevExp;
-      renderer.render(scene, camera);
+      if (backplateLayer) backplateLayer.position.y = -0.34 * prevExp;
+      if (pcbLayer) pcbLayer.position.y = -0.11 * prevExp;
+      if (heatsinkLayer) heatsinkLayer.position.y = 0.08 * prevExp;
+      if (shroudLayer) shroudLayer.position.y = 0.28 * prevExp;
+      if (fansGroup) fansGroup.position.y = 0.28 * prevExp;
+      if (elementsGroup) elementsGroup.position.y = 0.28 * prevExp;
+
+      camera.fov = prevFov;
+      camera.aspect = prevAspect;
+      camera.position.copy(prevPos);
+      camera.quaternion.copy(prevQuat);
+      camera.updateProjectionMatrix();
+      if (controls) {
+        controls.target.copy(prevTarget);
+        controls.enabled = prevCtrlEnabled;
+        controls.update();
+      }
+      renderer.setPixelRatio(prevPR);
+      resize();
+      if (stageEl && stageEl !== offscreenHostEl && stageEl.offsetParent !== null && !stageEl.closest('.hidden')) {
+        renderer.render(scene, camera);
+      }
       return dataUrl;
     } catch (_) {
+      if (prevConfig) {
+        try { config = prevConfig; buildModel(false); } catch (__) {}
+      }
       return '';
     }
+  }
+
+  function captureSnapshot(opts) {
+    return renderSnapshotSync(opts?.config || null, opts?.width || 360, opts?.height || 270);
+  }
+
+  async function captureHeroSnapshot(configOverride = null, width = 360, height = 270) {
+    const ok = await ensureOffscreenMounted();
+    if (!ok) return '';
+    return renderSnapshotSync(configOverride, width, height);
+  }
+
+  async function processGpuThumbQueue() {
+    if (thumbQueueBusy || !gpuThumbQueue.length) return;
+    thumbQueueBusy = true;
+    try {
+      while (gpuThumbQueue.length) {
+        const job = gpuThumbQueue.shift();
+        try {
+          const url = await captureHeroSnapshot(job.config, job.width || 360, job.height || 270);
+          if (typeof job.onDone === 'function') job.onDone(url);
+        } catch (_) {
+          if (typeof job.onDone === 'function') job.onDone('');
+        }
+        await new Promise(r => setTimeout(r, 12));
+      }
+    } finally {
+      thumbQueueBusy = false;
+    }
+  }
+
+  function enqueueThumbnail(configOverride, onDone, width = 360, height = 270) {
+    gpuThumbQueue.push({ config: configOverride, onDone, width, height });
+    processGpuThumbQueue();
   }
 
   function dispose() {
@@ -2027,6 +2393,7 @@
     disposeGroupContents(shroudLayer);
     disposeGroupContents(fansGroup);
     disposeGroupContents(elementsGroup);
+    rainbowRgbMats = [];
     disposeGroupContents(sizeGizmoGroup);
     disposeGroupContents(plinthGroup);
     Object.values(proceduralTex).forEach(t => t?.dispose?.());
@@ -2043,6 +2410,8 @@
     envTexture?.dispose?.();
     pmremGenerator?.dispose?.();
     renderer?.dispose?.();
+    if (offscreenHostEl?.parentNode) offscreenHostEl.remove();
+    offscreenHostEl = null;
     renderer = null;
     scene = null;
     camera = null;
@@ -2052,5 +2421,5 @@
     sizeHudEl = null;
   }
 
-  window.GpuDesigner3D = { mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, resize, dispose };
+  window.GpuDesigner3D = { mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, captureHeroSnapshot, enqueueThumbnail, resize, dispose };
 })();
