@@ -582,6 +582,11 @@
   }
 
   async function buyCompanyStock(companyId, amount) {
+    if (currentUser?.is_test_account) {
+      const msgEl = $('#csTradeMsg');
+      if (msgEl) msgEl.textContent = 'Test accounts cannot invest in company stocks.';
+      return;
+    }
     if (stockTradeBusy || !sb || !currentUser) return;
     const amt = Math.round(Number(amount || 0) * 100) / 100;
     const msgEl = $('#csTradeMsg');
@@ -609,6 +614,11 @@
   }
 
   async function sellCompanyStock(companyId, sharesToSell) {
+    if (currentUser?.is_test_account) {
+      const msgEl = $('#csTradeMsg');
+      if (msgEl) msgEl.textContent = 'Test accounts cannot invest in company stocks.';
+      return;
+    }
     if (stockTradeBusy || !sb || !currentUser) return;
     const msgEl = $('#csTradeMsg');
     if (!sharesToSell || sharesToSell <= 0) { if (msgEl) msgEl.textContent = 'No shares to sell.'; return; }
