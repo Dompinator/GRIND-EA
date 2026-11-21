@@ -14,8 +14,8 @@
     shroud: 'rounded', // rounded | angular | compact | founders | stealth | triple
     primaryColor: '#222733',
     accentColor: '#a855f7',
-    backplate: true,
-    backplateStyle: 'flow_through', // off | solid | flow_through | louvered
+    backplate: false,
+    backplateStyle: 'off', // off | solid | flow_through | louvered
     finStyle: 'silver',    // silver | black | copper
     pipeStyle: 'copper',   // copper | nickel | black
     powerType: '12v2x6',   // 1x8pin | 2x8pin | 3x8pin | 12v2x6

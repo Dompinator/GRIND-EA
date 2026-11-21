@@ -25,7 +25,7 @@
   let gpuShroud = 'rounded';
   let gpuPrimary = '#222733';
   let gpuAccent = '#a855f7';
-  let gpuBackplateStyle = 'flow_through';
+  let gpuBackplateStyle = 'off';
   let gpuFinStyle = 'silver';
   let gpuPipeStyle = 'copper';
   let gpuPowerType = '12v2x6';
@@ -54,6 +54,8 @@
     { key: 'gpu_small_fans', name: 'Small Fans', cost: 125, value: 80, score: 8, group: 'GPU' },
     { key: 'gpu_medium_fans', name: 'Medium Fans', cost: 800, value: 200, score: 14, group: 'GPU', pre: 'gpu_small_fans' },
     { key: 'gpu_smart_fans', name: 'Smart Fans', cost: 2800, value: 1400, score: 22, group: 'GPU', pre: 'gpu_medium_fans' },
+    { key: 'gpu_backplate_solid', name: 'Backplate Solid', cost: 600, value: 180, score: 14, group: 'GPU' },
+    { key: 'gpu_backplate_expanded', name: 'Backplate Expanded', cost: 1200, value: 360, score: 28, group: 'GPU', pre: 'gpu_backplate_solid' },
     { key: 'chip_ok_speed', name: 'OK Speed', cost: 75, value: 30, score: 4, group: 'CHIP' },
     { key: 'chip_decent_speed', name: 'Decent Speed', cost: 150, value: 70, score: 8, group: 'CHIP', pre: 'chip_ok_speed' },
     { key: 'chip_good_speed', name: 'Good Speed', cost: 300, value: 180, score: 13, group: 'CHIP', pre: 'chip_decent_speed' },
@@ -74,10 +76,17 @@
     { key: 'chip_vram_12gb_advanced', name: '12GB advanced V-RAM', cost: 8600, value: 3800, score: 32, group: 'CHIP', pre: 'chip_vram_8gb_advanced' },
     { key: 'chip_vram_16gb_advanced', name: '16GB advanced V-RAM', cost: 9800, value: 4190, score: 34, group: 'CHIP', pre: 'chip_vram_12gb_advanced' },
     { key: 'chip_vram_32gb_advanced', name: '32GB advanced V-RAM', cost: 12800, value: 6800, score: 48, group: 'CHIP', pre: 'chip_vram_16gb_advanced' },
-    { key: 'chip_custom_pcb_color', name: 'Custom PCB Color', cost: 280, value: 90, score: 4, group: 'CHIP' },
-    { key: 'chip_emerald_pcb', name: 'Emerald Green PCB', cost: 650, value: 180, score: 8, group: 'CHIP', pre: 'chip_custom_pcb_color' },
-    { key: 'chip_anti_crush_color', name: 'Anti-Crush Color', cost: 320, value: 110, score: 5, group: 'CHIP' },
-    { key: 'chip_copper_shim', name: 'Pure Copper Shim', cost: 850, value: 260, score: 10, group: 'CHIP', pre: 'chip_anti_crush_color' }
+    { key: 'chip_custom_pcb_color', name: 'Custom PCB Color', cost: 125, value: 90, score: 4, group: 'CHIP' },
+    { key: 'chip_emerald_pcb', name: 'Emerald Green PCB', cost: 250, value: 180, score: 8, group: 'CHIP', pre: 'chip_custom_pcb_color' },
+    { key: 'chip_anti_crush_color', name: 'Anti-Crush Color', cost: 125, value: 110, score: 5, group: 'CHIP' },
+    { key: 'chip_copper_shim', name: 'Pure Copper Shim', cost: 250, value: 260, score: 10, group: 'CHIP', pre: 'chip_anti_crush_color' }
+  ];
+
+  const GPU_BACKPLATE_OPTIONS = [
+    { id: 'off', label: 'Off', desc: 'Free · No backplate', researchKey: null },
+    { id: 'solid', label: 'Solid', researchKey: 'gpu_backplate_solid' },
+    { id: 'flow_through', label: 'Flow-Through', researchKey: 'gpu_backplate_expanded' },
+    { id: 'louvered', label: 'Louvered', researchKey: 'gpu_backplate_expanded' }
   ];
 
   const CHIP_SUBSTRATE_OPTIONS = [
@@ -106,6 +115,66 @@
   const researched = k => k === 'basic' || k === 'plastic' || (companyResearchRows || []).some(x => x.research_key === k);
   const researchName = k => GPU_RESEARCH.find(r => r.key === k)?.name || (k === 'none' ? 'Base' : k === 'basic' ? 'Basic Fan' : k);
   const chipVramLabel = k => (!k || k === 'none') ? 'No V-RAM' : researchName(k);
+
+  function scoreToTier(score) {
+    const n = Number(score || 0);
+    return n >= 300 ? 'U'
+      : n >= 260 ? 'X'
+      : n >= 220 ? 'S++'
+      : n >= 190 ? 'S+'
+      : n >= 145 ? 'S'
+      : n >= 100 ? 'A'
+      : n >= 64 ? 'B'
+      : n >= 32 ? 'C'
+      : n >= 16 ? 'D'
+      : n >= 8 ? 'E'
+      : 'F';
+  }
+  window.scoreToTier = scoreToTier;
+
+  function isBackplateUnlocked(id) {
+    const opt = GPU_BACKPLATE_OPTIONS.find(o => o.id === id);
+    return !!opt && (!opt.researchKey || researched(opt.researchKey));
+  }
+
+  function getSavedChipTotals(chip) {
+    if (!chip) return { value: 0, score: 0 };
+    const sDef = GPU_RESEARCH.find(r => r.key === chip.speed_level);
+    const pDef = GPU_RESEARCH.find(r => r.key === chip.power_level);
+    const vDef = GPU_RESEARCH.find(r => r.key === chip.vram_level);
+    return {
+      value: (sDef?.value || 0) + (pDef?.value || 0) + (vDef?.value || 0),
+      score: (sDef?.score || 0) + (pDef?.score || 0) + (vDef?.score || 0)
+    };
+  }
+
+  function getGpuProductScoreTier(p) {
+    const d = p?.design_data || {};
+    let score = Number(d.score ?? NaN);
+    let tier = d.tier || '';
+    if (!Number.isFinite(score)) {
+      const dbScore = Number(p?.cpu_score ?? NaN);
+      if (Number.isFinite(dbScore) && dbScore > 0) {
+        score = dbScore;
+        tier = p?.cpu_tier || scoreToTier(score);
+      } else {
+        const body = String(d.body || p?.body_type || 'plastic').toLowerCase();
+        const bScore = body === 'carbon' ? 29 : body === 'metallic' ? 18 : 0;
+        const elems = Array.isArray(d.elements) ? d.elements : [];
+        const fScore = elems.filter(e => e.kind === 'fan').reduce((s, f) =>
+          s + (f.fanType === 'gpu_smart_fans' ? 22 : f.fanType === 'gpu_medium_fans' ? 14 : f.fanType === 'gpu_small_fans' ? 8 : 0), 0);
+        const rScore = d.rgb ? 12 : 0;
+        const bp = d.backplate_style || (d.backplate === false ? 'off' : 'solid');
+        const bpScore = (bp === 'flow_through' || bp === 'louvered') ? 28 : bp === 'solid' ? 14 : 0;
+        const chipObj = d.chip_id ? chips.find(x => x.id === d.chip_id) : null;
+        const chipTotals = chipObj ? getSavedChipTotals(chipObj) : { score: GPU_RESEARCH.find(r => r.key === d.chip_vram)?.score || 0 };
+        score = bScore + fScore + rScore + bpScore + chipTotals.score;
+        tier = scoreToTier(score);
+      }
+    }
+    return { score, tier: tier || scoreToTier(score) };
+  }
+  window.getGpuProductScoreTier = getGpuProductScoreTier;
 
   const isProductDraft = p => {
     const st = String(p?.status || '').trim().toLowerCase();
@@ -330,7 +399,7 @@
     gpuShroud = 'rounded';
     gpuPrimary = '#222733';
     gpuAccent = '#a855f7';
-    gpuBackplateStyle = 'flow_through';
+    gpuBackplateStyle = 'off';
     gpuFinStyle = 'silver';
     gpuPipeStyle = 'copper';
     gpuPowerType = '12v2x6';
@@ -542,6 +611,7 @@
   function renderCoolingTab() {
     const wrap = $('#eaGpuMenu_cooling');
     if (!wrap) return;
+    if (!isBackplateUnlocked(gpuBackplateStyle)) gpuBackplateStyle = 'off';
 
     const pillGroup = (title, attr, currentVal, items) =>
       '<div class="ea-gpu-inline-box"><span>' + title + '</span><div class="ea-gpu-pill-row ea-gpu-pill-wrap">' +
@@ -559,6 +629,24 @@
       '<button type="button" class="zoom-btn' + (Math.abs(gpuThickness - mm) <= 2 ? ' active' : '') + '" data-slot-mm="' + mm + '">' + label + '</button>'
     ).join('');
 
+    const backplateCards = GPU_BACKPLATE_OPTIONS.map(opt => {
+      const rDef = opt.researchKey ? GPU_RESEARCH.find(r => r.key === opt.researchKey) : null;
+      const ok = !opt.researchKey || researched(opt.researchKey);
+      const selected = gpuBackplateStyle === opt.id;
+      const subText = !opt.researchKey
+        ? opt.desc
+        : ok
+          ? rDef.score + ' Score · $' + rDef.value.toLocaleString() + ' value'
+          : 'Research required · ' + rDef.name;
+      return '<div class="cpu-component-option ' + (ok ? '' : 'locked') + ' ' + (selected ? 'selected' : '') + '">' +
+        '<span class="cpu-component-icon">▤</span>' +
+        '<span><strong>' + esc(opt.label) + '</strong><small>' + esc(subText) + '</small></span>' +
+        '<button type="button" class="zoom-btn" ' + (ok ? 'data-bp-style="' + opt.id + '"' : 'data-bp-go-research="GPU"') + '>' +
+          (ok ? (selected ? 'Selected' : 'Use') : 'Research') +
+        '</button>' +
+      '</div>';
+    }).join('');
+
     wrap.innerHTML =
       '<h4>Heatsink &amp; Slot Thickness</h4>' +
       '<div class="ea-gpu-inline-box">' +
@@ -566,13 +654,9 @@
         '<input id="eaGpuThicknessSlider" type="range" min="38" max="76" step="2" value="' + gpuThickness + '">' +
         '<div class="ea-gpu-pill-row ea-gpu-pill-wrap">' + slotPresets + '</div>' +
       '</div>' +
+      '<h4 style="margin-top:12px">Backplate Shield</h4>' +
+      backplateCards +
       '<h4 style="margin-top:12px">Thermal &amp; PCB Hardware</h4>' +
-      pillGroup('Backplate Shield', 'bp-style', gpuBackplateStyle, [
-        ['flow_through', 'Flow-Through'],
-        ['solid', 'Solid'],
-        ['louvered', 'Louvered'],
-        ['off', 'Off']
-      ]) +
       pillGroup('Heatsink Fin Stack', 'fin-style', gpuFinStyle, [
         ['silver', 'Silver'],
         ['black', 'Blackout'],
@@ -611,6 +695,15 @@
       drawGpu();
     }));
 
+    wrap.querySelectorAll('[data-bp-style]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-bp-style');
+      if (!isBackplateUnlocked(id)) { goToGpuResearch('GPU'); return; }
+      gpuBackplateStyle = id;
+      renderCoolingTab();
+      drawGpu();
+    }));
+    wrap.querySelectorAll('[data-bp-go-research]').forEach(btn => btn.addEventListener('click', () => goToGpuResearch('GPU')));
+
     const bindPills = (attr, setter) => {
       wrap.querySelectorAll('[data-' + attr + ']').forEach(btn => btn.addEventListener('click', () => {
         setter(btn.getAttribute('data-' + attr));
@@ -618,7 +711,6 @@
         drawGpu();
       }));
     };
-    bindPills('bp-style', v => { gpuBackplateStyle = v; });
     bindPills('fin-style', v => { gpuFinStyle = v; });
     bindPills('pipe-style', v => { gpuPipeStyle = v; });
     bindPills('power-type', v => { gpuPowerType = v; });
@@ -1113,6 +1205,7 @@
               '</div>' +
               '<div class="cpu-design-summary">' +
                 '<div><span>Estimated Value</span><strong id="eaGpuEstValue">$0</strong></div>' +
+                '<div><span>Score / Tier</span><strong id="eaGpuScoreReadout">0 · F</strong></div>' +
                 '<div><span>Card Size</span><strong id="eaGpuSizeReadout">300 × 125 × 52 mm</strong></div>' +
               '</div>' +
               '<label class="cpu-design-label">GPU name<input id="eaGpuName" maxlength="48" value="New Graphics Card"></label>' +
@@ -1148,7 +1241,7 @@
               '<div id="eaChipMenu_vram" class="cpu-menu-content hidden"></div>' +
               '<div class="cpu-design-summary">' +
                 '<div><span>Chip Value</span><strong id="eaChipEstValue">$0</strong></div>' +
-                '<div><span>Score / V-RAM</span><strong id="eaChipScoreReadout">0 Score · No V-RAM</strong></div>' +
+                '<div><span>Score / Tier</span><strong id="eaChipScoreReadout">0 · F</strong></div>' +
               '</div>' +
               '<label class="cpu-design-label">Chip name<input id="eaChipName" maxlength="40" value="Nova GPU Chip"></label>' +
               '<button class="primary-btn full" id="eaSaveChip" type="button">Save chip</button>' +
@@ -1400,12 +1493,14 @@
   function renderResearchLists() {
     const GPU_LAYOUT = {
       __root: [560, 130, 'GPU', 'Baseline GPU'],
-      gpu_metallic_body: [280, 410, 'MB'],
-      gpu_carbon_body: [280, 700, 'CF'],
-      gpu_rgb: [560, 410, 'RGB'],
-      gpu_small_fans: [840, 410, 'SF'],
-      gpu_medium_fans: [840, 700, 'MF'],
-      gpu_smart_fans: [840, 990, 'AF']
+      gpu_metallic_body: [200, 410, 'MB'],
+      gpu_carbon_body: [200, 700, 'CF'],
+      gpu_rgb: [440, 410, 'RGB'],
+      gpu_small_fans: [680, 410, 'SF'],
+      gpu_medium_fans: [680, 700, 'MF'],
+      gpu_smart_fans: [680, 990, 'AF'],
+      gpu_backplate_solid: [920, 410, 'BP'],
+      gpu_backplate_expanded: [920, 700, 'BP+']
     };
     const VRAM_ICONS = ['1G', '2G', '4G', '6G', '4A', '6A', '8A', '12A', '16A', '32A'];
     const CHIP_LAYOUT = {
@@ -1499,9 +1594,73 @@
   }
 
   async function unlockResearch(key) {
-    const { data, error } = await sb.rpc('unlock_company_research', { p_company_id: currentCompany.id, p_research_key: key });
-    if (error) { toast(error.message); return; }
-    if (data?.cash_remaining !== undefined) currentUser.cash = data.cash_remaining;
+    if (!currentCompany || !currentUser || !sb || !key || String(key).startsWith('baseline_')) return;
+    if (researched(key)) return;
+    const def = GPU_RESEARCH.find(r => r.key === key);
+    const msgEl = $('#eaResearchMessage');
+    if (!def) {
+      const err = 'Unknown research upgrade: ' + key;
+      if (msgEl) msgEl.textContent = err;
+      toast(err);
+      return;
+    }
+    if (def.pre && !researched(def.pre)) {
+      const err = 'Research ' + researchName(def.pre) + ' first.';
+      if (msgEl) msgEl.textContent = err;
+      toast(err);
+      return;
+    }
+    if (msgEl) msgEl.textContent = 'Researching ' + def.name + '…';
+
+    let { data, error } = await sb.rpc('unlock_company_research', { p_company_id: currentCompany.id, p_research_key: key });
+    if (error && (/unknown\s+research/i.test(error.message || '') || error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''))) {
+      const curCash = Number(currentUser.cash ?? 0);
+      if (curCash < def.cost) {
+        const err = 'Not enough cash. ' + def.name + ' costs $' + def.cost.toLocaleString() + '.';
+        if (msgEl) msgEl.textContent = err;
+        toast(err);
+        return;
+      }
+      const nextCash = Math.round((curCash - def.cost) * 100) / 100;
+      let insRes = await sb.from('product_company_research').insert({
+        company_id: currentCompany.id,
+        research_key: key
+      });
+      if (insRes.error && /owner_id/i.test(insRes.error.message || '')) {
+        insRes = await sb.from('product_company_research').insert({
+          company_id: currentCompany.id,
+          owner_id: currentUser.id,
+          research_key: key
+        });
+      }
+      if (!insRes.error) {
+        const cashRes = await sb.from('profiles').update({ cash: nextCash }).eq('id', currentUser.id);
+        if (cashRes.error) {
+          await sb.from('product_company_research').delete().eq('company_id', currentCompany.id).eq('research_key', key);
+          error = cashRes.error;
+        } else {
+          const nextCosts = Number(currentCompany.total_costs || 0) + def.cost;
+          await sb.from('product_companies').update({ total_costs: nextCosts }).eq('id', currentCompany.id);
+          currentCompany.total_costs = nextCosts;
+          data = { cash_remaining: nextCash, cost: def.cost };
+          error = null;
+        }
+      } else {
+        error = new Error('Supabase RPC unlock_company_research needs "' + key + '" added in SQL Editor.');
+      }
+    }
+
+    if (error) {
+      if (msgEl) msgEl.textContent = error.message;
+      toast(error.message);
+      return;
+    }
+    const spent = Number(data?.cost ?? def.cost ?? 0);
+    if (data?.cash_remaining !== undefined) currentUser.cash = Number(data.cash_remaining);
+    else if (spent > 0) currentUser.cash = Math.max(0, Math.round((Number(currentUser.cash || 0) - spent) * 100) / 100);
+    if (spent > 0 && data?.cost !== undefined) {
+      currentCompany.total_costs = Number(currentCompany.total_costs || 0) + spent;
+    }
     await loadCompanyResearchAndProducts();
     renderResearchLists();
     renderBodyTab();
@@ -1512,6 +1671,8 @@
     drawGpu();
     drawChip();
     updateUIProfile?.();
+    if (msgEl) msgEl.textContent = def.name + ' unlocked!';
+    if (typeof playSound === 'function') playSound('upload');
     toast('Research unlocked!');
   }
 
@@ -1651,18 +1812,19 @@
       : null;
     const value = (sDef?.value || 0) + (pDef?.value || 0) + (vDef?.value || 0) + (subDef?.value || 0) + (shimDef?.value || 0);
     const score = (sDef?.score || 0) + (pDef?.score || 0) + (vDef?.score || 0) + (subDef?.score || 0) + (shimDef?.score || 0);
-    return { value, score, sDef, pDef, vDef, subDef, shimDef };
+    const tier = scoreToTier(score);
+    return { value, score, tier, sDef, pDef, vDef, subDef, shimDef };
   }
 
   function updateChipReadouts() {
-    const { value, score } = computeChipValues();
+    const { value, score, tier } = computeChipValues();
     if ($('#eaChipEstValue')) $('#eaChipEstValue').textContent = '$' + value.toLocaleString();
-    if ($('#eaChipScoreReadout')) $('#eaChipScoreReadout').textContent = score + ' Score · ' + chipVramLabel(selectedChipVram);
+    if ($('#eaChipScoreReadout')) $('#eaChipScoreReadout').textContent = score + ' · ' + tier;
     const cap = $('#eaChipCostCaption');
     if (cap) {
       const subLabel = chipSubstrate === 'green' ? 'Emerald Green' : chipSubstrate === 'blue' ? 'Cobalt Blue' : 'Matte Obsidian';
       const shimLabel = chipShimStyle === 'copper' ? 'Pure Copper Shim' : chipShimStyle === 'dark' ? 'Anodized Dark Shim' : 'Steel Shim';
-      cap.textContent = subLabel + ' · ' + shimLabel + ' · ' + researchName(selectedChipSpeed) + ' · ' + researchName(selectedChipPower) + ' · ' + chipVramLabel(selectedChipVram);
+      cap.textContent = subLabel + ' · ' + shimLabel + ' · ' + researchName(selectedChipSpeed) + ' · ' + researchName(selectedChipPower) + ' · ' + chipVramLabel(selectedChipVram) + ' · ' + score + ' · ' + tier;
     }
   }
 
@@ -1725,9 +1887,10 @@
     renderChipTab();
 
     if (wrap) {
-      wrap.innerHTML = chips.map(c =>
-        '<button type="button" class="ea-chip-card" data-chip-select="' + esc(c.id) + '"><span>▦</span><b>' + esc(c.chip_name) + '</b><small>' + esc(researchName(c.speed_level)) + ' · ' + esc(researchName(c.power_level)) + ' · ' + esc(chipVramLabel(c.vram_level)) + '</small></button>'
-      ).join('') || '<p class="muted">No chips saved yet.</p>';
+      wrap.innerHTML = chips.map(c => {
+        const ct = getSavedChipTotals(c);
+        return '<button type="button" class="ea-chip-card" data-chip-select="' + esc(c.id) + '"><span>▦</span><b>' + esc(c.chip_name) + '</b><small>' + esc(researchName(c.speed_level)) + ' · ' + esc(researchName(c.power_level)) + ' · ' + esc(chipVramLabel(c.vram_level)) + ' · ' + ct.score + ' Score (' + scoreToTier(ct.score) + ')</small></button>';
+      }).join('') || '<p class="muted">No chips saved yet.</p>';
       wrap.querySelectorAll('[data-chip-select]').forEach(b => b.addEventListener('click', () => {
         selectedChipId = b.dataset.chipSelect;
         setGpuTab('design');
@@ -1741,28 +1904,41 @@
   // ---------- Live Update, Cost & Save ----------
   function computeGpuValues() {
     const bodyValue = gpuBody === 'carbon' ? 4000 : gpuBody === 'metallic' ? 1200 : 0;
+    const bodyScore = gpuBody === 'carbon' ? 29 : gpuBody === 'metallic' ? 18 : 0;
     const fans = gpuElements.filter(e => e.kind === 'fan');
     const fanValue = fans.reduce((sum, f) => sum + (f.fanType === 'gpu_smart_fans' ? 1400 : f.fanType === 'gpu_medium_fans' ? 200 : f.fanType === 'gpu_small_fans' ? 80 : 0), 0);
+    const fanScore = fans.reduce((sum, f) => sum + (f.fanType === 'gpu_smart_fans' ? 22 : f.fanType === 'gpu_medium_fans' ? 14 : f.fanType === 'gpu_small_fans' ? 8 : 0), 0);
     const hasRgb = gpuElements.some(e => e.kind === 'rgb_strip' || (e.kind === 'fan' && e.rgbRing) || (e.kind === 'text' && e.glow));
     const rgbValue = hasRgb ? 480 : 0;
-    return { bodyValue, fanValue, rgbValue, total: bodyValue + fanValue + rgbValue, fanCount: fans.length, hasRgb };
+    const rgbScore = hasRgb ? 12 : 0;
+    const backplateValue = (gpuBackplateStyle === 'flow_through' || gpuBackplateStyle === 'louvered') ? 360 : gpuBackplateStyle === 'solid' ? 180 : 0;
+    const backplateScore = (gpuBackplateStyle === 'flow_through' || gpuBackplateStyle === 'louvered') ? 28 : gpuBackplateStyle === 'solid' ? 14 : 0;
+    const chipObj = chips.find(x => x.id === selectedChipId);
+    const chipTotals = getSavedChipTotals(chipObj);
+    const total = bodyValue + fanValue + rgbValue + backplateValue + chipTotals.value;
+    const score = bodyScore + fanScore + rgbScore + backplateScore + chipTotals.score;
+    const tier = scoreToTier(score);
+    return { bodyValue, fanValue, rgbValue, backplateValue, chipValue: chipTotals.value, total, score, tier, fanCount: fans.length, hasRgb };
   }
 
   function updateCostAndReadouts() {
-    const { bodyValue, fanValue, rgbValue, total, fanCount } = computeGpuValues();
+    const { bodyValue, fanValue, rgbValue, backplateValue, chipValue, total, score, tier, fanCount } = computeGpuValues();
     if ($('#eaGpuEstValue')) $('#eaGpuEstValue').textContent = '$' + total.toLocaleString();
+    if ($('#eaGpuScoreReadout')) $('#eaGpuScoreReadout').textContent = score + ' · ' + tier;
     if ($('#eaGpuSizeReadout')) $('#eaGpuSizeReadout').textContent = gpuLength + ' × ' + gpuWidth + ' × ' + gpuThickness + ' mm';
     if ($('#eaGpuCost')) {
       $('#eaGpuCost').textContent =
         (gpuBody === 'carbon' ? 'Carbon' : gpuBody === 'metallic' ? 'Metallic' : 'Plastic') +
         ' (' + gpuFinish + ')' +
         ' · ' + fanCount + ' Fan' + (fanCount === 1 ? '' : 's') +
+        ' · ' + score + ' · ' + tier +
         ' · Value $' + total.toLocaleString() +
-        ' (Body $' + bodyValue.toLocaleString() + ' + Fans $' + fanValue.toLocaleString() + ' + RGB $' + rgbValue.toLocaleString() + ')';
+        ' (Body $' + bodyValue.toLocaleString() + ' + Fans $' + fanValue.toLocaleString() + ' + Backplate $' + backplateValue.toLocaleString() + ' + RGB $' + rgbValue.toLocaleString() + ' + Chip $' + chipValue.toLocaleString() + ')';
     }
   }
 
   function drawGpu(fast = false) {
+    if (!isBackplateUnlocked(gpuBackplateStyle)) gpuBackplateStyle = 'off';
     window.GpuDesigner3D?.update({
       length: gpuLength,
       width: gpuWidth,
@@ -1801,12 +1977,13 @@
       byId.set(p.id, p);
       const draft = isProductDraft(p);
       const active = p.id === selectedGpuPageProductId;
+      const st = getGpuProductScoreTier(p);
       return (
         '<article class="ea-chip-card ea-gpu-product-card' + (active ? ' active' : '') + '" data-ea-gpu-select="' + esc(p.id) + '" tabindex="0" role="button">' +
         '<div class="ea-gpu-product-thumb-wrap" data-gpu-thumb-id="' + esc(p.id) + '">' + renderGpuThumbHtml(p) + '</div>' +
         '<b>' + esc(p.product_name || 'GPU') + '</b>' +
         '<small>' + esc(formatGpuSpecLine(p)) + '</small>' +
-        '<small>' + (draft ? 'Draft · Editable' : 'Published') + ' · Value $' + Number(p.product_value || 0).toLocaleString() + '</small>' +
+        '<small>' + st.score + ' Score · ' + esc(st.tier) + ' Tier · ' + (draft ? 'Draft' : 'Published') + '</small>' +
         '</article>'
       );
     }).join('');
@@ -1831,6 +2008,7 @@
     const draft = isProductDraft(selected);
     const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
     const stockCount = Number(selected.stock || 0);
+    const st = getGpuProductScoreTier(selected);
     const gpuProduceBlock = draft
       ? '<p class="muted tiny" style="margin:4px 0 0;">Publish this draft before producing units.</p>'
       : '<label>Produce quantity (costs $' + unitValue.toLocaleString() + ' each)<input id="eaGpuProduceQty" type="number" min="1" max="100000" value="1"></label>' +
@@ -1848,7 +2026,7 @@
       '</div>' +
       '<div class="company-product-detail-grid">' +
       '<div class="company-product-detail-stat"><span>Product value / unit</span><strong>$' + unitValue.toLocaleString() + '</strong></div>' +
-      '<div class="company-product-detail-stat"><span>Listed price</span><strong>$' + Number(selected.listed_price || 0).toLocaleString() + '</strong></div>' +
+      '<div class="company-product-detail-stat"><span>Score / Tier</span><strong>' + st.score + ' · ' + esc(st.tier) + '</strong></div>' +
       '<div class="company-product-detail-stat"><span>Stock</span><strong>' + (stockCount > 0 ? stockCount : 'Out Of Stock') + '</strong></div>' +
       '<div class="company-product-detail-stat"><span>Units sold</span><strong>' + Number(selected.purchase_count || 0) + '</strong></div>' +
       '</div>' +
@@ -1981,6 +2159,7 @@
     const hasRgb = gpuElements.some(e => e.kind === 'rgb_strip' || (e.kind === 'fan' && e.rgbRing) || (e.kind === 'text' && e.glow));
     if ((gpuBody === 'metallic' && !researched('gpu_metallic_body')) ||
         (gpuBody === 'carbon' && !researched('gpu_carbon_body')) ||
+        (!isBackplateUnlocked(gpuBackplateStyle)) ||
         (hasRgb && !researched('gpu_rgb')) ||
         fans.some(f => !researched(f.fanType))) {
       toast('Research the selected GPU component first.');
@@ -1989,7 +2168,7 @@
     const chip = chips.find(x => x.id === selectedChipId);
     if (!chip) { await loadChips(); $('#eaGpuMessage').textContent = 'Selected chip not found. Choose it again.'; return; }
 
-    const { total, fanCount } = computeGpuValues();
+    const { total, score, tier, fanCount } = computeGpuValues();
     const listedPrice = Math.max(1, Number($('#eaGpuPrice').value) || 1);
     const gpuConfig = {
       length: gpuLength,
@@ -2019,6 +2198,8 @@
       chip_id: chip.id,
       chip_name: chip.chip_name,
       chip_vram: chip.vram_level || 'none',
+      score,
+      tier,
       length: gpuLength,
       width: gpuWidth,
       thickness: gpuThickness,
@@ -2071,6 +2252,8 @@
             production_cost: total,
             product_value: total,
             listed_price: listedPrice,
+            cpu_score: score,
+            cpu_tier: tier,
             design_data: designData
           })
           .eq('id', wasEditingId)
@@ -2090,6 +2273,8 @@
           production_cost: total,
           product_value: total,
           listed_price: listedPrice,
+          cpu_score: score,
+          cpu_tier: tier,
           stock: 0,
           status: 'draft',
           design_data: designData
@@ -2152,7 +2337,7 @@
     if (!sb) return;
     const { data, error } = await sb
       .from('product_company_products')
-      .select('id,product_name,product_line,body_type,design_data,listed_price,product_value')
+      .select('id,product_name,product_line,body_type,cpu_score,cpu_tier,design_data,listed_price,product_value')
       .eq('status', 'published')
       .eq('product_line', 'gpu')
       .order('created_at', { ascending: false })
@@ -2175,6 +2360,10 @@
       }
       const pTags = card.querySelectorAll('p');
       if (pTags[1]) pTags[1].textContent = formatGpuSpecLine(p);
+      if (pTags[2]) {
+        const st = getGpuProductScoreTier(p);
+        pTags[2].textContent = st.score + ' Score · ' + st.tier + ' Tier';
+      }
     });
     hydrateGpuThumbElements(grid, byId, 360, 270);
   };
