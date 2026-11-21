@@ -256,12 +256,13 @@
     const wrap = $('#companyStockDetail');
     if (!wrap || !selectedCompanyStockId || !sb || !currentUser) return;
 
-    const [{ data: comp }, { data: stockRow }, { data: myHold }, { data: trades }, { data: allHolds }] = await Promise.all([
+    const [{ data: comp }, { data: stockRow }, { data: myHold }, { data: trades }, { data: allHolds }, { data: products, error: productsError }] = await Promise.all([
       sb.from('product_companies').select('*').eq('id', selectedCompanyStockId).single(),
       sb.from('company_stocks').select('*').eq('company_id', selectedCompanyStockId).maybeSingle(),
       sb.from('company_stock_holdings').select('*').eq('user_id', currentUser.id).eq('company_id', selectedCompanyStockId).maybeSingle(),
       sb.from('company_stock_trades').select('*').eq('company_id', selectedCompanyStockId).order('created_at', { ascending: false }).limit(120),
-      sb.from('company_stock_holdings').select('user_id,shares,total_spent_usd,total_returned_usd').eq('company_id', selectedCompanyStockId).gt('shares', 0)
+      sb.from('company_stock_holdings').select('user_id,shares,total_spent_usd,total_returned_usd').eq('company_id', selectedCompanyStockId).gt('shares', 0),
+      sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,stock,purchase_count,cpu_score,cpu_tier,core_count,thread_count,body_type,cooling_type,graphics_type,design_data,status').eq('company_id', selectedCompanyStockId).eq('status', 'published').order('created_at', { ascending: false })
     ]);
 
     if (!comp) {
@@ -326,6 +327,22 @@
           </div>
         </div>
       </div>
+
+      <section class="detail-panel" style="margin:18px 0;">
+        <h4>Products by ${esc(c.company_name)}</h4>
+        <div class="muted tiny" style="margin-bottom:12px;">Published products from this company</div>
+        <div class="published-product-grid" id="eaPublicCompanyProducts">
+          ${productsError ? '<p class="muted">Could not load this company\'s products.</p>' : (products || []).length ? products.map(p => `
+            <article class="published-product-card">
+              <h4>${esc(p.product_name || 'Product')}</h4>
+              <p>${esc(String(p.product_line || '').toUpperCase())}</p>
+              <strong>${fmtMoney(p.listed_price || 0)}</strong>
+              <p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
+              <p class="muted tiny">${Number(p.purchase_count || 0)} sold</p>
+            </article>
+          `).join('') : '<p class="muted">This company has not published any products yet.</p>'}
+        </div>
+      </section>
 
       <div class="detail-price">${fmtPrice(c.share_price)}</div>
       <div class="coin-change ${chg.cls}">${chg.text}</div>
