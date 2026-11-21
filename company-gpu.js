@@ -1780,6 +1780,13 @@
     const draft = isProductDraft(selected);
     const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
     const stockCount = Number(selected.stock || 0);
+    const gpuProduceBlock = draft
+      ? '<p class="muted tiny" style="margin:4px 0 0;">Publish this draft before producing units.</p>'
+      : '<label>Produce quantity (costs $' + unitValue.toLocaleString() + ' each)<input id="eaGpuProduceQty" type="number" min="1" max="100000" value="1"></label>' +
+        '<div class="company-product-details-actions">' +
+        '<button type="button" class="primary-btn" id="eaGpuProduceBtn">Produce 1 · $' + unitValue.toLocaleString() + '</button>' +
+        '<button type="button" class="danger-btn" id="eaGpuLiquidateBtn" ' + (stockCount > 0 ? '' : 'disabled') + '>Delete stock · 50% refund</button>' +
+        '</div>';
     detailEl.classList.remove('hidden');
     detailEl.innerHTML =
       '<div class="company-product-detail-hero">' +
@@ -1795,35 +1802,34 @@
       '<div class="company-product-detail-stat"><span>Units sold</span><strong>' + Number(selected.purchase_count || 0) + '</strong></div>' +
       '</div>' +
       '<label>Listing price ($)<input id="eaGpuDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
-      '<label>Produce quantity (costs $' + unitValue.toLocaleString() + ' each)<input id="eaGpuProduceQty" type="number" min="1" max="100000" value="1"></label>' +
-      '<div class="company-product-details-actions">' +
-      '<button type="button" class="primary-btn" id="eaGpuProduceBtn">Produce 1 · $' + unitValue.toLocaleString() + '</button>' +
-      '<button type="button" class="danger-btn" id="eaGpuLiquidateBtn" ' + (stockCount > 0 ? '' : 'disabled') + '>Delete stock · 50% refund</button>' +
-      '</div>' +
+      gpuProduceBlock +
       '<div class="company-product-details-actions">' +
       (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' : '') +
       '<button type="button" class="zoom-btn" id="eaGpuDetailSavePrice">Save price</button>' +
-      (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailPublish">Publish product</button>' : '') +
+      (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailPublish">Publish product</button><button type="button" class="danger-btn" id="eaGpuDetailDeleteDraft">Delete draft</button>' : '') +
       '</div>' +
       '<p class="form-message" id="eaGpuDetailMessage"></p>';
 
     hydrateGpuThumbElements(detailEl, new Map([[selected.id, selected]]), 360, 270);
     const msgEl = $('#eaGpuDetailMessage');
-    const qtyInput = $('#eaGpuProduceQty');
-    const prodBtn = $('#eaGpuProduceBtn');
-    const syncGpuProdBtn = () => {
-      const q = Math.max(1, Math.min(100000, Math.floor(Number(qtyInput?.value || 1))));
-      const totalCost = unitValue * q;
-      if (prodBtn) prodBtn.textContent = 'Produce ' + q + ' · ' + (totalCost > 0 ? '$' + totalCost.toLocaleString() : 'Free');
-    };
-    syncGpuProdBtn();
-    qtyInput?.addEventListener('input', syncGpuProdBtn);
-    prodBtn?.addEventListener('click', () => {
-      const q = Math.max(1, Math.min(100000, Math.floor(Number(qtyInput?.value || 1))));
-      window.produceMoreProduct?.(selected.id, q, msgEl);
-    });
-    $('#eaGpuLiquidateBtn')?.addEventListener('click', () => window.liquidateProductStock?.(selected.id, msgEl));
+    if (!draft) {
+      const qtyInput = $('#eaGpuProduceQty');
+      const prodBtn = $('#eaGpuProduceBtn');
+      const syncGpuProdBtn = () => {
+        const q = Math.max(1, Math.min(100000, Math.floor(Number(qtyInput?.value || 1))));
+        const totalCost = unitValue * q;
+        if (prodBtn) prodBtn.textContent = 'Produce ' + q + ' · ' + (totalCost > 0 ? '$' + totalCost.toLocaleString() : 'Free');
+      };
+      syncGpuProdBtn();
+      qtyInput?.addEventListener('input', syncGpuProdBtn);
+      prodBtn?.addEventListener('click', () => {
+        const q = Math.max(1, Math.min(100000, Math.floor(Number(qtyInput?.value || 1))));
+        window.produceMoreProduct?.(selected.id, q, msgEl);
+      });
+      $('#eaGpuLiquidateBtn')?.addEventListener('click', () => window.liquidateProductStock?.(selected.id, msgEl));
+    }
     $('#eaGpuDetailEdit')?.addEventListener('click', () => loadGpuDraftIntoEditor(selected));
+    $('#eaGpuDetailDeleteDraft')?.addEventListener('click', () => window.deleteDraftProduct?.(selected.id, msgEl));
     const saveOrPublish = async publish => {
       const amount = Number($('#eaGpuDetailPrice')?.value || 0);
       if (!Number.isFinite(amount) || amount <= 0) {
@@ -1847,6 +1853,19 @@
     $('#eaGpuDetailSavePrice')?.addEventListener('click', () => saveOrPublish(false));
     $('#eaGpuDetailPublish')?.addEventListener('click', () => saveOrPublish(true));
   }
+
+  window.clearGpuDraftArtifacts = function (id, name) {
+    if (id) clearGpuThumb(id);
+    if (name) clearGpuThumb('name:' + name);
+    if (editingGpuProductId === id) {
+      editingGpuProductId = null;
+      editingGpuOldName = '';
+      syncGpuSaveButtonUI();
+    }
+    if (selectedGpuPageProductId === id) {
+      selectedGpuPageProductId = null;
+    }
+  };
 
   function loadGpuDraftIntoEditor(p) {
     if (!p || !isProductDraft(p)) {

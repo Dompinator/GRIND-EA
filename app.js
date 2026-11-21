@@ -2628,6 +2628,12 @@ async function produceMoreProduct(id, quantity, msgEl) {
   if (!currentCompany || !currentUser || !sb) return false;
   const p = companyProducts.find(x => x.id === id);
   if (!p) return false;
+  if (isProductDraft(p)) {
+    const err = 'Publish this product before producing units.';
+    if (msgEl) msgEl.textContent = err;
+    toast(err);
+    return false;
+  }
   const q = Math.max(1, Math.min(100000, Math.floor(Number(quantity) || 1)));
   const unitValue = Math.max(0, Number(p.product_value ?? p.production_cost ?? 0));
   const totalCost = unitValue * q;
@@ -2660,6 +2666,69 @@ async function produceMoreProduct(id, quantity, msgEl) {
   return true;
 }
 
+async function deleteDraftProduct(id, msgEl) {
+  if (!currentCompany || !currentUser || !sb) return false;
+  const p = companyProducts.find(x => x.id === id);
+  if (!p) return false;
+  if (!isProductDraft(p)) {
+    const err = 'Published products cannot be deleted.';
+    if (msgEl) msgEl.textContent = err;
+    toast(err);
+    return false;
+  }
+  if (!confirm('Permanently delete draft "' + (p.product_name || 'Product') + '"? This cannot be undone.')) {
+    return false;
+  }
+  if (msgEl) msgEl.textContent = '';
+  let res = await sb.rpc('delete_draft_product', { p_product_id: id });
+  if (res.error && (res.error.code === 'PGRST202' || /could not find the function/i.test(res.error.message || ''))) {
+    res = await sb.rpc('delete_cpu_product_draft', { p_product_id: id });
+  }
+  if (res.error && (res.error.code === 'PGRST202' || /could not find the function/i.test(res.error.message || ''))) {
+    res = await sb
+      .from('product_company_products')
+      .delete()
+      .eq('id', id)
+      .eq('owner_id', currentUser.id)
+      .eq('status', 'draft');
+  }
+  if (res.error) {
+    const errTxt = /permission denied/i.test(res.error.message || '')
+      ? 'Could not delete draft: missing Supabase delete permission/RPC on product_company_products.'
+      : res.error.message;
+    if (msgEl) msgEl.textContent = errTxt;
+    toast(errTxt);
+    return false;
+  }
+
+  const cpuMap = getCpuThumbsMap();
+  if (cpuMap[id]) {
+    delete cpuMap[id];
+    persistCpuThumbsMap();
+  }
+  window.clearGpuDraftArtifacts?.(id, p.product_name);
+  if (editingCpuProductId === id) {
+    cancelCpuDraftEdit();
+  }
+  if (selectedCompanyProductId === id) {
+    selectedCompanyProductId = null;
+  }
+  const detailBox = $('#companyProductDetails');
+  if (detailBox && detailBox.dataset.productId === id) {
+    delete detailBox.dataset.productId;
+  }
+
+  await loadCompanyResearchAndProducts();
+  renderCompanyDashboard();
+  renderCompanyProducts();
+  if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
+  if (currentPage === 'company-products' && !(currentCompany?.product_lines || []).includes('gpu')) {
+    renderSidebarCpuProductsPage();
+  }
+  toast('Draft deleted.');
+  return true;
+}
+
 async function liquidateProductStock(id, msgEl) {
   if (!currentCompany || !currentUser || !sb) return false;
   if (!confirm('Delete remaining stock and receive 50% of its production value?')) return false;
@@ -2682,6 +2751,7 @@ async function liquidateProductStock(id, msgEl) {
 }
 
 window.produceMoreProduct = produceMoreProduct;
+window.deleteDraftProduct = deleteDraftProduct;
 window.liquidateProductStock = liquidateProductStock;
 
 function bindProduceMoreControls(qtyInput, btnEl, unitValue, id, msgEl) {
@@ -2705,28 +2775,37 @@ async function loadCompanyProductDetails(id){
  const draft = isProductDraft(p);
  const unitValue = Math.max(0, Number(p.product_value ?? p.production_cost ?? 0));
  const stockCount = Number(p.stock || 0);
+ const produceBlock = draft
+   ? '<p class="muted tiny" style="margin:4px 0 0;">Publish this draft before producing units.</p>'
+   : '<label>Produce quantity (costs '+money(unitValue)+' each)<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProduceMore">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div>';
  if (isGpu) {
    const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
    const gpuBadges = typeof window.formatGpuHardwareBadges === 'function' ? window.formatGpuHardwareBadges(p) : 'GPU';
-   d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(gpuBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Listed price</span><strong>'+money(Number(p.listed_price||0))+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label><label>Produce quantity (costs '+money(unitValue)+' each)<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProduceMore">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div><div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
+   d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(gpuBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Listed price</span><strong>'+money(Number(p.listed_price||0))+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
    window.hydrateGpuThumbElements?.(d, new Map([[p.id, p]]), 360, 270);
    const msgEl = $('#companyProductDetailMessage');
-   bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
-   $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+   if (!draft) {
+     bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
+     $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+   }
    $('#companyProductEditDraft')?.addEventListener('click',()=>editCpuDraftProduct(id));
    $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
    $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+   $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
    return;
  }
  const spec = resolveCpuProductSpec(p);
- d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(p.cpu_score||0)+' · '+escapeHtml(p.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label><label>Produce quantity (costs '+money(unitValue)+' each)<input id="companyProduceQuantity" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="companyProduceMore">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="companyLiquidateStock" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div><div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
+ d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(p.cpu_score||0)+' · '+escapeHtml(p.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
  hydrateCpuThumbElements(d, new Map([[p.id, spec]]), 320);
  const msgEl = $('#companyProductDetailMessage');
- bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
- $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+ if (!draft) {
+   bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
+   $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+ }
  $('#companyProductEditDraft')?.addEventListener('click',()=>editCpuDraftProduct(id));
  $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
  $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+ $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
 }
 function renderSidebarCpuProductsPage(){
  const page=$('#page-company-products');if(!page)return;
@@ -2737,7 +2816,7 @@ function renderSidebarCpuProductsPage(){
  if((currentCompany.product_lines||[]).includes('gpu')) return;
  if(!selectedCompanyProductId && companyProducts.length) selectedCompanyProductId = companyProducts[0].id;
  const specsById = new Map();
- page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">CPU MANUFACTURING</div><h3>Products</h3><p class="muted">Select a CPU to inspect details, edit drafts, produce stock, or publish to the Product Feed.</p></div><span class="company-count-chip">'+companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S')+'</span></div><div id="eaCpuProductList" class="company-product-list">'+(companyProducts.length?companyProducts.map(p=>{
+ page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">CPU MANUFACTURING</div><h3>Products</h3><p class="muted">Select a CPU to inspect details, edit or delete drafts, publish, or produce stock.</p></div><span class="company-count-chip">'+companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S')+'</span></div><div id="eaCpuProductList" class="company-product-list">'+(companyProducts.length?companyProducts.map(p=>{
    const spec = resolveCpuProductSpec(p);
    specsById.set(p.id, spec);
    const draft = isProductDraft(p);
@@ -2755,12 +2834,17 @@ function renderSidebarCpuProductsPage(){
    const draft = isProductDraft(selected);
    const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
    const stockCount = Number(selected.stock || 0);
+   const sideProduceBlock = draft
+     ? '<p class="muted tiny" style="margin:4px 0 0;">Publish this draft before producing units.</p>'
+     : '<label>Produce quantity (costs '+money(unitValue)+' each)<input id="eaCpuSideProduceQty" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="eaCpuSideProduceBtn">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="eaCpuSideLiquidateBtn" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div>';
    det.classList.remove('hidden');
-   det.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(selected.id)+'">'+renderCpuThumbHtml(selected, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(selected.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(selected.cpu_score||0)+' · '+escapeHtml(selected.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(selected.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="eaCpuSidePriceEdit" type="number" min="1" value="'+Number(selected.listed_price||1)+'"></label><label>Produce quantity (costs '+money(unitValue)+' each)<input id="eaCpuSideProduceQty" type="number" min="1" max="100000" value="1"></label><div class="company-product-details-actions"><button type="button" class="primary-btn" id="eaCpuSideProduceBtn">Produce 1 · '+money(unitValue)+'</button><button type="button" class="danger-btn" id="eaCpuSideLiquidateBtn" '+(stockCount>0?'':'disabled')+'>Delete stock · 50% refund</button></div><div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="eaCpuSideEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="eaCpuSideSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="eaCpuSidePublish">Publish</button>':'')+'</div><p class="form-message" id="eaCpuSideMessage"></p>';
+   det.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(selected.id)+'">'+renderCpuThumbHtml(selected, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(selected.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(selected.cpu_score||0)+' · '+escapeHtml(selected.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(selected.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="eaCpuSidePriceEdit" type="number" min="1" value="'+Number(selected.listed_price||1)+'"></label>'+sideProduceBlock+'<div class="company-product-details-actions">'+(draft?'<button type="button" class="primary-btn" id="eaCpuSideEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="eaCpuSideSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="eaCpuSidePublish">Publish</button><button type="button" class="danger-btn" id="eaCpuSideDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="eaCpuSideMessage"></p>';
    hydrateCpuThumbElements(det, new Map([[selected.id, spec]]), 320);
    const sideMsg = $('#eaCpuSideMessage');
-   bindProduceMoreControls($('#eaCpuSideProduceQty'), $('#eaCpuSideProduceBtn'), unitValue, selected.id, sideMsg);
-   $('#eaCpuSideLiquidateBtn')?.addEventListener('click', () => liquidateProductStock(selected.id, sideMsg));
+   if (!draft) {
+     bindProduceMoreControls($('#eaCpuSideProduceQty'), $('#eaCpuSideProduceBtn'), unitValue, selected.id, sideMsg);
+     $('#eaCpuSideLiquidateBtn')?.addEventListener('click', () => liquidateProductStock(selected.id, sideMsg));
+   }
    $('#eaCpuSideEditDraft')?.addEventListener('click',()=>editCpuDraftProduct(selected.id));
    const saveSide = async publish => {
      const price = Number($('#eaCpuSidePriceEdit')?.value||0);
@@ -2774,6 +2858,7 @@ function renderSidebarCpuProductsPage(){
    };
    $('#eaCpuSideSavePrice')?.addEventListener('click',()=>saveSide(false));
    $('#eaCpuSidePublish')?.addEventListener('click',()=>saveSide(true));
+   $('#eaCpuSideDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(selected.id, sideMsg));
  }
 }
 window.renderSidebarCpuProductsPage = renderSidebarCpuProductsPage;
