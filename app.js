@@ -5209,6 +5209,7 @@ async function freshCoin(coin) {
 }
 
 async function buy(coin, amount) {
+  if (currentUser?.is_test_account) return $('#tradeMessage').textContent = 'Test accounts cannot invest in coins.';
   if (tradeInFlight) return;
   amount = Math.round(Number(amount || 0) * 100) / 100;
   if (!currentUser || amount < 0.01) return $('#tradeMessage').textContent = 'Minimum buy is $0.01.';
@@ -5282,6 +5283,7 @@ async function buy(coin, amount) {
 }
 
 async function sell(coin, sharesToSell) {
+  if (currentUser?.is_test_account) return $('#tradeMessage').textContent = 'Test accounts cannot invest in coins.';
   if (tradeInFlight) return;
   if (!currentUser || sharesToSell <= 0) return $('#tradeMessage').textContent = 'No shares to sell.';
 
