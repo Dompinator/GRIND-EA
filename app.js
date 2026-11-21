@@ -2975,22 +2975,27 @@ async function loadPublishedProductFeed(){
     pcById.set(p.id, p);
     const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
     const pcSpec = typeof window.formatPcSpecLine === 'function' ? window.formatPcSpecLine(p) : 'PC';
-    return '<article class="published-product-card"><div class="product-feed-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+escapeHtml(pcSpec)+'</p><p>Custom PC · Specs Build</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
+    return '<article class="published-product-card"><div class="product-feed-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+'<button type="button" class="creator-chip" data-public-company-id="'+escapeHtml(p.company_id||'')+'" style="margin:4px 0;">'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</button>'+'</p><p>'+escapeHtml(pcSpec)+'</p><p>Custom PC · Specs Build</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
   }
   if (isGpu) {
     gpuById.set(p.id, p);
     const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
     const gpuSpec = typeof window.formatGpuSpecLine === 'function' ? window.formatGpuSpecLine(p) : 'GPU';
     const st = typeof window.getGpuProductScoreTier === 'function' ? window.getGpuProductScoreTier(p) : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
-    return '<article class="published-product-card"><div class="product-feed-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+escapeHtml(gpuSpec)+'</p><p>'+Number(st.score||0)+' Score · '+escapeHtml(st.tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
+    return '<article class="published-product-card"><div class="product-feed-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+'<button type="button" class="creator-chip" data-public-company-id="'+escapeHtml(p.company_id||'')+'" style="margin:4px 0;">'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</button>'+'</p><p>'+escapeHtml(gpuSpec)+'</p><p>'+Number(st.score||0)+' Score · '+escapeHtml(st.tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
   }
   const spec = resolveCpuProductSpec(p);
   specsById.set(p.id, spec);
-  return '<article class="published-product-card"><div class="product-feed-cpu" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</p><p>'+escapeHtml(formatCpuSpecLine(spec))+'</p><p>'+Number(p.cpu_score||0)+' Score · '+escapeHtml(p.cpu_tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
+  return '<article class="published-product-card"><div class="product-feed-cpu" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+'<button type="button" class="creator-chip" data-public-company-id="'+escapeHtml(p.company_id||'')+'" style="margin:4px 0;">'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</button>'+'</p><p>'+escapeHtml(formatCpuSpecLine(spec))+'</p><p>'+Number(p.cpu_score||0)+' Score · '+escapeHtml(p.cpu_tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p></article>';
  }).join('');
  hydrateCpuThumbElements(grid, specsById, 300);
  window.hydrateGpuThumbElements?.(grid, gpuById, 360, 270);
  window.hydratePcThumbElements?.(grid, pcById, 360, 270);
+ grid.querySelectorAll('[data-public-company-id]').forEach(btn => btn.addEventListener('click', event => {
+   event.preventDefault();
+   event.stopPropagation();
+   if (btn.dataset.publicCompanyId) window.CompanyStocks?.openCompanyStock?.(btn.dataset.publicCompanyId);
+ }));
 }
 async function respondToCompanyTransfer(requestId, accept) {
   if (!currentUser || !sb) return;
