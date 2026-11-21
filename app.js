@@ -483,6 +483,8 @@ function setAuthMode(mode) {
   if (btn) btn.textContent = mode === 'signup' ? 'Create account' : 'Log in';
   const pw = document.getElementById('authPassword');
   if (pw) pw.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+  const testOption = $('#testAccountOption');
+  if (testOption) testOption.classList.toggle('hidden', mode !== 'signup');
   const msg = document.getElementById('authMessage');
   if (msg) {
     msg.textContent = '';
@@ -516,16 +518,23 @@ async function createProfile(user) {
   try {
     if (user?.id) localStorage.setItem('grind_tos_pending_' + user.id, '1');
   } catch (e) {}
+  let isTestAccount = false;
+  try { isTestAccount = sessionStorage.getItem('grind_signup_test_account') === '1'; } catch (e) {}
   const username = await makeUniqueUsername(user.email);
-  return sb.from('profiles').insert({
+  const result = await sb.from('profiles').insert({
     id: user.id,
     username,
     email: user.email,
     cash: 15,
     is_premium: username.toLowerCase() === 'dompinator',
     net_worth: 15,
-    time_played: 0
+    time_played: 0,
+    is_test_account: isTestAccount
   });
+  if (!result.error) {
+    try { sessionStorage.removeItem('grind_signup_test_account'); } catch (e) {}
+  }
+  return result;
 }
 
 $('#authForm')?.addEventListener('submit', async (e) => {
@@ -538,6 +547,11 @@ $('#authForm')?.addEventListener('submit', async (e) => {
 
   const submitBtn = $('#authSubmit');
   if (mode === 'signup') {
+    const isTestAccount = !!$('#authTestAccount')?.checked;
+    try {
+      if (isTestAccount) sessionStorage.setItem('grind_signup_test_account', '1');
+      else sessionStorage.removeItem('grind_signup_test_account');
+    } catch (e) {}
     if (!password || password.length < 6) return authMsg('Password must be at least 6 characters.');
     const requiresEmailOtp = /\d/.test(email);
     if (submitBtn) {
@@ -589,8 +603,8 @@ $('#authForm')?.addEventListener('submit', async (e) => {
         return;
       }
 
-      pendingSignup = { email, password };
-      try { sessionStorage.setItem('grind_pending_pw', JSON.stringify({ email, password })); } catch (err) {}
+      pendingSignup = { email, password, isTestAccount };
+      try { sessionStorage.setItem('grind_pending_pw', JSON.stringify({ email, password, isTestAccount })); } catch (err) {}
       setSignupVerifyUI(true, email);
       startResendCooldown(60);
       authMsg('Verification code sent! Check your email inbox (and spam).', '#34d399');
@@ -701,7 +715,10 @@ $('#resendOtpBtn')?.addEventListener('click', async () => {
 });
 
 $('#cancelVerifyBtn')?.addEventListener('click', () => {
-  try { sessionStorage.removeItem('grind_pending_pw'); } catch (e) {}
+  try {
+    sessionStorage.removeItem('grind_pending_pw');
+    sessionStorage.removeItem('grind_signup_test_account');
+  } catch (e) {}
   setAuthMode('signup');
 });
 
@@ -1652,13 +1669,14 @@ async function toggleWatchlist(coinId) {
 
 function updateUIProfile() {
   if (!currentUser) return;
-  $('#sideName').innerHTML = `${escapeHtml(currentUser.username)}${tierBadgeHtml(currentUser)}`;
-  $('#sidePremium').textContent = tierLabel(currentUser);
+  $('#sideName').innerHTML = `${escapeHtml(currentUser.username)}${tierBadgeHtml(currentUser)}${currentUser.is_test_account ? ' <span class="nav-tier-chip unlocked">TEST</span>' : ''}`;
+  $('#sidePremium').textContent = currentUser.is_test_account ? 'TEST ACCOUNT' : tierLabel(currentUser);
   const av = currentUser.avatar_url ? `<img src="${escapeHtml(currentUser.avatar_url)}">` : escapeHtml(currentUser.username[0].toUpperCase());
   $('#sideAvatar').innerHTML = av;
   $('#topAvatar').innerHTML = av;
-  $('#topCash').textContent = money(currentUser.cash);
-  $('#moneyCash').textContent = money(currentUser.cash);
+  $('#topCash').textContent = currentUser.is_test_account ? '∞' : money(currentUser.cash);
+  $('#moneyCash').textContent = currentUser.is_test_account ? '∞' : money(currentUser.cash);
+  $('button[data-page="create"]')?.classList.toggle('hidden', !!currentUser.is_test_account);
   $('#profileInitial').textContent = currentUser.username[0].toUpperCase();
   const un = $('#accountUsername');
   if (un && document.activeElement !== un) un.value = currentUser.username;
@@ -1803,6 +1821,7 @@ $('#logoutBtn')?.addEventListener('click', async () => {
 
 // ---------- Navigation ----------
 function showPage(page) {
+  if (currentUser?.is_test_account && page === 'create') page = 'feed';
   if (page === 'grindbot' && currentUser && getUserTier(currentUser) === 'member') {
     openProUpgradeModal();
     return;
