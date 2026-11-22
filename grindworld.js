@@ -124,7 +124,7 @@
       const cutoff = new Date(Date.now() - ACTIVE_MS).toISOString();
       const [
         profiles, companies, products, coins, coinBuys,
-        companyBuys, productPurchases, holdings
+        companyBuys, productPurchases, holdings, companyHoldings, companyPriceRows
       ] = await Promise.all([
         safeRows(sb.from('profiles').select('id,username,avatar_url,is_test_account').limit(1000)),
         safeRows(sb.from('product_companies').select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,created_at').order('created_at', { ascending: false }).limit(1000)),
@@ -133,7 +133,9 @@
         safeRows(sb.from('trades').select('id,coin_id,user_id,type,amount_usd,created_at').eq('type', 'buy').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(2000)),
         safeRows(sb.from('company_stock_trades').select('id,company_id,user_id,type,amount_usd,created_at').eq('type', 'buy').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(1500)),
         safeRows(sb.rpc('get_grindworld_product_purchases')),
-        safeRows(sb.from('holdings').select('user_id,coin_id,shares').gt('shares', 0).limit(5000))
+        safeRows(sb.from('holdings').select('user_id,coin_id,shares').gt('shares', 0).limit(5000)),
+        safeRows(sb.from('company_stock_holdings').select('user_id,company_id,shares').gt('shares', 0).limit(5000)),
+        safeRows(sb.from('company_stock_trades').select('company_id,price_after,created_at').order('created_at', { ascending: false }).limit(10000))
       ]);
 
       const profileById = new Map(profiles.filter(p => p?.id).map(p => [String(p.id), p]));
@@ -166,30 +168,32 @@
         scoreByUser.set(key, scoreByUser.get(key) + Math.max(0, Number(amount) || 0));
       };
       const productsByCompany = new Map();
-      productRows.forEach(p => {
-        const key = String(p.company_id);
-        if (!productsByCompany.has(key)) productsByCompany.set(key, []);
-        productsByCompany.get(key).push(p);
-        addScore(p.owner_id, Math.max(0, Number(p.product_value || 0)) * 0.25);
+      const companyInventoryValue = new Map();
+      productRows.forEach(product => {
+        const companyId = String(product.company_id);
+        if (!productsByCompany.has(companyId)) productsByCompany.set(companyId, []);
+        productsByCompany.get(companyId).push(product);
+        const inventory = Math.max(0, Number(product.product_value || 0)) * Math.max(0, Number(product.stock || 0));
+        companyInventoryValue.set(companyId, (companyInventoryValue.get(companyId) || 0) + inventory);
       });
-      companyRows.forEach(c => addScore(c.owner_id,
-        Math.max(0, Number(c.total_revenue || 0)) +
-        Math.max(0, Number(c.total_costs || 0)) * 0.15
-      ));
-      const coinTradeVolumeByCreator = new Map();
-      validCoinBuys.forEach(t => {
-        const creatorId = String(coinById.get(String(t.coin_id))?.creator_id || '');
-        coinTradeVolumeByCreator.set(creatorId, (coinTradeVolumeByCreator.get(creatorId) || 0) + Number(t.amount_usd || 0));
+      // Market power reflects assets actually owned, not lifetime activity.
+      const latestCompanyPrice = new Map();
+      companyPriceRows.forEach(row => {
+        const key = String(row.company_id);
+        if (!latestCompanyPrice.has(key) && Number(row.price_after) > 0) latestCompanyPrice.set(key, Number(row.price_after));
       });
-      coinTradeVolumeByCreator.forEach((volume, creatorId) => addScore(creatorId, volume * 0.2));
-      const coinPriceById = new Map(coinRows.map(c => [String(c.id), Number(c.price || 1)]));
-      holdings.forEach(h => {
-        if (userExists(h.user_id) && coinPriceById.has(String(h.coin_id))) {
-          addScore(h.user_id, Number(h.shares || 0) * coinPriceById.get(String(h.coin_id)));
-        }
+      holdings.forEach(holding => {
+        const coin = coinById.get(String(holding.coin_id));
+        if (coin && userExists(holding.user_id)) addScore(holding.user_id, Number(holding.shares || 0) * Math.max(0, Number(coin.price || 0)));
       });
-      validCompanyBuys.forEach(t => addScore(t.user_id, Number(t.amount_usd || 0) * 0.35));
-      validProductPurchases.forEach(p => addScore(p.buyer_id, 1));
+      companyHoldings.forEach(holding => {
+        if (!userExists(holding.user_id) || !companyById.has(String(holding.company_id))) return;
+        addScore(holding.user_id, Number(holding.shares || 0) * (latestCompanyPrice.get(String(holding.company_id)) || 1));
+      });
+      companyRows.forEach(company => {
+        const inventory = companyInventoryValue.get(String(company.id)) || 0;
+        addScore(company.owner_id, Math.max(0, Number(company.total_revenue || 0)) + inventory);
+      });
 
       const nodes = [];
       const nodeById = new Map();
@@ -222,28 +226,31 @@
       const userColorById = new Map(activeProfiles.map(profile => [
         String(profile.id), validHex(profile.user_color) ? profile.user_color.toLowerCase() : colorFor(profile.id)
       ]));
-      const columns = Math.max(1, Math.ceil(Math.sqrt(activeProfiles.length * 1.25)));
-      const rows = Math.max(1, Math.ceil(activeProfiles.length / columns));
-      const cellW = 510, cellH = 420;
-      state.world = { width: columns * cellW + 120, height: rows * cellH + 120 };
-      const userPosition = new Map();
       const maxScore = Math.max(1, ...[...scoreByUser.values()]);
+      const totalPower = Math.max(1, [...scoreByUser.values()].reduce((sum, value) => sum + value, 0));
+      const userPosition = new Map();
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const outerRadius = Math.max(260, Math.sqrt(activeProfiles.length) * 210);
       activeProfiles.forEach((profile, index) => {
-        const col = index % columns;
-        const row = Math.floor(index / columns);
-        const seed = hash(profile.id);
-        const x = 90 + col * cellW + 210 + ((seed % 61) - 30);
-        const y = 90 + row * cellH + 175 + (((seed >>> 8) % 61) - 30);
         const score = scoreByUser.get(String(profile.id)) || 1;
+        const share = score / totalPower;
+        const rankProgress = activeProfiles.length <= 1 ? 0 : index / (activeProfiles.length - 1);
+        const distance = 105 + Math.pow(rankProgress, 0.72) * outerRadius;
+        const angle = index * goldenAngle - Math.PI / 2;
+        const x = outerRadius + 420 + Math.cos(angle) * distance;
+        const y = outerRadius + 420 + Math.sin(angle) * distance;
         const userId = 'user:' + profile.id;
-        userPosition.set(String(profile.id), { x, y });
+        const radius = 19 + Math.min(17, Math.sqrt(share) * 52);
+        userPosition.set(String(profile.id), { x, y, share, radius });
         addNode({
           id: userId, kind: 'user', label: profile.username || 'Trader',
-          meta: 'Market footprint ' + Math.round(score).toLocaleString(),
-          image: profile.avatar_url || '', color: userColorById.get(String(profile.id)), score,
-          radius: 25, x, y, profileId: String(profile.id)
+          meta: (share * 100).toFixed(2) + '% of tracked market · ' + Math.round(score).toLocaleString(),
+          image: profile.avatar_url || '', color: userColorById.get(String(profile.id)), score, marketShare: share,
+          radius, x, y, profileId: String(profile.id)
         });
       });
+      const worldSize = Math.max(1000, outerRadius * 2 + 1000);
+      state.world = { width: worldSize, height: worldSize };
 
       const companiesByOwner = new Map();
       companyRows.forEach(c => {
@@ -256,8 +263,10 @@
         if (!base) return;
         list.forEach((company, index) => {
           const angle = -Math.PI / 2 + (Math.PI * 2 * index / Math.max(1, list.length));
-          const x = base.x + Math.cos(angle) * 92;
-          const y = base.y + Math.sin(angle) * 72;
+          const companyValue = Math.max(1, Number(company.total_revenue || 0) + (companyInventoryValue.get(String(company.id)) || 0));
+          const companySpread = 112 + Math.min(28, Math.sqrt(companyValue / maxScore) * 22);
+          const x = base.x + Math.cos(angle) * companySpread;
+          const y = base.y + Math.sin(angle) * companySpread * 0.78;
           const id = 'company:' + company.id;
           addNode({
             id, kind: 'company', label: company.company_name || 'Company',
@@ -295,8 +304,8 @@
         if (!base) return;
         list.forEach((coin, index) => {
           const angle = Math.PI * 2 * index / Math.max(1, list.length) + Math.PI / 5;
-          const x = base.x + Math.cos(angle) * 166;
-          const y = base.y + Math.sin(angle) * 132;
+          const x = base.x + Math.cos(angle) * (150 + base.radius * 0.55);
+          const y = base.y + Math.sin(angle) * (124 + base.radius * 0.45);
           const id = 'coin:' + coin.id;
           addNode({
             id, kind: 'coin', label: coin.name || coin.ticker || 'Coin',
@@ -486,19 +495,9 @@
   }
 
   function drawHexBackground(ctx, users) {
-    if (!users.length) return;
-    const size = 31;
+    const size = 28;
     const stepX = Math.sqrt(3) * size;
     const stepY = 1.5 * size;
-    const bucketW = 510, bucketH = 420;
-    const buckets = new Map();
-    for (const user of users) {
-      const bx = Math.floor((user.x - 300) / bucketW);
-      const by = Math.floor((user.y - 265) / bucketH);
-      const key = bx + ':' + by;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(user);
-    }
     const minX = state.camera.x - state.width / (2 * state.camera.zoom) - stepX;
     const maxX = state.camera.x + state.width / (2 * state.camera.zoom) + stepX;
     const minY = state.camera.y - state.height / (2 * state.camera.zoom) - stepY;
@@ -513,19 +512,11 @@
       for (let col = colStart; col <= colEnd; col++) {
         const x = col * stepX + offset;
         const y = row * stepY;
-        const bx = Math.floor((x - 300) / bucketW);
-        const by = Math.floor((y - 265) / bucketH);
-        const candidates = [];
-        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
-          const nearby = buckets.get((bx + ox) + ':' + (by + oy));
-          if (nearby) candidates.push(...nearby);
-        }
-        if (!candidates.length) continue;
-        let owner = candidates[0];
+        let owner = null;
         let best = Infinity;
-        for (const user of candidates) {
+        for (const user of users) {
           const dx = x - user.x, dy = y - user.y;
-          const weight = Math.max(0.55, Math.sqrt(Number(user.score || 1) / maxScore));
+          const weight = Math.max(0.12, Math.sqrt(Number(user.score || 1) / maxScore));
           const distance = (dx * dx + dy * dy) / weight;
           if (distance < best) { best = distance; owner = user; }
         }
@@ -536,10 +527,10 @@
           if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
         ctx.closePath();
-        ctx.fillStyle = rgba(owner.color, 0.38);
+        ctx.fillStyle = owner ? rgba(owner.color, 0.62) : '#050608';
         ctx.fill();
-        ctx.lineWidth = 1.1;
-        ctx.strokeStyle = rgba(owner.color, 0.62);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = owner ? rgba(owner.color, 0.76) : 'rgba(255,255,255,.055)';
         ctx.stroke();
       }
     }
@@ -561,26 +552,22 @@
     const users = state.nodes.filter(n => n.kind === 'user');
     drawHexBackground(ctx, users);
 
-    const now = performance.now();
+    const now = Date.now();
     state.edges.forEach(edge => {
       const from = state.nodeById.get(edge.from);
       const to = state.nodeById.get(edge.to);
       if (!from || !to) return;
       const active = edge.activityAt && Date.now() - edge.activityAt <= ACTIVE_MS;
-      const color = from.color || to.color || '#8b5cf6';
+      if (!active) return;
+      const color = from.color || to.color || '#7c8798';
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
-      ctx.lineWidth = active ? 2.1 : 1.15;
-      ctx.strokeStyle = active ? (validHex(color) ? rgba(color, .82) : color.replace('hsl(', 'hsla(').replace(')', ' / .72)')) : 'rgba(170,170,190,.17)';
-      if (active) {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = color;
-      }
+      ctx.lineWidth = 1.35;
+      ctx.strokeStyle = validHex(color) ? rgba(color, .5) : 'rgba(148,163,184,.45)';
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
-      if (active) {
+      if (now - edge.activityAt <= 9000) {
         const count = Math.min(3, Math.max(1, Math.ceil(Math.log2((edge.activityCount || 1) + 1))));
         for (let i = 0; i < count; i++) {
           const phase = ((now / (1550 + i * 230)) + (hash(edge.key) % 997) / 997 + i / count) % 1;
@@ -650,12 +637,13 @@
   }
 
   function startAnimation() {
-    if (state.raf || document.hidden) return;
+    if (state.raf || document.hidden || currentPage !== 'grindworld') return;
     const tick = () => {
       state.raf = 0;
       if (document.hidden || currentPage !== 'grindworld') return;
+      const moving = state.edges.some(edge => edge.activityAt && Date.now() - edge.activityAt <= 9000);
       draw();
-      state.raf = requestAnimationFrame(tick);
+      if (moving) state.raf = requestAnimationFrame(tick);
     };
     state.raf = requestAnimationFrame(tick);
   }
