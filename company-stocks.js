@@ -256,13 +256,14 @@
     const wrap = $('#companyStockDetail');
     if (!wrap || !selectedCompanyStockId || !sb || !currentUser) return;
 
-    const [{ data: comp }, { data: stockRow }, { data: myHold }, { data: trades }, { data: allHolds }, { data: products, error: productsError }] = await Promise.all([
+    const [{ data: comp }, { data: stockRow }, { data: myHold }, { data: trades }, { data: allHolds }, { data: products, error: productsError }, { data: series, error: seriesError }] = await Promise.all([
       sb.from('product_companies').select('*').eq('id', selectedCompanyStockId).single(),
       sb.from('company_stocks').select('*').eq('company_id', selectedCompanyStockId).maybeSingle(),
       sb.from('company_stock_holdings').select('*').eq('user_id', currentUser.id).eq('company_id', selectedCompanyStockId).maybeSingle(),
       sb.from('company_stock_trades').select('*').eq('company_id', selectedCompanyStockId).order('created_at', { ascending: false }).limit(120),
       sb.from('company_stock_holdings').select('user_id,shares,total_spent_usd,total_returned_usd').eq('company_id', selectedCompanyStockId).gt('shares', 0),
-      sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,stock,purchase_count,cpu_score,cpu_tier,core_count,thread_count,body_type,cooling_type,graphics_type,v_cache_type,carbon_fiber_body,silicon_body,product_value,production_cost,design_data,status').eq('company_id', selectedCompanyStockId).eq('status', 'published').order('created_at', { ascending: false })
+      sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,stock,purchase_count,cpu_score,cpu_tier,core_count,thread_count,body_type,cooling_type,graphics_type,v_cache_type,carbon_fiber_body,silicon_body,product_value,production_cost,design_data,status,series_id').eq('company_id', selectedCompanyStockId).eq('status', 'published').order('created_at', { ascending: false }),
+      sb.from('product_company_series').select('id,company_id,name,created_at').eq('company_id', selectedCompanyStockId).order('created_at', { ascending: true })
     ]);
 
     if (!comp) {
@@ -329,21 +330,38 @@
       </div>
 
       <section class="detail-panel" style="margin:18px 0;">
-        <h4>Products by ${esc(c.company_name)}</h4>
-        <div class="muted tiny" style="margin-bottom:12px;">Published products from this company</div>
-        <div class="published-product-grid" id="eaPublicCompanyProducts">
-          ${productsError ? '<p class="muted">Could not load this company\'s products.</p>' : (products || []).length ? products.map(p => `
-            <article class="published-product-card">
-              <h4>${esc(p.product_name || 'Product')}</h4>
-              <p>${esc(String(p.product_line || '').toUpperCase())}</p>
-              <strong>${fmtMoney(p.listed_price || 0)}</strong>
-              <p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
-              <p class="muted tiny">${Number(p.purchase_count || 0)} sold</p>
-              <div class="ea-product-card-actions">
-                <button type="button" class="zoom-btn ea-product-preview-btn" data-preview-stock-product="${esc(p.id)}">👁 Preview</button>
-              </div>
-            </article>
-          `).join('') : '<p class="muted">This company has not published any products yet.</p>'}
+        <h4>Series</h4>
+        <div class="muted tiny" style="margin-bottom:12px;">Published products organized by ${esc(c.company_name)}</div>
+        <div id="eaPublicCompanyProducts">
+          ${productsError ? '<p class="muted">Could not load this company\'s products.</p>' : (products || []).length ? `
+            ${(series || []).map(folder => {
+              const members = (products || []).filter(p => p.series_id === folder.id);
+              if (!members.length) return '';
+              return `
+                <section class="company-series-block public-company-series">
+                  <div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📁</span><div><strong>${esc(folder.name)}</strong><small>${members.length} product${members.length === 1 ? '' : 's'}</small></div></div></div>
+                  <div class="published-product-grid">${members.map(p => `
+                    <article class="published-product-card">
+                      <h4>${esc(p.product_name || 'Product')}</h4><p>${esc(String(p.product_line || '').toUpperCase())}</p>
+                      <strong>${fmtMoney(p.listed_price || 0)}</strong><p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
+                      <p class="muted tiny">${Number(p.purchase_count || 0)} sold</p>
+                      <div class="ea-product-card-actions"><button type="button" class="zoom-btn ea-product-preview-btn" data-preview-stock-product="${esc(p.id)}">👁 Preview</button></div>
+                    </article>`).join('')}</div>
+                </section>`;
+            }).join('')}
+            ${(products || []).some(p => !p.series_id) ? `
+              <section class="company-series-block public-company-series">
+                <div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📦</span><div><strong>Other Products</strong><small>${(products || []).filter(p => !p.series_id).length} unassigned products</small></div></div></div>
+                <div class="published-product-grid">${(products || []).filter(p => !p.series_id).map(p => `
+                  <article class="published-product-card">
+                    <h4>${esc(p.product_name || 'Product')}</h4><p>${esc(String(p.product_line || '').toUpperCase())}</p>
+                    <strong>${fmtMoney(p.listed_price || 0)}</strong><p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
+                    <p class="muted tiny">${Number(p.purchase_count || 0)} sold</p>
+                    <div class="ea-product-card-actions"><button type="button" class="zoom-btn ea-product-preview-btn" data-preview-stock-product="${esc(p.id)}">👁 Preview</button></div>
+                  </article>`).join('')}</div>
+              </section>` : ''}
+            ${!(products || []).length ? '<p class="muted">This company has not published any products yet.</p>' : ''}
+          ` : '<p class="muted">This company has not published any products yet.</p>'}
         </div>
       </section>
 
