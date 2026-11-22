@@ -8139,3 +8139,62 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 
 .grind-intro.is-showcase .grind-intro-grind{opacity:0!important;visibility:hidden;pointer-events:none}
 .grind-intro.is-showcase .grind-intro-chapters{pointer-events:none}
+
+
+/* GRIND 1.0 showcase — energetic feature cards and illustrated product/editor previews */
+.grind-intro-chapter{width:min(1120px,92vw);max-height:94vh;overflow:visible}
+.grind-intro-chapter h2{font-size:clamp(38px,6.8vw,82px)}
+.grind-intro-chapter p{font-size:clamp(13px,1.35vw,17px);margin-top:14px}
+.feature-visual{width:min(760px,86vw);height:clamp(150px,27vh,245px);margin:clamp(15px,2.4vh,24px) auto 0;display:flex;align-items:center;justify-content:center;gap:14px;padding:14px;border:1px solid rgba(190,160,255,.22);border-radius:18px;background:linear-gradient(135deg,rgba(25,18,43,.9),rgba(8,8,15,.82));box-shadow:0 22px 80px rgba(0,0,0,.42),inset 0 0 45px rgba(132,80,220,.08);backdrop-filter:blur(14px)}
+.type-tile{height:100%;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.015))}
+.type-tile b{font-size:clamp(16px,2vw,23px);letter-spacing:.14em;color:#e9dcff}.type-tile small{font-size:8px;letter-spacing:.17em;color:#a99bbd}
+.silicon-chip,.silicon-gpu,.silicon-wafer,.silicon-pc{display:block;position:relative;width:58px;height:58px;border:2px solid #b99aff;background:linear-gradient(145deg,#6d4ca6,#171326);box-shadow:0 0 24px #7c3aed55}
+.silicon-chip{border-radius:8px;background:repeating-linear-gradient(90deg,#30214e 0 5px,#7052a0 6px 8px)}
+.silicon-chip:after{content:"";position:absolute;inset:13px;border:2px solid #dfd0ff;border-radius:4px}
+.silicon-gpu{width:72px;height:34px;border-radius:7px;transform:perspective(100px) rotateX(8deg)}
+.silicon-gpu:after{content:"";position:absolute;width:23px;height:23px;border:3px solid #d6c1ff;border-radius:50%;left:22px;top:4px;box-shadow:0 0 14px #a78bfa}
+.silicon-wafer{border-radius:50%;background:repeating-radial-gradient(circle,#6c4a9b 0 4px,#241a38 5px 8px)}
+.silicon-pc{width:40px;height:58px;border-radius:5px;background:linear-gradient(90deg,#18131f,#67518d);box-shadow:inset -5px 0 0 #b99aff,0 0 24px #7c3aed55}
+.editor-visual{justify-content:stretch;text-align:left}
+.editor-sidebar{width:42px;align-self:stretch;display:flex;flex-direction:column;gap:13px;padding:12px 9px;border-radius:9px;background:#100d19}
+.editor-sidebar i{height:8px;border-radius:4px;background:#6b5590}
+.editor-main{flex:1;height:100%;display:flex;flex-direction:column;justify-content:space-between;padding:10px 15px;border-radius:10px;background:linear-gradient(145deg,#171323,#0b0a11)}
+.editor-toolbar{display:flex;justify-content:space-between;gap:8px;font-size:9px;letter-spacing:.12em;color:#eee}.editor-toolbar span{color:#bda2ff}
+.editor-chip{align-self:center;width:76px;height:76px;border:4px solid #b89aff;border-radius:13px;background:repeating-linear-gradient(45deg,#39275a 0 5px,#1a1428 6px 10px);box-shadow:0 0 35px #9b72ff88}
+.editor-controls{display:flex;gap:7px}.editor-controls i{height:5px;flex:1;border-radius:5px;background:#574575}
+.editor-stats{width:155px;display:grid;gap:8px;font-size:8px;color:#a99bbd}.editor-stats b{display:flex;flex-direction:column;padding:7px;border-radius:7px;background:#171222}.editor-stats em{font-size:13px;color:#fff;font-style:normal;margin-top:3px}
+.gpu-visual{flex-direction:column;gap:10px}
+.gpu-card{position:relative;width:min(460px,75%);height:125px;border:2px solid #8b70b8;border-radius:13px;background:linear-gradient(115deg,#24202e,#08080d 55%,#382b50);box-shadow:0 15px 35px #0008,0 0 35px #8b5cf644;display:flex;align-items:center;gap:16px;padding:15px}
+.gpu-fan{width:72px;height:72px;border:4px solid #a78bfa;border-radius:50%;background:repeating-conic-gradient(#2b203d 0 18deg,#9873cb 20deg 25deg);box-shadow:0 0 20px #a78bfa66}
+.gpu-fan.second{width:58px;height:58px}.gpu-brand{font-size:12px;line-height:1.5;letter-spacing:.16em;color:#e8dcff}.gpu-ports{position:absolute;right:-5px;top:20px;width:8px;height:82px;background:#b99aff}
+.visual-caption{font-size:8px;letter-spacing:.2em;color:#c7b6e8}.visual-caption span{color:#8f7eaa;margin-left:10px}
+.chip-visual{gap:35px}
+.wafer-disc{position:relative;width:165px;height:165px;flex:none;border:5px solid #a78bfa;border-radius:50%;overflow:hidden;background:radial-gradient(circle,#3c2a5b,#11101a 70%);box-shadow:0 0 40px #8b5cf655}
+.wafer-grid{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 12px,#bca4f733 13px 14px),repeating-linear-gradient(90deg,transparent 0 12px,#bca4f733 13px 14px);border-radius:50%}
+.wafer-core{position:absolute;inset:42px;display:grid;place-items:center;border:2px solid #e5d5ff;border-radius:12px;color:#fff;font-size:38px;font-weight:900;background:#241a38}
+.chip-specs{display:grid;gap:10px;font-size:9px;color:#a99bbd}.chip-specs b{display:flex;flex-direction:column;gap:3px}.chip-specs em{font-style:normal;color:#fff;font-size:13px}
+.pc-visual{gap:28px}
+.pc-case{height:190px;width:130px;display:flex;gap:6px;padding:8px;border:2px solid #9d81c8;border-radius:12px;background:#11101a;box-shadow:0 0 30px #8b5cf644}
+.pc-glass{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:1px solid #9b7fc5;border-radius:7px;background:linear-gradient(140deg,#32234a,#0b0a10)}
+.pc-glass i{width:46px;height:46px;border:4px solid #b99aff;border-radius:50%;box-shadow:inset 0 0 12px #8b5cf6,0 0 15px #8b5cf6}.pc-glass i:nth-child(2),.pc-glass i:nth-child(3){display:none}.pc-glass b{font-size:8px;letter-spacing:.2em;color:#e8dcff}
+.pc-front{width:12px;border-radius:4px;background:linear-gradient(#b99aff 0 20%,#292033 20% 100%)}
+.pc-build-list{display:grid;gap:9px;font-size:10px;color:#d7c8ed}.pc-build-list b{font-size:12px;letter-spacing:.15em;color:#fff}.pc-build-list span{padding:5px 10px;border-radius:6px;background:#211a30}.pc-build-list strong{font-size:8px;letter-spacing:.15em;color:#a78bfa}
+.dashboard-visual{display:block;text-align:left;padding:17px 22px}
+.dash-top{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.15em;color:#eee}.dash-top span{color:#8ee6b4}
+.dash-metrics{display:flex;gap:10px;margin-top:12px}.dash-metrics i{flex:1;display:flex;flex-direction:column;gap:5px;padding:9px;border-radius:8px;background:#171222;font-style:normal}.dash-metrics small{font-size:8px;color:#a99bbd}.dash-metrics b{font-size:clamp(12px,1.6vw,20px);color:#fff}
+.dash-chart{height:65px;display:flex;align-items:end;gap:7px;margin-top:12px;padding:0 6px;border-bottom:1px solid #8b5cf655;background:repeating-linear-gradient(0deg,transparent 0 20px,#ffffff0b 21px 22px)}
+.dash-chart span{flex:1;height:var(--h,40%);border-radius:4px 4px 0 0;background:linear-gradient(#c4a6ff,#6741a0)}.dash-chart span:nth-child(3n){height:70%}.dash-chart span:nth-child(3n + 1){height:35%}.dash-chart span:nth-child(4n){height:88%}
+.dash-products{display:flex;gap:8px;margin-top:10px}.dash-products i{height:7px;flex:1;border-radius:4px;background:#5e4b7d}
+.market-visual{align-items:stretch}
+.market-panel,.live-panel{flex:1;min-width:0;padding:12px;border-radius:10px;background:#100d19;text-align:left}
+.market-panel>b,.live-panel>b{font-size:9px;letter-spacing:.16em;color:#eee}
+.market-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding:7px;border-radius:7px;background:#1b1627;font-size:8px;color:#fff}
+.market-row span{flex:1}.market-row small{display:block;margin-top:3px;color:#a99bbd}.market-row strong{font-size:10px;color:#cbb3ff}
+.mini-product{width:28px;height:28px;flex:none;border-radius:6px;background:linear-gradient(135deg,#a78bfa,#21172f)}.mini-product.gpu{background:linear-gradient(135deg,#6c8bd8,#171a2c)}.mini-product.pc{background:linear-gradient(135deg,#a78bfa,#14111e)}
+.live-panel{display:flex;flex-direction:column;gap:14px;font-size:8px;color:#c9bbdf}.live-panel em{float:right;color:#8ee6b4;font-style:normal}
+.chapter-release-line{margin-top:12px;font-size:9px;letter-spacing:.35em;color:#c8aaff}
+.grind-intro.is-showcase .grind-intro-chapter.active{animation:chapterFastIn .55s cubic-bezier(.16,1,.3,1) forwards}
+.grind-intro.is-showcase .grind-intro-chapter.leaving{animation:chapterFastOut .28s ease forwards}
+@keyframes chapterFastIn{0%{opacity:0;transform:translateY(22px) scale(.975);filter:blur(7px)}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes chapterFastOut{to{opacity:0;transform:translateY(-12px) scale(1.01);filter:blur(6px)}}
+@media(max-width:650px){.feature-visual{height:clamp(145px,25vh,205px);padding:9px;gap:7px}.type-tile small{font-size:6px}.silicon-chip,.silicon-wafer{width:42px;height:42px}.silicon-gpu{width:48px}.silicon-pc{width:30px;height:43px}.editor-stats{width:95px}.editor-chip{width:55px;height:55px}.wafer-disc{width:105px;height:105px}.wafer-core{inset:27px;font-size:25px}.pc-case{height:145px;width:95px}.market-panel,.live-panel{padding:7px}.market-row{gap:5px;padding:5px}.mini-product{width:20px;height:20px}.live-panel{gap:9px}.grind-intro-chapter{width:94vw}}
