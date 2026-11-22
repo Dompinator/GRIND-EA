@@ -362,28 +362,34 @@
       validCoinBuys.forEach(t => {
         const key = String(t.user_id) + '|' + String(t.coin_id);
         const prev = coinBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
         if (!prev || new Date(t.created_at).getTime() > new Date(prev.created_at).getTime()) {
-          coinBuyerEdges.set(key, t);
+          coinBuyerEdges.set(key, { ...t, activityCount: count });
+        } else {
+          prev.activityCount = count;
         }
       });
       coinBuyerEdges.forEach(t => {
         const coin = coinById.get(String(t.coin_id));
         if (!coin || String(coin.creator_id) === String(t.user_id)) return;
-        addEdge('coin-buyer:' + t.user_id + ':' + t.coin_id, 'user:' + t.user_id, 'coin:' + t.coin_id, 'coin-buy', t.created_at, 1);
+        addEdge('coin-buyer:' + t.user_id + ':' + t.coin_id, 'user:' + t.user_id, 'coin:' + t.coin_id, 'coin-buy', t.created_at, t.activityCount || 1);
       });
 
       const companyBuyerEdges = new Map();
       validCompanyBuys.forEach(t => {
         const key = String(t.user_id) + '|' + String(t.company_id);
         const prev = companyBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
         if (!prev || new Date(t.created_at).getTime() > new Date(prev.created_at).getTime()) {
-          companyBuyerEdges.set(key, t);
+          companyBuyerEdges.set(key, { ...t, activityCount: count });
+        } else {
+          prev.activityCount = count;
         }
       });
       companyBuyerEdges.forEach(t => {
         const company = companyById.get(String(t.company_id));
         if (!company || String(company.owner_id) === String(t.user_id)) return;
-        addEdge('company-investor:' + t.user_id + ':' + t.company_id, 'user:' + t.user_id, 'company:' + t.company_id, 'company-buy', t.created_at, 1);
+        addEdge('company-investor:' + t.user_id + ':' + t.company_id, 'user:' + t.user_id, 'company:' + t.company_id, 'company-buy', t.created_at, t.activityCount || 1);
       });
 
       const productBuyerEdges = new Map();
@@ -393,8 +399,11 @@
         const buyerNodeId = buyerCompanyId ? 'company:' + buyerCompanyId : 'user:' + p.buyer_id;
         const key = buyerNodeId + '|' + String(p.product_id);
         const prev = productBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
         if (!prev || new Date(p.created_at).getTime() > new Date(prev.created_at).getTime()) {
-          productBuyerEdges.set(key, p);
+          productBuyerEdges.set(key, { ...p, activityCount: count });
+        } else {
+          prev.activityCount = count;
         }
       });
       productBuyerEdges.forEach(p => {
@@ -403,7 +412,7 @@
         const buyerNodeId = buyerCompanyId ? 'company:' + buyerCompanyId : 'user:' + p.buyer_id;
         const sellerCompanyId = productById.get(String(p.product_id))?.company_id;
         if (buyerCompanyId && String(buyerCompanyId) === String(sellerCompanyId)) return;
-        addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, 1);
+        addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, p.activityCount || 1);
       });
 
       layoutNodesInOpenSpace(nodes);
@@ -602,57 +611,79 @@
   }
 
   function layoutNodesInOpenSpace(nodes) {
-    const count = Math.max(1, nodes.length);
-    const side = Math.max(5600, Math.sqrt(count) * 900);
+    const users = nodes.filter(node => node.kind === 'user');
+    const count = Math.max(1, users.length);
+    const side = Math.max(6400, Math.sqrt(count) * 1200);
     const width = side * 1.18;
     const height = side;
-    const padding = 420;
-    const cellSize = 360;
-    const buckets = new Map();
-    const ordered = [...nodes].sort((a, b) => hash(a.id) - hash(b.id));
-    const bucketKey = (x, y) => Math.floor(x / cellSize) + ':' + Math.floor(y / cellSize);
-    const nearby = (x, y) => {
-      const cx = Math.floor(x / cellSize), cy = Math.floor(y / cellSize);
-      const found = [];
-      for (let yy = cy - 1; yy <= cy + 1; yy++) {
-        for (let xx = cx - 1; xx <= cx + 1; xx++) {
-          const list = buckets.get(xx + ':' + yy);
-          if (list) found.push(...list);
+    const padding = 520;
+    const minUserGap = 640;
+    const orderedUsers = [...users].sort((a, b) => hash(a.id) - hash(b.id));
+    const placedUsers = [];
+
+    // Place accounts first, with generous space between each account.
+    orderedUsers.forEach((user, index) => {
+      let placed = false;
+      for (let attempt = 0; attempt < 1200; attempt++) {
+        const sx = hash(user.id + ':account-x:' + attempt);
+        const sy = hash(user.id + ':account-y:' + attempt);
+        const x = padding + (sx / 4294967295) * (width - padding * 2);
+        const y = padding + (sy / 4294967295) * (height - padding * 2);
+        if (placedUsers.every(other =>
+          Math.hypot(other.x - x, other.y - y) >= minUserGap + user.radius + other.radius
+        )) {
+          user.x = x;
+          user.y = y;
+          placed = true;
+          break;
         }
       }
-      return found;
-    };
-
-    ordered.forEach(node => {
-      const minimumGap = 210 + node.radius * 0.35;
-      let placed = false;
-      for (let attempt = 0; attempt < 700; attempt++) {
-        const seedA = hash(node.id + ':x:' + attempt);
-        const seedB = hash(node.id + ':y:' + attempt);
-        const x = padding + (seedA / 4294967295) * (width - padding * 2);
-        const y = padding + (seedB / 4294967295) * (height - padding * 2);
-        const candidates = nearby(x, y);
-        const clear = candidates.every(other => {
-          const required = Math.max(minimumGap, 210 + other.radius * 0.35);
-          return Math.hypot(other.x - x, other.y - y) >= required;
-        });
-        if (!clear) continue;
-        node.x = x;
-        node.y = y;
-        const key = bucketKey(x, y);
-        if (!buckets.has(key)) buckets.set(key, []);
-        buckets.get(key).push(node);
-        placed = true;
-        break;
-      }
       if (!placed) {
-        // Expand the usable area deterministically if the map becomes very dense.
-        const index = nodes.indexOf(node);
-        node.x = padding + ((index * 997) % Math.max(1, width - padding * 2));
-        node.y = padding + ((index * 1597) % Math.max(1, height - padding * 2));
-        const key = bucketKey(node.x, node.y);
-        if (!buckets.has(key)) buckets.set(key, []);
-        buckets.get(key).push(node);
+        // A deterministic expanding spiral is a fallback for unusually dense worlds.
+        const angle = index * 2.399963229728653;
+        const distance = minUserGap * Math.sqrt(index + 1);
+        user.x = width / 2 + Math.cos(angle) * distance;
+        user.y = height / 2 + Math.sin(angle) * distance;
+      }
+      placedUsers.push(user);
+    });
+
+    const usersByProfile = new Map(users.map(user => [String(user.profileId), user]));
+    const companiesById = new Map(nodes.filter(node => node.kind === 'company')
+      .map(node => [String(node.companyId), node]));
+
+    // Preserve ownership proximity: companies orbit their owner, products their company,
+    // and coins their creator. The offsets were assigned when the nodes were built.
+    nodes.forEach(node => {
+      if (node.kind === 'company') {
+        const owner = usersByProfile.get(String(node.ownerId));
+        if (owner) {
+          const ownerOrigin = { x: 0, y: 0 };
+          node.x = owner.x + (node.x - ownerOrigin.x);
+          node.y = owner.y + (node.y - ownerOrigin.y);
+        }
+      } else if (node.kind === 'coin') {
+        const owner = usersByProfile.get(String(node.ownerId));
+        if (owner) {
+          node.x += owner.x;
+          node.y += owner.y;
+        }
+      }
+    });
+
+    // Product offsets were originally relative to their company's local position.
+    nodes.filter(node => node.kind === 'product').forEach(node => {
+      const company = companiesById.get(String(node.companyId));
+      if (company) {
+        // Their original coordinates were based on a company centered around (roughly) zero.
+        // Recover the offset from the original company placement encoded by the product node.
+        const productsForCompany = nodes.filter(candidate =>
+          candidate.kind === 'product' && candidate.companyId === node.companyId
+        );
+        const index = productsForCompany.indexOf(node);
+        const angle = (Math.PI * 2 * index / Math.max(1, productsForCompany.length)) - Math.PI / 2;
+        node.x = company.x + Math.cos(angle) * 57;
+        node.y = company.y + Math.sin(angle) * 49;
       }
     });
 
@@ -692,10 +723,19 @@
       const active = edge.activityAt && Date.now() - edge.activityAt <= ACTIVE_MS;
       if (!active && !edge.persistent) return;
       const color = from.color || to.color || '#7c8798';
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const distance = Math.hypot(dx, dy);
+      const arcHeight = Math.min(190, Math.max(24, distance * 0.13));
+      const controlX = (from.x + to.x) / 2;
+      const controlY = (from.y + to.y) / 2 - arcHeight;
+      const activity = Math.max(1, Number(edge.activityCount) || 1);
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.lineWidth = active ? 1.45 : 1.05;
+      ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
+      ctx.lineWidth = active
+        ? Math.min(8, 1.25 + Math.log2(activity + 1) * 1.15)
+        : 1.0;
       ctx.strokeStyle = validHex(color)
         ? rgba(color, active ? .62 : .28)
         : (active ? 'rgba(148,163,184,.55)' : 'rgba(148,163,184,.22)');
@@ -705,8 +745,9 @@
         const count = Math.min(3, Math.max(1, Math.ceil(Math.log2((edge.activityCount || 1) + 1))));
         for (let i = 0; i < count; i++) {
           const phase = ((now / (1550 + i * 230)) + (hash(edge.key) % 997) / 997 + i / count) % 1;
-          const px = from.x + (to.x - from.x) * phase;
-          const py = from.y + (to.y - from.y) * phase;
+          const inverse = 1 - phase;
+          const px = inverse * inverse * from.x + 2 * inverse * phase * controlX + phase * phase * to.x;
+          const py = inverse * inverse * from.y + 2 * inverse * phase * controlY + phase * phase * to.y;
           ctx.beginPath();
           ctx.arc(px, py, 3.1 + (i % 2) * 1.1, 0, Math.PI * 2);
           ctx.fillStyle = '#f5d0fe';
@@ -791,6 +832,9 @@
     if (state.realtime || !sb) return;
     try {
       state.realtime = sb.channel('grindworld-network')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'holdings' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_stock_holdings' }, queueRefresh)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'coins' }, queueRefresh)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, queueRefresh)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'product_companies' }, queueRefresh)
