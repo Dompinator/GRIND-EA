@@ -612,7 +612,7 @@
     if (nodes.length < 2) return;
     const cellSize = 100;
     const gap = 12;
-    const iterations = 110;
+    const iterations = 700;
     const anchors = nodes.map(node => ({ x: node.x, y: node.y }));
 
     for (let iteration = 0; iteration < iterations; iteration++) {
@@ -657,7 +657,7 @@
       }
 
       // Keep the network recognizably clustered around its market layout while resolving overlaps.
-      const anchorStrength = 0.012;
+      const anchorStrength = 0.00005;
       nodes.forEach((node, index) => {
         node.x += (anchors[index].x - node.x) * anchorStrength;
         node.y += (anchors[index].y - node.y) * anchorStrength;
