@@ -942,9 +942,15 @@
     document.body.appendChild(modalEl);
     stageEl = modalEl.querySelector('#eaProductPreviewStage');
 
+    const notifyPreviewClosed = () => {
+      if (typeof window.onProductPreviewClosed === 'function') {
+        try { window.onProductPreviewClosed(); } catch (err) { console.warn('Preview close callback failed:', err); }
+      }
+    };
     const closeModal = () => {
       modalEl.classList.add('hidden');
       disposeRenderer();
+      notifyPreviewClosed();
     };
     modalEl.querySelector('#closeEaProductPreviewBtn')?.addEventListener('click', closeModal);
     modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
@@ -1102,6 +1108,7 @@
         window.onProductPreviewCapture(imageData);
         modalEl.classList.add('hidden');
         disposeRenderer();
+        notifyPreviewClosed();
       } catch (err) {
         if (typeof toast === 'function') toast('Could not capture this preview view.');
       }
