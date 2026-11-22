@@ -2156,7 +2156,7 @@
 
     if ($('#eaGpuName')) $('#eaGpuName').value = p.product_name || 'New Graphics Card';
     if ($('#eaGpuPrice')) $('#eaGpuPrice').value = String(Math.max(1, Number(p.listed_price || 1200)));
-    if ($('#eaGpuMessage')) $('#eaGpuMessage').textContent = 'Editing draft "' + (p.product_name || 'GPU') + '". Make changes and click Save edits.';
+    if ($('#eaGpuMessage')) $('#eaGpuMessage').textContent = 'Editing product "' + (p.product_name || 'GPU') + '". Make changes and click Save edits.';
 
     renderBodyTab();
     renderCoolingTab();
@@ -2166,7 +2166,7 @@
     syncGpuSaveButtonUI();
     drawGpu();
     requestAnimationFrame(() => window.GpuDesigner3D?.resize?.());
-    toast('Loaded GPU draft into editor.');
+    toast('Loaded GPU product into editor.');
   }
 
   window.editGpuDraftProduct = function (id) {
