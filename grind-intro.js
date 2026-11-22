@@ -4,6 +4,7 @@
   const skipButton=document.getElementById('grindIntroSkip');
   const studio=document.getElementById('grindIntroStudio');
   const canvas=document.getElementById('grindIntroParticles');
+  const chapters=[...overlay.querySelectorAll('[data-intro-chapter]')];
   if(!overlay||!playButton||!skipButton||!studio)return;
   let timers=[],running=false,audioCtx=null,master=null,raf=0,particles=[];
   const clearTimers=()=>{timers.forEach(clearTimeout);timers=[]};
@@ -55,19 +56,24 @@
     }catch(e){/* Browser audio may be unavailable; visual intro still runs. */}
   }
   function stopAudio(){if(master&&audioCtx){const m=master;master=null;try{m.gain.setTargetAtTime(.0001,audioCtx.currentTime,.08);setTimeout(()=>{try{m.disconnect()}catch{}},450)}catch{}}}
+  function showChapter(index){chapters.forEach((el,i)=>{el.classList.remove('active','leaving');if(i===index){void el.offsetWidth;el.classList.add('active')}else if(i<index)el.classList.add('leaving')});}
   function finish(){
     if(!running)return;running=false;clearTimers();cancelAnimationFrame(raf);stopAudio();
     overlay.classList.add('is-closing');
-    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind');studio.classList.remove('is-gone','playing');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
+    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind');studio.classList.remove('is-gone','playing');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
   }
   function play(){
     if(running)return;running=true;clearTimers();
-    overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind');overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
+    overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
     void overlay.offsetWidth;studio.classList.remove('playing','is-gone');void studio.offsetWidth;studio.classList.add('playing');
     initParticles();startAudio();
-    schedule(()=>overlay.classList.add('is-transitioning'),5600);
-    schedule(()=>{studio.classList.add('is-gone');overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},6900);
-    schedule(finish,20000);
+    schedule(()=>overlay.classList.add('is-transitioning'),10500);
+    schedule(()=>{studio.classList.add('is-gone');overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},12000);
+    schedule(()=>showChapter(0),14500);
+    schedule(()=>showChapter(1),19500);
+    schedule(()=>showChapter(2),25000);
+    schedule(()=>showChapter(3),30500);
+    schedule(()=>showChapter(4),36000);
   }
   playButton.addEventListener('click',play);skipButton.addEventListener('click',finish);
   document.addEventListener('keydown',e=>{if(running&&e.key==='Escape')finish()});
