@@ -537,19 +537,37 @@
     const desc = $('#eaCompanyDescription').value.trim();
     if (name.length < 2) { msg.textContent = 'Company name must be at least 2 characters.'; return; }
     if (!line) { msg.textContent = 'Choose a manufacturing type.'; return; }
+    const { data: authData, error: authError } = await sb.auth.getUser();
+    const authUser = authData?.user;
+    if (authError || !authUser?.id) {
+      msg.textContent = 'Your login session could not be verified. Please log out and back in.';
+      return;
+    }
+    const ownerId = authUser.id;
+    const { data: ownerProfile, error: profileError } = await sb
+      .from('profiles')
+      .select('id,is_test_account')
+      .eq('id', ownerId)
+      .maybeSingle();
+    if (profileError || !ownerProfile) {
+      msg.textContent = 'Your account profile is missing. Please log out and back in so GRIND-EA can reload it.';
+      console.error('Company owner profile lookup failed:', { ownerId, profileError });
+      return;
+    }
     if (companies.some(c => (c.product_lines || []).includes(line))) {
       msg.textContent = 'You already own a company for this manufacturing type.';
       return;
     }
     const { data, error } = await sb
       .from('product_companies')
-      .insert({ owner_id: currentUser.id, company_name: name, description: desc, product_lines: [line] })
+      .insert({ owner_id: ownerId, company_name: name, description: desc, product_lines: [line] })
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
       .single();
     if (error) {
       msg.textContent = error.code === '23505'
         ? 'You already own a company for this manufacturing type.'
         : error.message;
+      console.error('Company creation failed:', { ownerId, error });
       return;
     }
     companies.push(data);
