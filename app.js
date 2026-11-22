@@ -3095,13 +3095,28 @@ $('#companyCreateForm')?.addEventListener('submit', async e => {
   if (companyName.length < 2) { if (msg) msg.textContent = 'Company name must be at least 2 characters.'; return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Creating company...'; }
   if (msg) msg.textContent = '';
+  const { data: authData, error: authError } = await sb.auth.getUser();
+  const ownerId = authData?.user?.id;
+  if (authError || !ownerId) {
+    if (msg) msg.textContent = 'Your login session could not be verified. Please log out and back in.';
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Company · FREE'; }
+    return;
+  }
+  const { data: ownerProfile, error: profileError } = await sb
+    .from('profiles').select('id').eq('id', ownerId).maybeSingle();
+  if (profileError || !ownerProfile) {
+    if (msg) msg.textContent = 'Your account profile is missing. Please log out and back in so GRIND-EA can reload it.';
+    console.error('Company owner profile lookup failed:', { ownerId, profileError });
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Company · FREE'; }
+    return;
+  }
   const { data, error } = await sb.from('product_companies').insert({
-    owner_id: currentUser.id, company_name: companyName,
+    owner_id: ownerId, company_name: companyName,
     logo_data_url: pendingCompanyLogo || null, description, product_lines: ['cpu']
   }).select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at').single();
   if (error) {
-    console.error('Company creation error:', error);
-    if (msg) msg.textContent = error.code === '23505' ? 'You already have a company. Refresh this page.' : 'Could not create company: ' + error.message;
+    console.error('Company creation error:', { ownerId, error });
+    if (msg) msg.textContent = error.code === '23505' ? 'You already have a company for this manufacturing type.' : 'Could not create company: ' + error.message;
     if (btn) { btn.disabled = false; btn.textContent = 'Create Company · FREE'; }
     return;
   }
