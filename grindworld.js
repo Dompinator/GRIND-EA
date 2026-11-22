@@ -75,8 +75,9 @@
     startRealtime();
     if (!state.pollTimer) {
       state.pollTimer = setInterval(() => {
+        // Realtime is primary; this is a safety refresh if a subscription event is missed.
         if (currentPage === 'grindworld' && !document.hidden) load(true);
-      }, 60000);
+      }, 30000);
     }
     startAnimation();
     requestAnimationFrame(() => resizeCanvas());
@@ -257,7 +258,6 @@
         (sum, profile) => sum + (scoreByUser.get(String(profile.id)) || 1), 0
       ));
       const userPosition = new Map();
-      const maxShare = Math.max(0.000001, maxScore / totalMarketPower);
       activeProfiles.forEach(profile => {
         const score = scoreByUser.get(String(profile.id)) || 1;
         const isTestAccount = Boolean(profile.is_test_account);
@@ -265,7 +265,8 @@
         const x = 0;
         const y = 0;
         const userId = 'user:' + profile.id;
-        const radius = 19 + Math.min(17, Math.sqrt(share) * 52);
+        // User bubble size follows estimated net worth, with a capped logarithmic scale.
+        const radius = 17 + Math.min(31, Math.log10(Math.max(1, score) + 1) * 5.2);
         userPosition.set(String(profile.id), { x, y, share, radius });
         addNode({
           id: userId, kind: 'user', label: profile.username || 'Trader',
@@ -275,6 +276,9 @@
           radius, x, y, profileId: String(profile.id)
         });
       });
+      const companyValueOf = company => Math.max(1,
+        Number(company.total_revenue || 0) + (companyInventoryValue.get(String(company.id)) || 0));
+      const maxCompanyValue = Math.max(1, ...companyRows.map(companyValueOf));
       const companiesByOwner = new Map();
       companyRows.forEach(c => {
         const ownerId = String(c.owner_id);
@@ -286,7 +290,8 @@
         if (!base) return;
         list.forEach((company, index) => {
           const angle = -Math.PI / 2 + (Math.PI * 2 * index / Math.max(1, list.length));
-          const companyValue = Math.max(1, Number(company.total_revenue || 0) + (companyInventoryValue.get(String(company.id)) || 0));
+          const companyValue = companyValueOf(company);
+          const companyRadius = 16 + Math.min(24, Math.sqrt(companyValue / maxCompanyValue) * 24);
           const companySpread = 112 + Math.min(28, Math.sqrt(companyValue / maxScore) * 22);
           const x = base.x + Math.cos(angle) * companySpread;
           const y = base.y + Math.sin(angle) * companySpread * 0.78;
@@ -294,7 +299,7 @@
           addNode({
             id, kind: 'company', label: company.company_name || 'Company',
             meta: (company.product_lines || []).join(' / ').toUpperCase() + ' · ' + productRows.filter(p => String(p.company_id) === String(company.id)).length + ' products',
-            image: company.logo_data_url || '', color: userColorById.get(ownerId) || colorFor(ownerId), radius: 20,
+            image: company.logo_data_url || '', color: userColorById.get(ownerId) || colorFor(ownerId), radius: companyRadius,
             x, y, companyId: String(company.id), ownerId
           });
           addEdge('owner:' + company.id, 'user:' + ownerId, id, 'owner', company.created_at, 1, ownerId === String(currentUser.id));
@@ -304,13 +309,15 @@
             const pX = x + Math.cos(pAngle) * 57;
             const pY = y + Math.sin(pAngle) * 49;
             const productId = 'product:' + product.id;
+            const productPopularity = Math.max(0, Number(product.purchase_count || 0));
+            const productRadius = 13 + Math.min(17, Math.log2(productPopularity + 1) * 4.2);
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
               meta: String(product.product_line || 'product').toUpperCase() + ' · ' + Number(product.purchase_count || 0) + ' units sold',
               image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image ||
                 (typeof getCpuThumbsMap === 'function' ? (getCpuThumbsMap()?.[String(product.id)]?.dataUrl || '') : ''),
               color: userColorById.get(ownerId) || colorFor(ownerId),
-              radius: 14, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
+              radius: productRadius, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
               ownerId, line: product.product_line
             });
             addEdge('company-product:' + product.id, id, productId, 'product', product.created_at, 1, ownerId === String(currentUser.id));
@@ -318,6 +325,18 @@
         });
       });
 
+      const coinPopularity = new Map();
+      validCoinBuys.forEach(trade => {
+        const key = String(trade.coin_id);
+        coinPopularity.set(key, (coinPopularity.get(key) || 0) + 1);
+      });
+      const coinHolderCounts = new Map();
+      holdings.forEach(holding => {
+        if (Number(holding.shares || 0) > 0 && coinById.has(String(holding.coin_id))) {
+          const key = String(holding.coin_id);
+          coinHolderCounts.set(key, (coinHolderCounts.get(key) || 0) + 1);
+        }
+      });
       const coinsByCreator = new Map();
       coinRows.forEach(c => {
         const creatorId = String(c.creator_id);
@@ -332,10 +351,12 @@
           const x = base.x + Math.cos(angle) * (150 + base.radius * 0.55);
           const y = base.y + Math.sin(angle) * (124 + base.radius * 0.45);
           const id = 'coin:' + coin.id;
+          const popularity = (coinPopularity.get(String(coin.id)) || 0) + (coinHolderCounts.get(String(coin.id)) || 0);
+          const coinRadius = 14 + Math.min(20, Math.log2(popularity + 1) * 4.5);
           addNode({
             id, kind: 'coin', label: coin.name || coin.ticker || 'Coin',
             meta: '$' + String(coin.ticker || '').toUpperCase() + ' · ' + Number(coin.price || 1).toFixed(2),
-            image: coin.image_url || '', color: userColorById.get(creatorId) || colorFor(creatorId), radius: 17,
+            image: coin.image_url || '', color: userColorById.get(creatorId) || colorFor(creatorId), radius: coinRadius,
             x, y, coinId: String(coin.id), ownerId: creatorId
           });
           addEdge('coin-creator:' + coin.id, 'user:' + creatorId, id, 'coin-owner', coin.created_at, 1, creatorId === String(currentUser.id));
@@ -742,7 +763,7 @@
       ctx.moveTo(from.x, from.y);
       ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
       ctx.lineWidth = active
-        ? Math.min(8, 1.25 + Math.log2(activity + 1) * 1.15)
+        ? Math.min(10, 1.1 + Math.log2(activity + 1) * 1.8)
         : 1.0;
       ctx.strokeStyle = validHex(color)
         ? rgba(color, active ? .62 : .28)
