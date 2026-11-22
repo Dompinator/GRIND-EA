@@ -8201,14 +8201,14 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 
 
 /* GRIND product advertisements */
-#page-feed{position:relative;padding-right:148px}
-.grind-ads-rail{position:absolute;right:0;top:12px;width:126px;z-index:3}
+#page-feed{position:relative;padding-right:320px}
+.grind-ads-rail{position:absolute;right:0;top:12px;width:290px;z-index:3}
 .grind-ads-rail-title{font-size:9px;font-weight:900;letter-spacing:.22em;color:#bda5df;text-align:center;margin-bottom:10px}
 .grind-ads-slots{display:grid;gap:10px}
-.grind-ad-slot{width:100%;aspect-ratio:1/16;min-height:220px;border:1px solid rgba(168,85,247,.28);border-radius:12px;overflow:hidden;background:#100d19;position:relative;cursor:pointer;padding:0;text-align:left;color:#fff}
-.grind-ad-slot img{width:100%;height:72%;object-fit:cover;display:block}
-.grind-ad-slot strong{display:block;font-size:11px;line-height:1.25;padding:7px 8px 2px}
-.grind-ad-slot small{display:block;font-size:9px;color:#b8a8cd;padding:0 8px 8px}
+.grind-ad-slot{width:100%;aspect-ratio:16/9;min-height:0;border:1px solid rgba(168,85,247,.28);border-radius:12px;overflow:hidden;background:#100d19;position:relative;cursor:pointer;padding:0;text-align:left;color:#fff}
+.grind-ad-slot img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.grind-ad-slot strong{position:absolute;left:9px;right:8px;bottom:23px;display:block;font-size:12px;line-height:1.25;padding:7px 8px 2px;background:#080610b8;border-radius:5px}
+.grind-ad-slot small{position:absolute;left:9px;bottom:5px;display:block;font-size:9px;color:#e0d5ef;padding:0 8px 4px}
 .grind-ad-sponsored{position:absolute;top:7px;left:7px;background:#09070dcc;border:1px solid #ffffff35;border-radius:5px;padding:4px 6px;font-size:8px;font-weight:900;letter-spacing:.12em}
 .grind-ad-empty{height:100%;min-height:130px;display:grid;place-items:center;color:#7f718f;font-size:9px;letter-spacing:.15em}
 .grind-ad-modal{position:fixed;inset:0;z-index:10050;background:#05040bdc;display:grid;place-items:center;padding:18px;overflow:auto}
@@ -8230,9 +8230,9 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .grind-ad-package strong{display:block;color:#fff;margin-bottom:3px}
 .grind-ad-preview-wrap{min-width:0;background:#08070e;border:1px solid #30243f;border-radius:12px;padding:12px;display:grid;justify-items:center;align-content:start;gap:8px}
 .grind-ad-preview-label{font-size:9px;letter-spacing:.18em;color:#bfa6e7}
-#grindAdCanvas{width:min(100%,360px);height:auto;max-height:68vh;object-fit:contain;background:#181222;border-radius:8px;touch-action:none}
+#grindAdCanvas{width:min(100%,640px);height:auto;aspect-ratio:16/9;max-height:68vh;object-fit:contain;background:#181222;border-radius:8px;touch-action:none}
 .grind-ad-dashboard-card{display:grid;grid-template-columns:100px 1fr;gap:14px;padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 .grind-ad-dashboard-card img{width:100px;height:130px;object-fit:cover;border-radius:8px}
 .grind-ad-dashboard-card h4{margin:2px 0 6px}
-@media(max-width:900px){#page-feed{padding-right:0}.grind-ads-rail{position:static;width:100%;margin:14px 0}.grind-ads-slots{grid-template-columns:repeat(4,minmax(0,1fr))}.grind-ad-slot{aspect-ratio:1/8;min-height:160px}.grind-ad-editor-layout{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){#page-feed{padding-right:0}.grind-ads-rail{position:static;width:100%;margin:14px 0}.grind-ads-slots{grid-template-columns:repeat(2,minmax(0,1fr))}.grind-ad-slot{aspect-ratio:16/9;min-height:0}.grind-ad-editor-layout{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.grind-ad-editor-layout{grid-template-columns:1fr}.grind-ad-dialog{padding:13px}.grind-ads-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
