@@ -2078,7 +2078,7 @@ async function loadCompanyDashboard() {
   if (inviteError) console.warn('Could not load incoming company transfers:', inviteError);
   incomingCompanyTransfers = invites || [];
   renderCompanyIncomingTransfers();
-  if(currentCompany) await loadCompanyResearchAndProducts(); else {companyResearchRows=[];companyProducts=[];}
+  if(currentCompany) await loadCompanyResearchAndProducts(); else {companyResearchRows=[];companyProducts=[];companySeriesRows=[];}
   renderCompanyDashboard();
   if(currentPage==='company-design') renderCpuDesigner();
 }
