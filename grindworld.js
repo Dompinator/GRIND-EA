@@ -158,7 +158,10 @@
       const userExists = id => Boolean(id && profileById.has(String(id)));
       const companyRows = companies.filter(c => c?.id && userExists(c.owner_id));
       const companyById = new Map(companyRows.map(c => [String(c.id), c]));
-      const productRows = products.filter(p => p?.id && p.status === 'published' && companyById.has(String(p.company_id)) && userExists(p.owner_id));
+      const productRows = products.filter(p =>
+        p?.id && p.status === 'published' &&
+        companyById.has(String(p.company_id)) && userExists(p.owner_id)
+      );
       const productById = new Map(productRows.map(p => [String(p.id), p]));
       const coinRows = coins.filter(c =>
         c?.id && !deletedCoinIds.has(String(c.id)) && userExists(c.creator_id)
@@ -300,7 +303,8 @@
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
               meta: String(product.product_line || 'product').toUpperCase() + ' · ' + Number(product.purchase_count || 0) + ' units sold',
-              image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image || '',
+              image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image ||
+                (typeof getCpuThumbsMap === 'function' ? (getCpuThumbsMap()?.[String(product.id)]?.dataUrl || '') : ''),
               color: userColorById.get(ownerId) || colorFor(ownerId),
               radius: 14, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
               ownerId, line: product.product_line
