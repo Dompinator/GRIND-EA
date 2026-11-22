@@ -8,7 +8,6 @@
     edges: [],
     nodeById: new Map(),
     images: new Map(),
-    hexCells: [],
     minZoom: 0.1,
     camera: { x: 0, y: 0, zoom: 1 },
     world: { width: 1200, height: 800 },
@@ -227,14 +226,15 @@
         nodes.push(node);
         nodeById.set(node.id, node);
       };
-      const addEdge = (key, from, to, type, activityAt = null, activityCount = 0) => {
+      const addEdge = (key, from, to, type, activityAt = null, activityCount = 0, persistent = false) => {
         if (!nodeById.has(String(from)) || !nodeById.has(String(to))) return;
         let edge = edgeByKey.get(key);
         if (!edge) {
-          edge = { key, from: String(from), to: String(to), type, activityAt: null, activityCount: 0 };
+          edge = { key, from: String(from), to: String(to), type, activityAt: null, activityCount: 0, persistent: false };
           edgeByKey.set(key, edge);
           edges.push(edge);
         }
+        edge.persistent = edge.persistent || persistent;
         if (activityAt && isRecent(activityAt)) {
           const ts = new Date(activityAt).getTime();
           if (!edge.activityAt || ts > edge.activityAt) edge.activityAt = ts;
@@ -257,18 +257,13 @@
         (sum, profile) => sum + (scoreByUser.get(String(profile.id)) || 1), 0
       ));
       const userPosition = new Map();
-      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-      const outerRadius = Math.max(260, Math.sqrt(activeProfiles.length) * 210);
       const maxShare = Math.max(0.000001, maxScore / totalMarketPower);
-      activeProfiles.forEach((profile, index) => {
+      activeProfiles.forEach(profile => {
         const score = scoreByUser.get(String(profile.id)) || 1;
         const isTestAccount = Boolean(profile.is_test_account);
         const share = isTestAccount ? 0 : score / totalMarketPower;
-        const powerRatio = isTestAccount ? 0 : Math.max(0, Math.min(1, share / maxShare));
-        const distance = 140 + Math.pow(1 - Math.sqrt(powerRatio), 0.72) * outerRadius;
-        const angle = index * goldenAngle - Math.PI / 2;
-        const x = outerRadius + 420 + Math.cos(angle) * distance;
-        const y = outerRadius + 420 + Math.sin(angle) * distance;
+        const x = 0;
+        const y = 0;
         const userId = 'user:' + profile.id;
         const radius = 19 + Math.min(17, Math.sqrt(share) * 52);
         userPosition.set(String(profile.id), { x, y, share, radius });
@@ -302,7 +297,7 @@
             image: company.logo_data_url || '', color: userColorById.get(ownerId) || colorFor(ownerId), radius: 20,
             x, y, companyId: String(company.id), ownerId
           });
-          addEdge('owner:' + company.id, 'user:' + ownerId, id, 'owner', company.created_at, 1);
+          addEdge('owner:' + company.id, 'user:' + ownerId, id, 'owner', company.created_at, 1, ownerId === String(currentUser.id));
           const listProducts = productsByCompany.get(String(company.id)) || [];
           listProducts.forEach((product, productIndex) => {
             const pAngle = (Math.PI * 2 * productIndex / Math.max(1, listProducts.length)) - Math.PI / 2;
@@ -318,7 +313,7 @@
               radius: 14, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
               ownerId, line: product.product_line
             });
-            addEdge('company-product:' + product.id, id, productId, 'product', product.created_at, 1);
+            addEdge('company-product:' + product.id, id, productId, 'product', product.created_at, 1, ownerId === String(currentUser.id));
           });
         });
       });
@@ -343,8 +338,24 @@
             image: coin.image_url || '', color: userColorById.get(creatorId) || colorFor(creatorId), radius: 17,
             x, y, coinId: String(coin.id), ownerId: creatorId
           });
-          addEdge('coin-creator:' + coin.id, 'user:' + creatorId, id, 'coin-owner', coin.created_at, 1);
+          addEdge('coin-creator:' + coin.id, 'user:' + creatorId, id, 'coin-owner', coin.created_at, 1, creatorId === String(currentUser.id));
         });
+      });
+
+      // Keep durable links to assets the signed-in user currently owns.
+      holdings.forEach(holding => {
+        if (String(holding.user_id) !== String(currentUser.id) || Number(holding.shares || 0) <= 0) return;
+        if (coinById.has(String(holding.coin_id))) {
+          addEdge('my-coin-holding:' + holding.coin_id, 'user:' + currentUser.id,
+            'coin:' + holding.coin_id, 'my-holding', null, 0, true);
+        }
+      });
+      companyHoldings.forEach(holding => {
+        if (String(holding.user_id) !== String(currentUser.id) || Number(holding.shares || 0) <= 0) return;
+        if (companyById.has(String(holding.company_id))) {
+          addEdge('my-company-holding:' + holding.company_id, 'user:' + currentUser.id,
+            'company:' + holding.company_id, 'my-holding', null, 0, true);
+        }
       });
 
       const coinBuyerEdges = new Map();
@@ -395,23 +406,8 @@
         addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, 1);
       });
 
-      separateNodeCollisions(nodes);
-      const bounds = nodes.reduce((b, node) => ({
-        minX: Math.min(b.minX, node.x - node.radius),
-        minY: Math.min(b.minY, node.y - node.radius),
-        maxX: Math.max(b.maxX, node.x + node.radius),
-        maxY: Math.max(b.maxY, node.y + node.radius)
-      }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-      const shiftX = 260 - bounds.minX;
-      const shiftY = 260 - bounds.minY;
-      nodes.forEach(node => { node.x += shiftX; node.y += shiftY; });
-      state.world = {
-        width: Math.max(900, bounds.maxX - bounds.minX + 520),
-        height: Math.max(900, bounds.maxY - bounds.minY + 520)
-      };
-
+      layoutNodesInOpenSpace(nodes);
       state.nodes = nodes;
-      buildHexOwnershipGrid(nodes.filter(node => node.kind === 'user' && !node.testAccount));
       state.edges = edges;
       state.nodeById = nodeById;
       state.loaded = true;
@@ -555,64 +551,6 @@
     }
   }
 
-  function buildHexOwnershipGrid(users) {
-    const size = 44;
-    const stepX = Math.sqrt(3) * size;
-    const stepY = 1.5 * size;
-    const cells = [];
-    const eligibleUsers = users.filter(user => Number(user.backgroundShare) > 0);
-    if (!eligibleUsers.length) {
-      state.hexCells = [];
-      return;
-    }
-
-    for (let row = 0, y = size; y <= state.world.height - size; row++, y += stepY) {
-      const offset = (row & 1) ? stepX / 2 : 0;
-      for (let x = size + offset; x <= state.world.width - size; x += stepX) {
-        let owner = null;
-        let best = Infinity;
-        for (const user of eligibleUsers) {
-          const dx = x - user.x;
-          const dy = y - user.y;
-          const share = Math.max(0.000001, Number(user.backgroundShare) || 0);
-          const weightedDistance = (dx * dx + dy * dy) / Math.sqrt(share);
-          if (weightedDistance < best) {
-            best = weightedDistance;
-            owner = user;
-          }
-        }
-        cells.push({ x, y, owner });
-      }
-    }
-    state.hexCells = cells;
-  }
-
-  function drawHexBackground(ctx) {
-    const size = 44;
-    const stepX = Math.sqrt(3) * size;
-    const stepY = 1.5 * size;
-    const minX = Math.max(0, state.camera.x - state.width / (2 * state.camera.zoom) - stepX);
-    const maxX = Math.min(state.world.width, state.camera.x + state.width / (2 * state.camera.zoom) + stepX);
-    const minY = Math.max(0, state.camera.y - state.height / (2 * state.camera.zoom) - stepY);
-    const maxY = Math.min(state.world.height, state.camera.y + state.height / (2 * state.camera.zoom) + stepY);
-
-    for (const cell of state.hexCells) {
-      if (cell.x < minX || cell.x > maxX || cell.y < minY || cell.y > maxY) continue;
-      const { x, y, owner } = cell;
-      ctx.beginPath();
-      for (let corner = 0; corner < 6; corner++) {
-        const angle = Math.PI / 3 * corner + Math.PI / 6;
-        const px = x + size * Math.cos(angle), py = y + size * Math.sin(angle);
-        if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fillStyle = owner ? rgba(owner.color, 0.78) : '#15171b';
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = owner ? rgba(owner.color, 0.9) : 'rgba(255,255,255,.08)';
-      ctx.stroke();
-    }
-  }
   function separateNodeCollisions(nodes) {
     if (nodes.length < 2) return;
     const cellSize = 100;
@@ -663,7 +601,77 @@
     }
   }
 
-  function draw() {
+  function layoutNodesInOpenSpace(nodes) {
+    const count = Math.max(1, nodes.length);
+    const side = Math.max(5600, Math.sqrt(count) * 900);
+    const width = side * 1.18;
+    const height = side;
+    const padding = 420;
+    const cellSize = 360;
+    const buckets = new Map();
+    const ordered = [...nodes].sort((a, b) => hash(a.id) - hash(b.id));
+    const bucketKey = (x, y) => Math.floor(x / cellSize) + ':' + Math.floor(y / cellSize);
+    const nearby = (x, y) => {
+      const cx = Math.floor(x / cellSize), cy = Math.floor(y / cellSize);
+      const found = [];
+      for (let yy = cy - 1; yy <= cy + 1; yy++) {
+        for (let xx = cx - 1; xx <= cx + 1; xx++) {
+          const list = buckets.get(xx + ':' + yy);
+          if (list) found.push(...list);
+        }
+      }
+      return found;
+    };
+
+    ordered.forEach(node => {
+      const minimumGap = 210 + node.radius * 0.35;
+      let placed = false;
+      for (let attempt = 0; attempt < 700; attempt++) {
+        const seedA = hash(node.id + ':x:' + attempt);
+        const seedB = hash(node.id + ':y:' + attempt);
+        const x = padding + (seedA / 4294967295) * (width - padding * 2);
+        const y = padding + (seedB / 4294967295) * (height - padding * 2);
+        const candidates = nearby(x, y);
+        const clear = candidates.every(other => {
+          const required = Math.max(minimumGap, 210 + other.radius * 0.35);
+          return Math.hypot(other.x - x, other.y - y) >= required;
+        });
+        if (!clear) continue;
+        node.x = x;
+        node.y = y;
+        const key = bucketKey(x, y);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(node);
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        // Expand the usable area deterministically if the map becomes very dense.
+        const index = nodes.indexOf(node);
+        node.x = padding + ((index * 997) % Math.max(1, width - padding * 2));
+        node.y = padding + ((index * 1597) % Math.max(1, height - padding * 2));
+        const key = bucketKey(node.x, node.y);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(node);
+      }
+    });
+
+    const bounds = nodes.reduce((b, node) => ({
+      minX: Math.min(b.minX, node.x - node.radius),
+      minY: Math.min(b.minY, node.y - node.radius),
+      maxX: Math.max(b.maxX, node.x + node.radius),
+      maxY: Math.max(b.maxY, node.y + node.radius)
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const shiftX = padding - bounds.minX;
+    const shiftY = padding - bounds.minY;
+    nodes.forEach(node => { node.x += shiftX; node.y += shiftY; });
+    state.world = {
+      width: Math.max(width, bounds.maxX - bounds.minX + padding * 2),
+      height: Math.max(height, bounds.maxY - bounds.minY + padding * 2)
+    };
+  }
+
+    function draw() {
     const ctx = state.ctx;
     if (!ctx || !state.width || !state.height) return;
     const dpr = state.dpr;
@@ -676,24 +684,24 @@
       dpr * (state.height / 2 - state.camera.y * state.camera.zoom)
     );
 
-    drawHexBackground(ctx);
-
     const now = Date.now();
     state.edges.forEach(edge => {
       const from = state.nodeById.get(edge.from);
       const to = state.nodeById.get(edge.to);
       if (!from || !to) return;
       const active = edge.activityAt && Date.now() - edge.activityAt <= ACTIVE_MS;
-      if (!active) return;
+      if (!active && !edge.persistent) return;
       const color = from.color || to.color || '#7c8798';
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
-      ctx.lineWidth = 1.35;
-      ctx.strokeStyle = validHex(color) ? rgba(color, .5) : 'rgba(148,163,184,.45)';
+      ctx.lineWidth = active ? 1.45 : 1.05;
+      ctx.strokeStyle = validHex(color)
+        ? rgba(color, active ? .62 : .28)
+        : (active ? 'rgba(148,163,184,.55)' : 'rgba(148,163,184,.22)');
       ctx.stroke();
 
-      if (now - edge.activityAt <= 9000) {
+      if (active && now - edge.activityAt <= 9000) {
         const count = Math.min(3, Math.max(1, Math.ceil(Math.log2((edge.activityCount || 1) + 1))));
         for (let i = 0; i < count; i++) {
           const phase = ((now / (1550 + i * 230)) + (hash(edge.key) % 997) / 997 + i / count) % 1;
