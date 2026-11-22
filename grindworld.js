@@ -54,6 +54,12 @@
   };
   const hueFor = id => hash(id) % 360;
   const colorFor = id => 'hsl(' + hueFor(id) + ' 78% 63%)';
+  const validHex = value => /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+  const rgba = (hex, alpha) => {
+    const value = validHex(hex) ? hex.slice(1) : 'a78bfa';
+    const n = parseInt(value, 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+  };
   const isRecent = ts => {
     const t = ts ? new Date(ts).getTime() : 0;
     return t > 0 && Date.now() - t <= ACTIVE_MS;
@@ -130,7 +136,7 @@
         safeRows(sb.from('holdings').select('user_id,coin_id,shares').gt('shares', 0).limit(5000))
       ]);
 
-      const profileById = new Map(profiles.filter(p => p?.id && !p.is_test_account).map(p => [String(p.id), p]));
+      const profileById = new Map(profiles.filter(p => p?.id).map(p => [String(p.id), p]));
       if (currentUser?.is_test_account) {
         state.nodes = [];
         state.edges = [];
@@ -153,7 +159,7 @@
       const validCompanyBuys = companyBuys.filter(t => t?.company_id && companyById.has(String(t.company_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validProductPurchases = productPurchases.filter(p => p?.product_id && productById.has(String(p.product_id)) && userExists(p.buyer_id) && isRecent(p.created_at));
 
-      const activeUserIds = new Set();
+      const activeUserIds = new Set(profiles.filter(p => p?.id).map(p => String(p.id)));
       companyRows.forEach(c => activeUserIds.add(String(c.owner_id)));
       coinRows.forEach(c => activeUserIds.add(String(c.creator_id)));
       validCoinBuys.forEach(t => activeUserIds.add(String(t.user_id)));
@@ -224,6 +230,9 @@
         .map(id => profileById.get(id))
         .filter(Boolean)
         .sort((a, b) => (scoreByUser.get(String(b.id)) || 0) - (scoreByUser.get(String(a.id)) || 0));
+      const userColorById = new Map(activeProfiles.map(profile => [
+        String(profile.id), validHex(profile.user_color) ? profile.user_color.toLowerCase() : colorFor(profile.id)
+      ]));
       const columns = Math.max(1, Math.ceil(Math.sqrt(activeProfiles.length * 1.25)));
       const rows = Math.max(1, Math.ceil(activeProfiles.length / columns));
       const cellW = 510, cellH = 420;
@@ -242,7 +251,7 @@
         addNode({
           id: userId, kind: 'user', label: profile.username || 'Trader',
           meta: 'Market footprint ' + Math.round(score).toLocaleString(),
-          image: profile.avatar_url || '', color: colorFor(profile.id), score,
+          image: profile.avatar_url || '', color: userColorById.get(String(profile.id)), score,
           radius: 25, x, y, profileId: String(profile.id)
         });
       });
@@ -264,7 +273,7 @@
           addNode({
             id, kind: 'company', label: company.company_name || 'Company',
             meta: (company.product_lines || []).join(' / ').toUpperCase() + ' · ' + productRows.filter(p => String(p.company_id) === String(company.id)).length + ' products',
-            image: company.logo_data_url || '', color: colorFor(ownerId), radius: 20,
+            image: company.logo_data_url || '', color: userColorById.get(ownerId) || colorFor(ownerId), radius: 20,
             x, y, companyId: String(company.id), ownerId
           });
           addEdge('owner:' + company.id, 'user:' + ownerId, id, 'owner', company.created_at, 1);
@@ -277,7 +286,7 @@
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
               meta: String(product.product_line || 'product').toUpperCase() + ' · ' + Number(product.purchase_count || 0) + ' units sold',
-              image: product.design_data?.thumbnail || '', color: colorFor(ownerId),
+              image: product.design_data?.thumbnail || '', color: userColorById.get(ownerId) || colorFor(ownerId),
               radius: 14, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
               ownerId, line: product.product_line
             });
@@ -303,7 +312,7 @@
           addNode({
             id, kind: 'coin', label: coin.name || coin.ticker || 'Coin',
             meta: '$' + String(coin.ticker || '').toUpperCase() + ' · ' + Number(coin.price || 1).toFixed(2),
-            image: coin.image_url || '', color: colorFor(creatorId), radius: 17,
+            image: coin.image_url || '', color: userColorById.get(creatorId) || colorFor(creatorId), radius: 17,
             x, y, coinId: String(coin.id), ownerId: creatorId
           });
           addEdge('coin-creator:' + coin.id, 'user:' + creatorId, id, 'coin-owner', coin.created_at, 1);
@@ -487,34 +496,47 @@
     }
   }
 
-  function drawRegion(ctx, node, maxScore) {
-    const ratio = Math.max(0.015, Number(node.score || 1) / maxScore);
-    const radius = 58 + Math.sqrt(ratio) * 230;
-    const seed = hash(node.profileId);
-    const points = 13;
-    const path = [];
-    for (let i = 0; i < points; i++) {
-      const angle = (Math.PI * 2 * i / points);
-      const wobble = 0.78 + (((seed >>> (i % 24)) & 15) / 48);
-      path.push({
-        x: node.x + Math.cos(angle) * radius * wobble,
-        y: node.y + Math.sin(angle) * radius * wobble * 0.82
-      });
+  function drawHexBackground(ctx, users) {
+    if (!users.length) return;
+    const size = 31;
+    const stepX = Math.sqrt(3) * size;
+    const stepY = 1.5 * size;
+    const maxScore = Math.max(1, ...users.map(user => Number(user.score || 1)));
+    const minX = -stepX, maxX = state.world.width + stepX;
+    const minY = -stepY, maxY = state.world.height + stepY;
+    const rowStart = Math.floor(minY / stepY);
+    const rowEnd = Math.ceil(maxY / stepY);
+    const colStart = Math.floor(minX / stepX) - 1;
+    const colEnd = Math.ceil(maxX / stepX) + 1;
+    for (let row = rowStart; row <= rowEnd; row++) {
+      const offset = (row & 1) ? stepX / 2 : 0;
+      for (let col = colStart; col <= colEnd; col++) {
+        const x = col * stepX + offset;
+        const y = row * stepY;
+        let owner = users[0];
+        let best = Infinity;
+        for (const user of users) {
+          const dx = x - user.x;
+          const dy = y - user.y;
+          const activityWeight = Math.max(0.55, Math.sqrt(Number(user.score || 1) / maxScore));
+          const weightedDistance = (dx * dx + dy * dy) / activityWeight;
+          if (weightedDistance < best) { best = weightedDistance; owner = user; }
+        }
+        ctx.beginPath();
+        for (let corner = 0; corner < 6; corner++) {
+          const angle = Math.PI / 3 * corner + Math.PI / 6;
+          const px = x + size * Math.cos(angle);
+          const py = y + size * Math.sin(angle);
+          if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = rgba(owner.color, 0.38);
+        ctx.fill();
+        ctx.lineWidth = 1.1;
+        ctx.strokeStyle = rgba(owner.color, 0.62);
+        ctx.stroke();
+      }
     }
-    ctx.beginPath();
-    path.forEach((p, i) => {
-      const next = path[(i + 1) % path.length];
-      const midX = (p.x + next.x) / 2;
-      const midY = (p.y + next.y) / 2;
-      if (i === 0) ctx.moveTo(midX, midY);
-      ctx.quadraticCurveTo(p.x, p.y, midX, midY);
-    });
-    ctx.closePath();
-    ctx.fillStyle = 'hsla(' + hueFor(node.profileId) + ', 78%, 54%, .13)';
-    ctx.fill();
-    ctx.strokeStyle = 'hsla(' + hueFor(node.profileId) + ', 82%, 65%, .12)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
   }
 
   function draw() {
@@ -531,8 +553,7 @@
     );
 
     const users = state.nodes.filter(n => n.kind === 'user');
-    const maxScore = Math.max(1, ...users.map(n => Number(n.score || 1)));
-    users.forEach(user => drawRegion(ctx, user, maxScore));
+    drawHexBackground(ctx, users);
 
     const now = performance.now();
     state.edges.forEach(edge => {
@@ -545,7 +566,7 @@
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
       ctx.lineWidth = active ? 2.1 : 1.15;
-      ctx.strokeStyle = active ? color.replace('hsl(', 'hsla(').replace(')', ' / .72)') : 'rgba(170,170,190,.17)';
+      ctx.strokeStyle = active ? (validHex(color) ? rgba(color, .82) : color.replace('hsl(', 'hsla(').replace(')', ' / .72)')) : 'rgba(170,170,190,.17)';
       if (active) {
         ctx.shadowBlur = 10;
         ctx.shadowColor = color;
