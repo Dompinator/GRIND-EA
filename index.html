@@ -127,7 +127,7 @@
 
       <div class="content">
         <!-- FEED -->
-        <section id="page-feed" class="page">
+        <section id="page-feed" class="page"><aside id="grindAdsRail" class="grind-ads-rail" aria-label="Sponsored products"><div class="grind-ads-rail-title">SPONSORED</div><div id="grindAdsSlots" class="grind-ads-slots"></div></aside>
           <div class="hero-panel">
             <div>
               <div class="eyebrow">LIVE MARKET</div>
@@ -405,6 +405,7 @@
               <button type="button" class="company-dashboard-tab" data-company-tab="stocks">Stocks</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="research">Research</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="products">Products</button>
+              <button type="button" class="company-dashboard-tab" data-company-tab="ads">ADS</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="logo">Logo</button>
               <button type="button" class="company-dashboard-tab" data-company-tab="settings">Settings</button>
             </div>
@@ -457,7 +458,8 @@
 <button type="button" class="research-node" data-research-node="advanced_v_cache" style="--node-x:93%;--node-y:57%"><span class="research-hex"><b>VC+</b></span><strong>Advanced V-Cache</strong><small>$4,500 research · 46 Score</small><em class="research-node-status">LOCKED</em></button>
 <button type="button" class="research-node" data-research-node="basic_3d_v_cache" style="--node-x:93%;--node-y:70.3%"><span class="research-hex"><b>3D</b></span><strong>Basic 3D V-Cache</strong><small>$4,750 research · 48 Score</small><em class="research-node-status">LOCKED</em></button>
 <button type="button" class="research-node" data-research-node="advanced_3d_v_cache" style="--node-x:93%;--node-y:83.7%"><span class="research-hex"><b>3D+</b></span><strong>Advanced 3D V-Cache</strong><small>$8,000 research · 68 Score</small><em class="research-node-status">LOCKED</em></button>
-</div><div class="research-tree-controls"><button type="button" data-research-zoom="out" aria-label="Zoom out">−</button><button type="button" data-research-zoom="reset">Reset</button><button type="button" data-research-zoom="in" aria-label="Zoom in">+</button></div></div><p id="companyResearchMessage" class="form-message" aria-live="polite"></p></div></div><div class="company-dashboard-panel hidden" id="companyPanelProducts">
+</div><div class="research-tree-controls"><button type="button" data-research-zoom="out" aria-label="Zoom out">−</button><button type="button" data-research-zoom="reset">Reset</button><button type="button" data-research-zoom="in" aria-label="Zoom in">+</button></div></div><p id="companyResearchMessage" class="form-message" aria-live="polite"></p></div></div><div class="company-dashboard-panel hidden" id="companyPanelAds"></div>
+            <div class="company-dashboard-panel hidden" id="companyPanelProducts">
               <div class="company-dashboard-section">
                 <div class="company-section-heading"><div><div class="eyebrow purple-text">CATALOGUE</div><h4>All products</h4></div><span class="company-count-chip">0 PRODUCTS</span></div>
                 <div id="companyProductList" class="company-product-list"><div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first CPU to get started.</p></div></div><div id="companyProductDetails" class="company-product-details hidden"></div>
@@ -2141,7 +2143,7 @@
   </div>
 
 
-  <aside id="grindAdsRail" class="grind-ads-rail" aria-label="Sponsored products"><div class="grind-ads-rail-title">SPONSORED</div><div id="grindAdsSlots" class="grind-ads-slots"></div></aside>
+  
   <div id="grindAdDesigner" class="grind-ad-modal hidden" role="dialog" aria-modal="true" aria-labelledby="grindAdDesignerTitle">
     <div class="grind-ad-dialog">
       <header class="grind-ad-dialog-head"><div><div class="eyebrow purple-text">GRIND AD STUDIO</div><h3 id="grindAdDesignerTitle">Create product ad</h3><p id="grindAdProductName" class="muted tiny"></p></div><button type="button" class="zoom-btn" id="grindAdClose">✕</button></header>
