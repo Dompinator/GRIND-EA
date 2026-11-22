@@ -2140,6 +2140,29 @@
     <div class="grind-intro-progress"><span></span></div>
   </div>
 
+
+  <aside id="grindAdsRail" class="grind-ads-rail" aria-label="Sponsored products"><div class="grind-ads-rail-title">SPONSORED</div><div id="grindAdsSlots" class="grind-ads-slots"></div></aside>
+  <div id="grindAdDesigner" class="grind-ad-modal hidden" role="dialog" aria-modal="true" aria-labelledby="grindAdDesignerTitle">
+    <div class="grind-ad-dialog">
+      <header class="grind-ad-dialog-head"><div><div class="eyebrow purple-text">GRIND AD STUDIO</div><h3 id="grindAdDesignerTitle">Create product ad</h3><p id="grindAdProductName" class="muted tiny"></p></div><button type="button" class="zoom-btn" id="grindAdClose">✕</button></header>
+      <div class="grind-ad-editor-layout">
+        <div class="grind-ad-tools">
+          <label>Headline<input id="grindAdHeadline" maxlength="80" placeholder="Make your product stand out"></label>
+          <label>Description<textarea id="grindAdDescription" maxlength="180" rows="3" placeholder="Short product description"></textarea></label>
+          <label class="grind-ad-upload">Upload image<input id="grindAdImageFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <button type="button" class="zoom-btn" id="grindAdTakePicture">Take Picture of product preview</button>
+          <div class="grind-ad-tool-row"><button type="button" class="zoom-btn" id="grindAdAddText">＋ Add text</button><button type="button" class="zoom-btn" id="grindAdAddSticker">＋ Sticker</button></div>
+          <label>Selected element text<input id="grindAdElementText" maxlength="80" placeholder="Select a text element"></label>
+          <label>Text size<input id="grindAdElementSize" type="range" min="12" max="64" value="28"></label>
+          <p class="muted tiny">Drag elements on the preview. Use the size slider to resize selected text.</p>
+          <div class="grind-ad-pricing" id="grindAdPricing"></div>
+          <button type="button" class="primary-btn full" id="grindAdPurchase">Preview &amp; pay</button>
+          <p id="grindAdMessage" class="form-message" aria-live="polite"></p>
+        </div>
+        <div class="grind-ad-preview-wrap"><div class="grind-ad-preview-label">LIVE PREVIEW · SPONSORED</div><canvas id="grindAdCanvas" width="720" height="1280"></canvas></div>
+      </div>
+    </div>
+  </div>
   <!-- REAL-TIME NOTIFICATION POPUP STACK -->
   <div id="liveNotifPopups" class="live-notif-popups-container" aria-live="polite"></div>
 
@@ -2155,10 +2178,11 @@
   <script defer src="product-preview-modal.js?v=2"></script>
   <script defer src="pc-assembly-ritual.js?v=1"></script>
   <script defer src="grind-intro.js?v=4"></script>
-  <script defer src="app.js?v=114"></script>
+  <script defer src="app.js?v=115"></script>
   <script defer src="company-stocks.js?v=2"></script>
   <script defer src="company-pc.js?v=4"></script>
   <script defer src="company-gpu.js?v=26"></script>
   <script defer src="grindworld.js?v=8"></script>
+  <script defer src="grind-ads.js?v=1"></script>
 </body>
 </html>
