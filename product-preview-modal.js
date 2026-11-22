@@ -1084,6 +1084,29 @@
     }
 
     renderDockButtons();
+    const captureBtn = document.createElement('button');
+    captureBtn.type = 'button';
+    captureBtn.className = 'primary-btn';
+    captureBtn.id = 'eaPreviewUseViewBtn';
+    captureBtn.textContent = 'Use this view for AD';
+    captureBtn.style.marginLeft = '10px';
+    captureBtn.addEventListener('click', () => {
+      try {
+        if (!renderer || !renderer.domElement) throw new Error('Preview is not ready');
+        renderer.render(scene, camera);
+        const imageData = renderer.domElement.toDataURL('image/png');
+        if (typeof window.onProductPreviewCapture !== 'function') {
+          if (typeof toast === 'function') toast('Open the Ad Designer first.');
+          return;
+        }
+        window.onProductPreviewCapture(imageData);
+        modalEl.classList.add('hidden');
+        disposeRenderer();
+      } catch (err) {
+        if (typeof toast === 'function') toast('Could not capture this preview view.');
+      }
+    });
+    footer?.appendChild(captureBtn);
     modalEl.classList.remove('hidden');
     requestAnimationFrame(() => mountAndBuild(p));
   }
