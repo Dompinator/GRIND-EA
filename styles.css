@@ -8205,7 +8205,7 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .grind-ads-rail{position:absolute;right:0;top:12px;width:126px;z-index:3}
 .grind-ads-rail-title{font-size:9px;font-weight:900;letter-spacing:.22em;color:#bda5df;text-align:center;margin-bottom:10px}
 .grind-ads-slots{display:grid;gap:10px}
-.grind-ad-slot{width:100%;aspect-ratio:1/3.8;min-height:130px;max-height:270px;border:1px solid rgba(168,85,247,.28);border-radius:12px;overflow:hidden;background:#100d19;position:relative;cursor:pointer;padding:0;text-align:left;color:#fff}
+.grind-ad-slot{width:100%;aspect-ratio:1/16;min-height:220px;border:1px solid rgba(168,85,247,.28);border-radius:12px;overflow:hidden;background:#100d19;position:relative;cursor:pointer;padding:0;text-align:left;color:#fff}
 .grind-ad-slot img{width:100%;height:72%;object-fit:cover;display:block}
 .grind-ad-slot strong{display:block;font-size:11px;line-height:1.25;padding:7px 8px 2px}
 .grind-ad-slot small{display:block;font-size:9px;color:#b8a8cd;padding:0 8px 8px}
@@ -8234,5 +8234,5 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 .grind-ad-dashboard-card{display:grid;grid-template-columns:100px 1fr;gap:14px;padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 .grind-ad-dashboard-card img{width:100px;height:130px;object-fit:cover;border-radius:8px}
 .grind-ad-dashboard-card h4{margin:2px 0 6px}
-@media(max-width:900px){#page-feed{padding-right:0}.grind-ads-rail{position:static;width:100%;margin:14px 0}.grind-ads-slots{grid-template-columns:repeat(4,minmax(0,1fr))}.grind-ad-slot{aspect-ratio:1/2.8;min-height:90px}.grind-ad-editor-layout{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){#page-feed{padding-right:0}.grind-ads-rail{position:static;width:100%;margin:14px 0}.grind-ads-slots{grid-template-columns:repeat(4,minmax(0,1fr))}.grind-ad-slot{aspect-ratio:1/8;min-height:160px}.grind-ad-editor-layout{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.grind-ad-editor-layout{grid-template-columns:1fr}.grind-ad-dialog{padding:13px}.grind-ads-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
