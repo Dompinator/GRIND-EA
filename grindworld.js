@@ -415,6 +415,8 @@
         addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, p.activityCount || 1);
       });
 
+      const keepCurrentView = state.loaded;
+      const previousCamera = { ...state.camera };
       layoutNodesInOpenSpace(nodes);
       state.nodes = nodes;
       state.edges = edges;
@@ -428,7 +430,13 @@
         nodes.filter(n => n.kind === 'coin').length + ' coins · ' +
         edges.filter(e => e.activityAt && Date.now() - e.activityAt <= ACTIVE_MS).length + ' active connections';
       $('grindWorldLoading')?.classList.add('hidden');
-      fitView();
+      if (keepCurrentView) {
+        state.camera = previousCamera;
+        clampCamera();
+        draw();
+      } else {
+        fitView();
+      }
       startAnimation();
     } catch (error) {
       console.error('GrindWorld load failed:', error);
