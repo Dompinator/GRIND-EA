@@ -1435,6 +1435,7 @@
     const selected = rows.find(r => r.id === selectedPcPageProductId);
     if (!detailEl || !selected) { detailEl?.classList.add('hidden'); return; }
     const draft = isProductDraft(selected);
+    const canEdit = selected.owner_id === currentUser?.id;
     const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
     const stockCount = Number(selected.stock || 0);
     const d = selected.design_data || {};
@@ -1470,7 +1471,7 @@
       '<label>Listing price ($)<input id="eaPcDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       produceBlock +
       '<div class="company-product-details-actions">' +
-        '<button type="button" class="primary-btn" id="eaPcDetailEdit">Edit</button>' +
+        (canEdit ? '<button type="button" class="primary-btn" id="eaPcDetailEdit">Edit</button>' : '') +
         '<button type="button" class="zoom-btn" id="eaPcDetailSavePrice">Save price</button>' +
         (draft ? '<button type="button" class="primary-btn" id="eaPcDetailPublish">Publish PC</button><button type="button" class="danger-btn" id="eaPcDetailDeleteDraft">Delete draft</button>' : '') +
       '</div>' +
