@@ -8063,3 +8063,31 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 @keyframes introStudioEpicOut{to{opacity:0;transform:scale(1.18);filter:blur(22px)}}
 @keyframes introGrindEpicIn{0%{opacity:0;transform:scale(.72) translateY(28px);filter:blur(22px)}45%{opacity:1;filter:blur(0)}75%{transform:scale(1.025)}100%{opacity:1;transform:scale(1)}}
 @media(max-width:600px){.grind-intro-studio{width:88vw;gap:16px}.grind-intro-overline,.grind-intro-studio-caption{font-size:8px;letter-spacing:.25em}.grind-intro-tagline{letter-spacing:.2em}.grind-intro-skip{top:16px;right:16px}}
+
+/* Cinematic pacing + clean handoff: the studio mark must never reappear */
+.grind-intro-stage{overflow:hidden;background:radial-gradient(ellipse at 50% 52%,rgba(92,48,156,.13),transparent 48%)}
+.grind-intro-stage::before{content:"";position:absolute;inset:-40%;pointer-events:none;opacity:0;background:repeating-conic-gradient(from 0deg at 50% 50%,rgba(190,160,255,.0) 0deg,rgba(190,160,255,.0) 8deg,rgba(190,160,255,.11) 8.4deg,rgba(190,160,255,0) 9deg);mask-image:radial-gradient(ellipse,black 0%,transparent 67%);transform:scale(.35) rotate(-20deg)}
+.grind-intro.playing .grind-intro-stage::before{animation:introGodRays 20s ease-out forwards}
+.grind-intro-stage::after{content:"";position:absolute;left:50%;top:50%;width:min(72vw,760px);aspect-ratio:1;border:1px solid rgba(195,170,255,.0);border-radius:50%;transform:translate(-50%,-50%) scale(.2);box-shadow:0 0 80px rgba(140,90,255,0);pointer-events:none}
+.grind-intro.playing .grind-intro-stage::after{animation:introShockwave 20s ease-out forwards}
+.grind-intro-studio{z-index:3;will-change:opacity,transform,filter}
+.grind-intro-studio.is-gone{display:none!important;animation:none!important;visibility:hidden!important;opacity:0!important}
+.grind-intro-transition-mark{position:absolute;z-index:4;opacity:0;transform:scale(.1) rotate(-90deg);filter:blur(18px);pointer-events:none}
+.grind-intro.is-transitioning .grind-intro-transition-mark{animation:introGMark 1.4s cubic-bezier(.12,.9,.2,1) .05s forwards}
+.grind-intro.is-grind .grind-intro-transition-mark{animation:introGOut .7s ease forwards}
+.grind-intro-grind{position:absolute;z-index:5;opacity:0;transform:scale(.5) translateY(60px);filter:blur(30px);text-align:center}
+.grind-intro-grind-word{font-weight:950;line-height:.82;letter-spacing:-.105em;background:linear-gradient(180deg,#fff 0%,#e9dcff 38%,#a879ff 72%,#6531c9 100%);background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.3);filter:drop-shadow(0 12px 0 rgba(28,11,54,.8)) drop-shadow(0 0 26px rgba(171,126,255,.7)) drop-shadow(0 0 90px rgba(122,64,255,.65))}
+.grind-intro-grind-word span{color:#fff;background:none;-webkit-text-fill-color:#fff}
+.grind-intro-tagline{opacity:0;transform:translateY(14px);text-shadow:0 0 22px rgba(180,140,255,.65)}
+.grind-intro.is-grind .grind-intro-grind{animation:introGrindEpicIn 2.7s cubic-bezier(.12,1,.22,1) .1s forwards}
+.grind-intro.is-grind .grind-intro-tagline{animation:introTaglineIn 1.1s ease 1.5s forwards}
+.grind-intro.is-grind .grind-intro-overline{animation:introTaglineIn .8s ease .8s forwards}
+.grind-intro.is-transitioning .grind-intro-studio{animation:introStudioEpicOut 1.35s cubic-bezier(.16,1,.3,1) forwards}
+.grind-intro-progress span{display:block;width:0;height:100%;background:linear-gradient(90deg,#6841bd,#d8c2ff,#fff);box-shadow:0 0 18px #a879ff}
+@keyframes introGodRays{0%{opacity:0;transform:scale(.35) rotate(-20deg)}18%{opacity:.5}65%{opacity:.22;transform:scale(1.2) rotate(40deg)}100%{opacity:.5;transform:scale(1.5) rotate(70deg)}}
+@keyframes introShockwave{0%,52%{opacity:0;transform:translate(-50%,-50%) scale(.2);border-color:rgba(195,170,255,0)}60%{opacity:1;border-color:rgba(210,190,255,.8);box-shadow:0 0 60px rgba(140,90,255,.55)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.3);border-color:rgba(195,170,255,0)}}
+@keyframes introGMark{0%{opacity:0;transform:scale(.1) rotate(-90deg);filter:blur(18px)}55%{opacity:1;transform:scale(1.25) rotate(8deg);filter:blur(0);text-shadow:0 0 55px #fff,0 0 160px #9c62ff}100%{opacity:1;transform:scale(1) rotate(0);filter:blur(0)}}
+@keyframes introGOut{to{opacity:0;transform:scale(2.2);filter:blur(28px)}}
+@keyframes introGrindEpicIn{0%{opacity:0;transform:scale(.48) translateY(75px);filter:blur(30px)}42%{opacity:1;filter:blur(0)}66%{transform:scale(1.08) translateY(-5px)}82%{transform:scale(.985)}100%{opacity:1;transform:scale(1);filter:blur(0)}}
+@keyframes introTaglineIn{from{opacity:0;transform:translateY(14px);letter-spacing:.9em}to{opacity:1;transform:translateY(0);letter-spacing:.42em}}
+@keyframes introProgress{0%{width:0}100%{width:100%}}
