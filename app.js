@@ -2635,6 +2635,19 @@ async function finishCpuDesign(){
   }
 
   const savedId = data?.id || wasEditingId;
+
+  // Keep the saved CPU product value identical to the Designer's Estimated Value.
+  // The CPU draft RPC calculates its own value, so explicitly sync the Designer total.
+  if (savedId) {
+    const valueSync = await sb.from('product_company_products')
+      .update({ production_cost: activeCost, product_value: activeCost })
+      .eq('id', savedId)
+      .eq('owner_id', currentUser.id);
+    if (valueSync.error) {
+      console.warn('Could not sync CPU Estimated Value to product value:', valueSync.error);
+    }
+  }
+
   if(savedId && snapDataUrl){
     saveCpuProductThumb(savedId, activeSpec, snapDataUrl);
     applyCpuThumbToDom(savedId, name, snapDataUrl);
