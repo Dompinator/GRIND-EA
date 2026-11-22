@@ -2066,18 +2066,16 @@
   <div id="grindIntro" class="grind-intro hidden" aria-hidden="true">
     <button type="button" class="grind-intro-skip" id="grindIntroSkip">SKIP INTRO <span>↗</span></button>
     <div class="grind-intro-stage">
+      <canvas class="grind-intro-particles" id="grindIntroParticles"></canvas>
+      <div class="grind-intro-scanline"></div>
       <div class="grind-intro-studio" id="grindIntroStudio">
-        <svg class="grind-intro-logo" viewBox="0 0 1120 440" role="img" aria-label="Dompic Entertainment">
-          <g class="grind-intro-mark">
-            <path d="M235 22 392 185 248 322 420 505 302 615 24 322Z" transform="translate(0 -90) scale(.78)" />
-            <path d="m282 202 105 105-110 103-104-105z" transform="translate(0 -25) scale(.78)"/>
-          </g>
-          <text class="grind-intro-dompic" x="430" y="250">D<span>O</span>MPIC</text>
-          <text class="grind-intro-entertainment" x="430" y="335">ENTERTAINMENT</text>
-        </svg>
+        <div class="grind-intro-overline">A DOMPIC ENTERTAINMENT PRESENTATION</div>
+        <img class="grind-intro-logo" src="dompic-logo.svg?v=1" alt="Dompic Entertainment"/>
+        <div class="grind-intro-studio-caption">CREATED WITH PURPOSE. BUILT TO LAST.</div>
       </div>
-      <div class="grind-intro-transition-mark">G</div>
+      <div class="grind-intro-transition-mark" aria-hidden="true">◆</div>
       <div class="grind-intro-grind" id="grindIntroGrind">
+        <div class="grind-intro-overline">THE NEXT CHAPTER</div>
         <div class="grind-intro-grind-word">GRIND<span>.</span></div>
         <div class="grind-intro-tagline">GRIND YOUR WAY THROUGH THE MARKET</div>
       </div>
@@ -2099,7 +2097,7 @@
   <script defer src="pc-designer-3d.js?v=3"></script>
   <script defer src="product-preview-modal.js?v=2"></script>
   <script defer src="pc-assembly-ritual.js?v=1"></script>
-  <script defer src="grind-intro.js?v=1"></script>
+  <script defer src="grind-intro.js?v=2"></script>
   <script defer src="app.js?v=114"></script>
   <script defer src="company-stocks.js?v=2"></script>
   <script defer src="company-pc.js?v=4"></script>
