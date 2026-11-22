@@ -1345,7 +1345,7 @@
       selectedPcPageProductId = savedId;
     }
     syncPcSaveButtonUI();
-    if (msgEl) msgEl.textContent = wasEditingId ? 'PC draft updated!' : 'PC saved as draft! Publish it from Products.';
+    if (msgEl) msgEl.textContent = wasEditingId ? 'PC product updated!' : 'PC saved as draft! Publish it from Products.';
     toast(wasEditingId ? 'PC product updated!' : 'PC draft saved!');
     await loadCompanyResearchAndProducts();
     renderPcProducts();
@@ -1372,12 +1372,12 @@
     setPcView('build');
     if ($('#eaPcName')) $('#eaPcName').value = p.product_name || 'Nova Gaming PC';
     if ($('#eaPcPrice')) $('#eaPcPrice').value = String(Math.max(1, Number(p.listed_price || 1800)));
-    if ($('#eaPcBuildMessage')) $('#eaPcBuildMessage').textContent = 'Editing draft "' + (p.product_name || 'PC') + '".';
+    if ($('#eaPcBuildMessage')) $('#eaPcBuildMessage').textContent = 'Editing product "' + (p.product_name || 'PC') + '".';
     renderBuildCaseSelector();
     updateBuildSpecsReadout();
     syncPcSaveButtonUI();
     drawBuildStage();
-    toast('Loaded PC draft into builder.');
+    toast('Loaded PC product into builder.');
   }
 
   window.editPcDraftProduct = function (id) {
