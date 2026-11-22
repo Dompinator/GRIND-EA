@@ -1924,7 +1924,7 @@ let companyLoaded = false;
 let pendingCompanyLogo = '';
 let pendingSettingsCompanyLogo = '';
 let incomingCompanyTransfers = [];
-let companyResearchRows = [], companyProducts = [], selectedCompanyProductId = null;
+let companyResearchRows = [], companyProducts = [], companySeriesRows = [], selectedCompanyProductId = null;
 let cpuDesignCore = false, cpuDesignThreads = false, cpuDesignSilicon = false, cpuDesignSixThreads = false, cpuDesignTwoCores = false, cpuDesignEightThreads = false, cpuDesignFourCores = false, cpuDesignCarbonFiber = false, cpuDesignBuiltInCooling = false, cpuDesignGreatCooling = false;
 let cpuDesignEightCores = false, cpuDesignSixteenCores = false, cpuDesignThirtyTwoCores = false, cpuDesignSixtyFourCores = false, cpuDesignEightySixCores = false, cpuDesignTwelveThreads = false, cpuDesignEighteenThreads = false, cpuDesignThirtySixThreads = false, cpuDesignSixtyFourThreads = false, cpuDesignEightySixThreads = false, cpuDesignOneHundredEightThreads = false, cpuDesignTitaniumBody = false, cpuDesignVaporChamber = false, cpuDesignUltraCooling = false, cpuDesignSimpleGraphics = false, cpuDesignAdvancedGraphics = false, cpuDesignBasicAI = false, cpuDesignAdvancedAI = false, cpuDesignVCache = 'none';
 let cpuDesignMenu = 'body', cpuRotationX = -24, cpuRotationY = -35;
@@ -2086,8 +2086,17 @@ async function loadCompanyDashboard() {
 
 async function loadCompanyResearchAndProducts(){
  if(!currentCompany||!sb)return;
- const [r,p]=await Promise.all([sb.from('product_company_research').select('research_key,unlocked_at').eq('company_id',currentCompany.id),sb.from('product_company_products').select('*').eq('company_id',currentCompany.id).order('created_at',{ascending:false})]);
- if(r.error)console.warn('CPU research load:',r.error);if(p.error)console.warn('Products load:',p.error);companyResearchRows=r.data||[];companyProducts=p.data||[];
+ const [r,p,seriesRes]=await Promise.all([
+   sb.from('product_company_research').select('research_key,unlocked_at').eq('company_id',currentCompany.id),
+   sb.from('product_company_products').select('*').eq('company_id',currentCompany.id).order('created_at',{ascending:false}),
+   sb.from('product_company_series').select('id,company_id,name,created_at').eq('company_id',currentCompany.id).order('created_at',{ascending:true})
+ ]);
+ if(r.error)console.warn('CPU research load:',r.error);
+ if(p.error)console.warn('Products load:',p.error);
+ if(seriesRes.error)console.warn('Company series load:',seriesRes.error);
+ companyResearchRows=r.data||[];
+ companyProducts=p.data||[];
+ companySeriesRows=seriesRes.data||[];
 }
 function hasCpuResearch(k){return companyResearchRows.some(x=>x.research_key===k);}
 function renderCpuResearchTree(){const tree=$('#cpuResearchTree');if(!tree)return;const costs={basic_v_cache:2600,advanced_v_cache:4500,basic_3d_v_cache:4750,advanced_3d_v_cache:8000,simple_1_core:75,simple_4_threads:75,silicon_body:350,six_threads:150,two_cores:175,eight_threads:350,four_cores:400,carbon_fiber_body:5500,built_in_cooling:1500,great_cooling:3500,titanium_body:12000,vapor_chamber_cooling:6000,ultra_cooling:8000,eight_cores:2400,sixteen_cores:3600,thirty_two_cores:6800,sixty_four_cores:14000,eighty_six_cores:24000,twelve_threads:800,eighteen_threads:1200,thirty_six_threads:2600,sixty_four_threads:5000,eighty_six_threads:8000,one_hundred_eight_threads:12000,simple_graphics_integration:1200,advanced_graphics_integration:4500,basic_ai_integration:2400,advanced_ai_integration:6800};const prerequisites={advanced_v_cache:'basic_v_cache',basic_3d_v_cache:'advanced_v_cache',advanced_3d_v_cache:'basic_3d_v_cache',carbon_fiber_body:'silicon_body',titanium_body:'carbon_fiber_body',two_cores:'simple_1_core',four_cores:'two_cores',eight_cores:'four_cores',sixteen_cores:'eight_cores',thirty_two_cores:'sixteen_cores',sixty_four_cores:'thirty_two_cores',eighty_six_cores:'sixty_four_cores',six_threads:'simple_4_threads',eight_threads:'six_threads',twelve_threads:'eight_threads',eighteen_threads:'twelve_threads',thirty_six_threads:'eighteen_threads',sixty_four_threads:'thirty_six_threads',eighty_six_threads:'sixty_four_threads',one_hundred_eight_threads:'eighty_six_threads',great_cooling:'built_in_cooling',vapor_chamber_cooling:'great_cooling',ultra_cooling:'vapor_chamber_cooling',advanced_graphics_integration:'simple_graphics_integration',advanced_ai_integration:'basic_ai_integration'};Object.entries(costs).forEach(([k,c])=>{const n=tree.querySelector('[data-research-node="'+k+'"]');if(!n)return;const yes=hasCpuResearch(k),pre=prerequisites[k],ready=!pre||hasCpuResearch(pre);n.classList.toggle('researched',yes);n.classList.toggle('available',!yes&&ready);n.classList.toggle('prerequisite-locked',!yes&&!ready);n.disabled=yes||!ready;const st=n.querySelector('.research-node-status');if(st)st.textContent=yes?'UNLOCKED':!ready?'RESEARCH '+pre.replace(/_/g,' ').toUpperCase()+' FIRST':'UNLOCK · $'+c;});const b=tree.querySelector('[data-research-node="baseline_cpu"]');if(b)b.disabled=true;}
@@ -2651,46 +2660,87 @@ function renderCompanyProducts(){
  const list=$('#companyProductList');if(!list)return;
  const countChip=document.querySelector('#companyPanelProducts .company-count-chip');
  if(countChip)countChip.textContent=companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S');
- if(!companyProducts.length){list.innerHTML='<div class="company-empty-products"><span>▦</span><strong>No products yet</strong><p class="muted">Design your first product to get started.</p></div>';$('#companyProductDetails')?.classList.add('hidden');return;}
- if(!selectedCompanyProductId || !companyProducts.some(p=>p.id===selectedCompanyProductId)){
-   selectedCompanyProductId = companyProducts[0].id;
- }
-  const specsById = new Map();
-  const gpuById = new Map();
-  const pcById = new Map();
-  list.innerHTML=companyProducts.map(p=>{
-    const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
-    const isGpu = !isPc && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
-    const draft = isProductDraft(p);
-    if (isPc) {
-      pcById.set(p.id, p);
-      const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
-      const pcSpec = typeof window.formatPcSpecLine === 'function' ? window.formatPcSpecLine(p) : 'PC';
-      return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(pcSpec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Build: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
-    }
-    if (isGpu) {
-      gpuById.set(p.id, p);
-      const gpuThumb = typeof window.renderGpuThumbHtml === 'function' ? window.renderGpuThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
-      const gpuSpec = typeof window.formatGpuSpecLine === 'function' ? window.formatGpuSpecLine(p) : 'GPU';
-      return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(gpuSpec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
-    }
-    const spec = resolveCpuProductSpec(p);
-    specsById.set(p.id, spec);
-    return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(formatCpuSpecLine(spec))+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
-  }).join('');
-  list.querySelectorAll('[data-company-product]').forEach(b=>b.addEventListener('click',()=>{
-    selectedCompanyProductId=b.dataset.companyProduct;
-    renderCompanyProducts();
-    loadCompanyProductDetails(selectedCompanyProductId);
-  }));
-  hydrateCpuThumbElements(list, specsById, 240);
-  window.hydrateGpuThumbElements?.(list, gpuById, 360, 270);
-  window.hydratePcThumbElements?.(list, pcById, 360, 270);
-  if(selectedCompanyProductId&&companyProducts.some(p=>p.id===selectedCompanyProductId)){
-    loadCompanyProductDetails(selectedCompanyProductId);
-  } else {
-    $('#companyProductDetails')?.classList.add('hidden');
-  }
+ const specsById=new Map(),gpuById=new Map(),pcById=new Map();
+ const cardHtml=(p)=>{
+   const isPc=typeof window.isPcProductRow==='function'?window.isPcProductRow(p):(p?.product_line==='pc');
+   const isGpu=!isPc&&(typeof window.isGpuProductRow==='function'?window.isGpuProductRow(p):(p?.product_line==='gpu'));
+   const draft=isProductDraft(p);
+   if(isPc){
+     pcById.set(p.id,p);
+     const thumb=typeof window.renderPcThumbHtml==='function'?window.renderPcThumbHtml(p):'<div class="cpu-thumb-loading"></div>';
+     const spec=typeof window.formatPcSpecLine==='function'?window.formatPcSpecLine(p):'PC';
+     return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+thumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(spec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Build: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+   }
+   if(isGpu){
+     gpuById.set(p.id,p);
+     const thumb=typeof window.renderGpuThumbHtml==='function'?window.renderGpuThumbHtml(p):'<div class="cpu-thumb-loading"></div>';
+     const spec=typeof window.formatGpuSpecLine==='function'?window.formatGpuSpecLine(p):'GPU';
+     return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+thumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(spec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+   }
+   const spec=resolveCpuProductSpec(p);specsById.set(p.id,spec);
+   return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p,spec)+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(formatCpuSpecLine(spec))+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+ };
+ if(!selectedCompanyProductId||!companyProducts.some(p=>p.id===selectedCompanyProductId))selectedCompanyProductId=companyProducts[0]?.id||null;
+ const sections=companySeriesRows.map(series=>{
+   const members=companyProducts.filter(p=>p.series_id===series.id);
+   return '<section class="company-series-block"><div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📁</span><div><strong>'+escapeHtml(series.name)+'</strong><small>'+members.length+' product'+(members.length===1?'':'s')+'</small></div></div><div class="company-series-actions"><button type="button" class="zoom-btn" data-series-rename="'+escapeHtml(series.id)+'">Rename</button><button type="button" class="danger-btn" data-series-delete="'+escapeHtml(series.id)+'">Delete</button></div></div><div class="company-series-products">'+(members.length?members.map(cardHtml).join(''):'<p class="muted tiny">This Series is empty. Add products using “Add to Series”.</p>')+'</div></section>';
+ }).join('');
+ const unassigned=companyProducts.filter(p=>!p.series_id);
+ list.innerHTML='<div class="company-series-toolbar"><div><div class="eyebrow purple-text">PRODUCT COLLECTIONS</div><h4>Series</h4><p class="muted tiny">Group your products into named collections.</p></div><button type="button" class="primary-btn" id="companyCreateSeriesToggle">＋ Create Series</button></div><form id="companyCreateSeriesForm" class="company-series-create hidden"><input id="companySeriesName" maxlength="40" minlength="1" required placeholder="e.g. Nova Series"><button type="submit" class="primary-btn">Create</button><button type="button" class="zoom-btn" id="companyCancelSeriesCreate">Cancel</button></form>'+sections+(unassigned.length?'<section class="company-series-block company-series-unassigned"><div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📦</span><div><strong>Other Products</strong><small>'+unassigned.length+' unassigned product'+(unassigned.length===1?'':'s')+'</small></div></div></div><div class="company-series-products">'+unassigned.map(cardHtml).join('')+'</div></section>':'')+(!companyProducts.length&&!companySeriesRows.length?'<div class="company-empty-products"><span>▦</span><strong>No products or Series yet</strong><p class="muted">Create a Series or design your first product.</p></div>':'');
+ $('#companyCreateSeriesToggle')?.addEventListener('click',()=>{$('#companyCreateSeriesForm')?.classList.toggle('hidden');$('#companySeriesName')?.focus();});
+ $('#companyCancelSeriesCreate')?.addEventListener('click',()=>$('#companyCreateSeriesForm')?.classList.add('hidden'));
+ $('#companyCreateSeriesForm')?.addEventListener('submit',createCompanySeries);
+ list.querySelectorAll('[data-series-rename]').forEach(btn=>btn.addEventListener('click',()=>renameCompanySeries(btn.dataset.seriesRename)));
+ list.querySelectorAll('[data-series-delete]').forEach(btn=>btn.addEventListener('click',()=>deleteCompanySeries(btn.dataset.seriesDelete)));
+ list.querySelectorAll('[data-company-product]').forEach(btn=>btn.addEventListener('click',()=>{selectedCompanyProductId=btn.dataset.companyProduct;renderCompanyProducts();loadCompanyProductDetails(selectedCompanyProductId);}));
+ hydrateCpuThumbElements(list,specsById,240);
+ window.hydrateGpuThumbElements?.(list,gpuById,360,270);
+ window.hydratePcThumbElements?.(list,pcById,360,270);
+ if(selectedCompanyProductId)loadCompanyProductDetails(selectedCompanyProductId);else $('#companyProductDetails')?.classList.add('hidden');
+}
+async function createCompanySeries(event){
+ event.preventDefault();
+ if(!currentCompany||!currentUser||!sb)return;
+ const input=$('#companySeriesName'),name=String(input?.value||'').trim();
+ if(!name||name.length>40)return;
+ const {data,error}=await sb.from('product_company_series').insert({company_id:currentCompany.id,name}).select('id,company_id,name,created_at').single();
+ if(error){toast(error.code==='23505'?'A Series with that name already exists.':error.message);return;}
+ companySeriesRows.push(data);renderCompanyProducts();toast('Series created.');
+}
+async function renameCompanySeries(seriesId){
+ const series=companySeriesRows.find(x=>x.id===seriesId);if(!series||!currentCompany||!currentUser)return;
+ const next=window.prompt('Rename Series',series.name);if(next===null)return;
+ const name=next.trim();if(!name||name.length>40){toast('Series names must be 1–40 characters.');return;}
+ const {data,error}=await sb.from('product_company_series').update({name}).eq('id',seriesId).eq('company_id',currentCompany.id).select('id,company_id,name,created_at').single();
+ if(error){toast(error.code==='23505'?'A Series with that name already exists.':error.message);return;}
+ Object.assign(series,data);renderCompanyProducts();toast('Series renamed.');
+}
+async function deleteCompanySeries(seriesId){
+ const series=companySeriesRows.find(x=>x.id===seriesId);if(!series||!currentCompany||!currentUser)return;
+ if(!window.confirm('Delete "'+series.name+'"? Its products will remain in your company as unassigned products.'))return;
+ const {error}=await sb.from('product_company_series').delete().eq('id',seriesId).eq('company_id',currentCompany.id);
+ if(error){toast(error.message);return;}
+ companySeriesRows=companySeriesRows.filter(x=>x.id!==seriesId);
+ companyProducts.forEach(p=>{if(p.series_id===seriesId)p.series_id=null;});
+ renderCompanyProducts();toast('Series deleted. Products were kept.');
+}
+async function assignCompanyProductSeries(productId,seriesId){
+ const product=companyProducts.find(x=>x.id===productId);
+ if(!product||!currentCompany||!currentUser||product.company_id!==currentCompany.id||currentCompany.owner_id!==currentUser.id)return;
+ const target=seriesId?companySeriesRows.find(x=>x.id===seriesId):null;
+ if(seriesId&&!target){toast('That Series is not available in this company.');return;}
+ const {data,error}=await sb.from('product_company_products').update({series_id:target?.id||null}).eq('id',productId).eq('company_id',currentCompany.id).eq('owner_id',currentUser.id).select('id,series_id').single();
+ if(error){toast('Could not update Series: '+error.message);return;}
+ product.series_id=data.series_id;renderCompanyProducts();loadCompanyProductDetails(productId);toast(target?'Added to '+target.name+'.':'Removed from Series.');
+}
+function renderProductSeriesControls(product,detailElement,canEdit){
+ if(!canEdit||!detailElement)return;
+ const wrap=document.createElement('div');wrap.className='company-product-series-control';
+ const options='<option value="">Other Products (no Series)</option>'+companySeriesRows.map(x=>'<option value="'+escapeHtml(x.id)+'">'+escapeHtml(x.name)+'</option>').join('');
+ wrap.innerHTML='<label for="companyProductSeriesSelect">Series</label><div class="company-product-series-row"><select id="companyProductSeriesSelect">'+options+'</select><button type="button" class="primary-btn" id="companyProductSeriesSave">'+(product.series_id?'Update Series':'Add to Series')+'</button></div><p class="muted tiny">A product can belong to one Series at a time.</p>';
+ detailElement.appendChild(wrap);
+ const select=wrap.querySelector('#companyProductSeriesSelect');select.value=product.series_id||'';
+ wrap.querySelector('#companyProductSeriesSave')?.addEventListener('click',()=>assignCompanyProductSeries(product.id,select.value));
 }
 async function produceMoreProduct(id, quantity, msgEl) {
   if (!currentCompany || !currentUser || !sb) return false;
@@ -2873,6 +2923,7 @@ async function loadCompanyProductDetails(id){
    const pcBadges = typeof window.formatPcHardwareBadges === 'function' ? window.formatPcHardwareBadges(p) : 'PC';
    d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-pc-thumb-id="'+escapeHtml(p.id)+'">'+pcThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(pcBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Build cost / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Listed price</span><strong>'+money(Number(p.listed_price||0))+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions"><button type="button" class="zoom-btn" id="companyProductPreview">👁 Preview</button>'+(canEdit ? '<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>' : '')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
    window.hydratePcThumbElements?.(d, new Map([[p.id, p]]), 360, 270);
+   renderProductSeriesControls(p,d,canEdit);
    const msgEl = $('#companyProductDetailMessage');
    if (!draft) {
      bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
@@ -2891,6 +2942,7 @@ async function loadCompanyProductDetails(id){
    const st = typeof window.getGpuProductScoreTier === 'function' ? window.getGpuProductScoreTier(p) : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
    d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-gpu-thumb-id="'+escapeHtml(p.id)+'">'+gpuThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(gpuBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(st.score||0)+' · '+escapeHtml(st.tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions"><button type="button" class="zoom-btn" id="companyProductPreview">👁 Preview</button>'+(canEdit?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
    window.hydrateGpuThumbElements?.(d, new Map([[p.id, p]]), 360, 270);
+   renderProductSeriesControls(p,d,canEdit);
    const msgEl = $('#companyProductDetailMessage');
    if (!draft) {
      bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
@@ -2906,6 +2958,7 @@ async function loadCompanyProductDetails(id){
  const spec = resolveCpuProductSpec(p);
  d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb" data-cpu-thumb-id="'+escapeHtml(p.id)+'">'+renderCpuThumbHtml(p, spec)+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(formatCpuHardwareBadges(spec))+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(p.cpu_score||0)+' · '+escapeHtml(p.cpu_tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions"><button type="button" class="zoom-btn" id="companyProductPreview">👁 Preview</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
  hydrateCpuThumbElements(d, new Map([[p.id, spec]]), 320);
+ renderProductSeriesControls(p,d,canEdit);
  const msgEl = $('#companyProductDetailMessage');
  if (!draft) {
    bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
