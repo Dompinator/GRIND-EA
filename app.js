@@ -1998,7 +1998,7 @@ function renderCompanyDashboard() {
 }
 
 function switchCompanyDashboardTab(tab) {
-  ['money','stocks','research','products','logo','settings'].forEach(name => {
+  ['money','stocks','research','products','ads','logo','settings'].forEach(name => {
     $('#companyPanel' + name[0].toUpperCase() + name.slice(1))?.classList.toggle('hidden', name !== tab);
     document.querySelector('[data-company-tab="' + name + '"]')?.classList.toggle('active', name === tab);
   });
