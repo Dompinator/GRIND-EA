@@ -3174,9 +3174,12 @@ $('#companyTransferForm')?.addEventListener('submit', async e => {
     if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } return;
   }
   const { data: existingCompany, error: companyCheckError } = await sb.from('product_companies')
-    .select('id').eq('owner_id', recipient.id).maybeSingle();
+    .select('id').eq('owner_id', recipient.id)
+    .contains('product_lines', currentCompany.product_lines || []).maybeSingle();
   if (companyCheckError || existingCompany) {
-    if (msg) msg.textContent = existingCompany ? 'That player already owns a company.' : 'Could not verify that player: ' + companyCheckError.message;
+    if (msg) msg.textContent = existingCompany
+      ? 'That player already owns a company for this manufacturing type.'
+      : 'Could not verify that player: ' + companyCheckError.message;
     if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } return;
   }
   const { error } = await sb.from('product_company_transfers').insert({
