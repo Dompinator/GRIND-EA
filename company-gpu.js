@@ -387,8 +387,15 @@
     root.classList.remove('hidden');
     $('#companyOnboarding')?.classList.add('hidden');
     $('#companyDashboard')?.classList.add('hidden');
+    const companyTypes = [
+      { id: 'cpu', label: 'CPU Manufacturing' },
+      { id: 'gpu', label: 'GPU Manufacturing' },
+      { id: 'pc', label: 'PC Manufacturing' }
+    ];
+    const ownedTypes = new Set(companies.flatMap(c => c.product_lines || []));
+    const availableTypes = companyTypes.filter(type => !ownedTypes.has(type.id));
     root.innerHTML =
-      '<div class="ea-company-heading"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><h3>Select a company</h3><p class="muted">Open a company dashboard, or create another company. Maximum 3 companies.</p></div>' +
+      '<div class="ea-company-heading"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><h3>Select a company</h3><p class="muted">Open any of your companies, or create one for a manufacturing type you do not own yet.</p></div>' +
       '<div class="ea-company-grid">' +
       companies.map(c =>
         '<button class="ea-company-card" data-company-open="' + esc(c.id) + '">' +
@@ -397,14 +404,15 @@
         '<strong>Open →</strong></button>'
       ).join('') +
       '</div>' +
-      '<button class="primary-btn" id="eaCreateCompany" ' + (companies.length >= 3 ? 'disabled' : '') + '>' +
-      (companies.length >= 3 ? 'Company limit reached (3/3)' : '＋ Create company') +
-      '</button>' +
+      '<button class="primary-btn" id="eaCreateCompany">＋ Create company</button>' +
       '<div id="eaCompanyCreateWrap" class="ea-company-create hidden"><h4>Create a company</h4><form id="eaCompanyCreateForm">' +
       '<label>Company name<input id="eaCompanyName" maxlength="40" minlength="2" required placeholder="e.g. Nova PCs"></label>' +
       '<label>Description<textarea id="eaCompanyDescription" maxlength="500" rows="2" placeholder="What does your company make?"></textarea></label>' +
-      '<label>Product line<select id="eaCompanyLine"><option value="cpu">CPU Manufacturing</option><option value="gpu">GPU Manufacturing</option><option value="pc">PC Manufacturing</option></select></label>' +
-      '<button class="primary-btn" type="submit">Create company</button><p id="eaCompanyCreateMessage" class="form-message"></p></form></div>';
+      '<label>Product line<select id="eaCompanyLine"><option value="" disabled selected>Select a manufacturing type</option>' +
+      companyTypes.map(type => '<option value="' + type.id + '"' + (ownedTypes.has(type.id) ? ' disabled' : '') + '>' + type.label + (ownedTypes.has(type.id) ? ' · Already owned' : '') + '</option>').join('') +
+      '</select></label>' +
+      (availableTypes.length ? '' : '<p class="form-message">You already own a company for every available manufacturing type.</p>') +
+      '<button class="primary-btn" type="submit"' + (availableTypes.length ? '' : ' disabled') + '>Create company</button><p id="eaCompanyCreateMessage" class="form-message"></p></form></div>';
     root.querySelectorAll('[data-company-open]').forEach(b => b.addEventListener('click', () => selectCompany(b.dataset.companyOpen)));
     $('#eaCreateCompany')?.addEventListener('click', () => $('#eaCompanyCreateWrap')?.classList.toggle('hidden'));
     $('#eaCompanyCreateForm')?.addEventListener('submit', createCompany);
@@ -412,14 +420,21 @@
 
   async function refreshCompanies() {
     if (!currentUser || !sb) return;
-    const { data, error } = await sb
-      .from('product_companies')
-      .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
-      .eq('owner_id', currentUser.id)
-      .order('created_at', { ascending: true })
-      .limit(3);
-    if (error) { console.error('Company list:', error); return; }
-    companies = data || [];
+    const allCompanies = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from('product_companies')
+        .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
+        .eq('owner_id', currentUser.id)
+        .order('created_at', { ascending: true })
+        .range(from, from + 999);
+      if (error) { console.error('Company list:', error); return; }
+      allCompanies.push(...(data || []));
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+    companies = allCompanies;
     companiesLoadedForUserId = currentUser.id;
     companyLoaded = true;
 
@@ -517,17 +532,26 @@
   async function createCompany(e) {
     e.preventDefault();
     const msg = $('#eaCompanyCreateMessage');
-    if (companies.length >= 3) { msg.textContent = 'You can own a maximum of 3 companies.'; return; }
     const name = $('#eaCompanyName').value.trim();
     const line = $('#eaCompanyLine').value;
     const desc = $('#eaCompanyDescription').value.trim();
     if (name.length < 2) { msg.textContent = 'Company name must be at least 2 characters.'; return; }
+    if (!line) { msg.textContent = 'Choose a manufacturing type.'; return; }
+    if (companies.some(c => (c.product_lines || []).includes(line))) {
+      msg.textContent = 'You already own a company for this manufacturing type.';
+      return;
+    }
     const { data, error } = await sb
       .from('product_companies')
       .insert({ owner_id: currentUser.id, company_name: name, description: desc, product_lines: [line] })
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
       .single();
-    if (error) { msg.textContent = error.message; return; }
+    if (error) {
+      msg.textContent = error.code === '23505'
+        ? 'You already own a company for this manufacturing type.'
+        : error.message;
+      return;
+    }
     companies.push(data);
     renderChooser();
     toast('Company created. Select it to open the dashboard.');
