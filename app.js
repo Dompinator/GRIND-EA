@@ -1828,7 +1828,6 @@ $('#logoutBtn')?.addEventListener('click', async () => {
 // ---------- Navigation ----------
 function showPage(page) {
   if (currentUser?.is_test_account && page === 'create') page = 'feed';
-  if (currentUser?.is_test_account && page === 'company-stock') page = 'company';
   if (page === 'grindbot' && currentUser && getUserTier(currentUser) === 'member') {
     openProUpgradeModal();
     return;
