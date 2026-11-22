@@ -8136,3 +8136,6 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 @keyframes chapterCinematicIn{0%{opacity:0;transform:translateY(45px) scale(.94);filter:blur(14px)}55%{opacity:1;filter:blur(0)}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
 @keyframes chapterCinematicOut{to{opacity:0;transform:translateY(-28px) scale(1.025);filter:blur(12px)}}
 @media(max-width:600px){.grind-intro-logo{max-height:42vh}.chapter-kicker{letter-spacing:.25em}.chapter-pills{gap:7px}.chapter-pills span{padding:8px 12px}}
+
+.grind-intro.is-showcase .grind-intro-grind{opacity:0!important;visibility:hidden;pointer-events:none}
+.grind-intro.is-showcase .grind-intro-chapters{pointer-events:none}
