@@ -2059,7 +2059,7 @@
       '<label>Listing price ($)<input id="eaGpuDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       gpuProduceBlock +
       '<div class="company-product-details-actions">' +
-      (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' : '') +
+      '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' +
       '<button type="button" class="zoom-btn" id="eaGpuDetailSavePrice">Save price</button>' +
       (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailPublish">Publish product</button><button type="button" class="danger-btn" id="eaGpuDetailDeleteDraft">Delete draft</button>' : '') +
       '</div>' +
@@ -2123,8 +2123,8 @@
   };
 
   function loadGpuDraftIntoEditor(p) {
-    if (!p || !isProductDraft(p)) {
-      toast('Only Draft GPUs can be edited.');
+    if (!p) {
+      toast('GPU product not found.');
       return;
     }
     const d = p.design_data || {};
@@ -2284,7 +2284,7 @@
           })
           .eq('id', wasEditingId)
           .eq('owner_id', currentUser.id)
-          .eq('status', 'draft')
+          .in('status', ['draft', 'published'])
           .select('id,product_name')
           .single();
         data = res.data;
@@ -2341,9 +2341,9 @@
     }
     syncGpuSaveButtonUI();
     $('#eaGpuMessage').textContent = wasEditingId
-      ? 'GPU draft updated with a new snapshot!'
+      ? 'GPU product updated!'
       : 'GPU saved as a draft! Publish it from Products.';
-    toast(wasEditingId ? 'GPU draft updated with a new picture!' : 'GPU draft saved.');
+    toast(wasEditingId ? 'GPU product updated!' : 'GPU draft saved.');
     await loadCompanyResearchAndProducts();
     renderGpuProducts();
     if (typeof renderCompanyProducts === 'function') renderCompanyProducts();
