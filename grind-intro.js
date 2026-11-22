@@ -56,15 +56,15 @@
     }catch(e){/* Browser audio may be unavailable; visual intro still runs. */}
   }
   function stopAudio(){if(master&&audioCtx){const m=master;master=null;try{m.gain.setTargetAtTime(.0001,audioCtx.currentTime,.08);setTimeout(()=>{try{m.disconnect()}catch{}},450)}catch{}}}
-  function showChapter(index){chapters.forEach((el,i)=>{el.classList.remove('active','leaving');if(i===index){void el.offsetWidth;el.classList.add('active')}else if(i<index)el.classList.add('leaving')});}
+  function showChapter(index){overlay.classList.add('is-showcase');chapters.forEach((el,i)=>{el.classList.remove('active','leaving');if(i===index){void el.offsetWidth;el.classList.add('active')}else if(i<index)el.classList.add('leaving')});}
   function finish(){
     if(!running)return;running=false;clearTimers();cancelAnimationFrame(raf);stopAudio();
     overlay.classList.add('is-closing');
-    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind');studio.classList.remove('is-gone','playing');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
+    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind','is-showcase');studio.classList.remove('is-gone','playing');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
   }
   function play(){
     if(running)return;running=true;clearTimers();
-    overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
+    overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind','is-showcase');chapters.forEach(el=>el.classList.remove('active','leaving'));overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
     void overlay.offsetWidth;studio.classList.remove('playing','is-gone');void studio.offsetWidth;studio.classList.add('playing');
     initParticles();startAudio();
     schedule(()=>overlay.classList.add('is-transitioning'),10500);
