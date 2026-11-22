@@ -13,7 +13,7 @@
     const dpr=Math.min(devicePixelRatio||1,2),w=innerWidth,h=innerHeight;
     canvas.width=w*dpr;canvas.height=h*dpr;
     const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
-    particles=Array.from({length:150},()=>({x:Math.random()*w,y:Math.random()*h,z:.2+Math.random()*.8,r:.4+Math.random()*1.5,a:.15+Math.random()*.7,v:.12+Math.random()*.65}));
+    particles=Array.from({length:240},()=>({x:Math.random()*w,y:Math.random()*h,z:.2+Math.random()*.8,r:.4+Math.random()*1.5,a:.15+Math.random()*.7,v:1.1+Math.random()*3.8}));
     cancelAnimationFrame(raf);
     const draw=()=>{if(!running)return;ctx.clearRect(0,0,w,h);for(const p of particles){p.y-=p.v*p.z;if(p.y< -5){p.y=h+5;p.x=Math.random()*w}ctx.beginPath();ctx.fillStyle='rgba(220,211,255,'+(p.a*p.z)+')';ctx.arc(p.x,p.y,p.r*p.z,0,Math.PI*2);ctx.fill()}raf=requestAnimationFrame(draw)};
     draw();
@@ -42,16 +42,16 @@
       const t=audioCtx.currentTime;
       // Original synthesized cinematic score: evolving low drone, rising harmonic bed, impacts and final reveal.
       [55,82.41,110,164.81].forEach((f,i)=>tone(f,t+i*.12,18,.035,'sine',f*1.002));
-      tone(110,t+.2,8,.045,'triangle',220);tone(164.81,t+3.2,8,.035,'sine',329.63);
-      tone(220,t+6.1,7,.03,'triangle',440);noise(t+4.1,2.8,.045,650);noise(t+8.4,2.2,.05,1200);
-      [0,1.5,3,4.5,6,7.5,9].forEach((v,i)=>tone(55+i*8,t+v,3,.018,'sine',70+i*12));
+      tone(110,t+.15,5.2,.07,'triangle',246.94);tone(164.81,t+1.4,5.1,.055,'sine',392);tone(220,t+2.7,4.5,.05,'triangle',523.25);
+      tone(220,t+6.1,7,.03,'triangle',440);noise(t+1.7,1.8,.075,950);noise(t+3.6,1.8,.095,1500);noise(t+5.1,1.1,.13,2300);
+      [0,.55,1.1,1.65,2.2,2.75,3.3,3.85,4.4,4.95].forEach((v,i)=>{tone(55+i*3,t+v,1.1,.025,'sine',82+i*9);noise(t+v,.22,.018,500+i*160)});
       // Transition swell and dramatic reveal hit, followed by a resonant tail.
-      tone(65,t+10.4,5,.08,'sawtooth',130);noise(t+11.2,2.8,.075,1800);
-      [110,164.81,220,329.63,440].forEach((f,i)=>tone(f,t+13.9,5.4,.042-i*.004,'sine',f*1.001));
-      noise(t+14,3.2,.16,2600);tone(41.2,t+14,4.8,.15,'sine',41.2);
-      tone(220,t+15.1,3.8,.045,'triangle',440);tone(329.63,t+15.25,3.5,.035,'sine',659.25);
-      [0,.16,.32].forEach((v,i)=>tone(880-i*110,t+16.1+v,.9,.018,'sine',1320-i*120));
-      tone(55,t+18,2,.06,'sine',55);
+      tone(48,t+5.1,2.2,.14,'sawtooth',180);noise(t+5.25,1.5,.19,2600);
+      [110,164.81,220,329.63,440,523.25,659.25].forEach((f,i)=>tone(f,t+6.85,4.8,.055-i*.005,'sine',f*1.001));
+      noise(t+6.9,2.1,.23,3200);tone(41.2,t+6.9,4.8,.2,'sine',41.2);
+      tone(220,t+7.1,3.8,.065,'triangle',440);tone(329.63,t+7.25,3.5,.055,'sine',659.25);
+      [0,.12,.24,.36,.48].forEach((v,i)=>tone(880-i*90,t+8.2+v,.9,.025,'sine',1320-i*120));
+      tone(55,t+9.5,4,.075,'sine',55);
     }catch(e){/* Browser audio may be unavailable; visual intro still runs. */}
   }
   function stopAudio(){if(master&&audioCtx){const m=master;master=null;try{m.gain.setTargetAtTime(.0001,audioCtx.currentTime,.08);setTimeout(()=>{try{m.disconnect()}catch{}},450)}catch{}}}
@@ -65,8 +65,8 @@
     overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind');overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
     void overlay.offsetWidth;studio.classList.remove('playing','is-gone');void studio.offsetWidth;studio.classList.add('playing');
     initParticles();startAudio();
-    schedule(()=>overlay.classList.add('is-transitioning'),11000);
-    schedule(()=>{studio.classList.add('is-gone');overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},12700);
+    schedule(()=>overlay.classList.add('is-transitioning'),5600);
+    schedule(()=>{studio.classList.add('is-gone');overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},6900);
     schedule(finish,20000);
   }
   playButton.addEventListener('click',play);skipButton.addEventListener('click',finish);
