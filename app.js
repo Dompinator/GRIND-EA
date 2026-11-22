@@ -1865,6 +1865,9 @@ function showPage(page) {
   };
   $('#pageTitle').textContent = titles[page] || 'GRIND';
   $('#feedTypeSwitch')?.classList.toggle('hidden', page !== 'feed');
+
+  if (page === 'feed' && typeof window.loadGrindAds === 'function') window.loadGrindAds(true);
+  if (page === 'company' && typeof window.loadGrindAdsDashboard === 'function') window.loadGrindAdsDashboard();
   if (page === 'feed') {
     if (feedType === 'company') window.CompanyStocks?.loadCompanyStocks?.();
     else renderFeed();
