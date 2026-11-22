@@ -2032,7 +2032,7 @@
       return;
     }
     const draft = isProductDraft(selected);
-    const canEdit = selected.owner_id === currentUser?.id;
+    const canEdit = currentCompany?.owner_id === currentUser?.id && selected.company_id === currentCompany?.id;
     const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
     const stockCount = Number(selected.stock || 0);
     const st = getGpuProductScoreTier(selected);
