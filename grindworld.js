@@ -121,6 +121,20 @@
     state.loading = true;
     $('grindWorldLoading')?.classList.remove('hidden');
     try {
+      let moderationState = null;
+      try {
+        if (typeof fetchAdminModerationState === 'function') {
+          moderationState = await fetchAdminModerationState(true);
+        } else if (typeof adminModStateCache !== 'undefined') {
+          moderationState = adminModStateCache;
+        }
+      } catch (moderationError) {
+        console.warn('GrindWorld moderation state unavailable:', moderationError);
+      }
+      const deletedUserIds = moderationState?.deletedUserIds instanceof Set
+        ? moderationState.deletedUserIds : new Set();
+      const deletedCoinIds = moderationState?.deletedCoinIds instanceof Set
+        ? moderationState.deletedCoinIds : new Set();
       const cutoff = new Date(Date.now() - ACTIVE_MS).toISOString();
       const [
         profiles, companies, products, coins, coinBuys,
@@ -138,19 +152,23 @@
         safeRows(sb.from('company_stock_trades').select('company_id,price_after,created_at').order('created_at', { ascending: false }).limit(10000))
       ]);
 
-      const profileById = new Map(profiles.filter(p => p?.id).map(p => [String(p.id), p]));
+      const profileById = new Map(profiles
+        .filter(p => p?.id && !deletedUserIds.has(String(p.id)))
+        .map(p => [String(p.id), p]));
       const userExists = id => Boolean(id && profileById.has(String(id)));
       const companyRows = companies.filter(c => c?.id && userExists(c.owner_id));
       const companyById = new Map(companyRows.map(c => [String(c.id), c]));
       const productRows = products.filter(p => p?.id && p.status === 'published' && companyById.has(String(p.company_id)) && userExists(p.owner_id));
       const productById = new Map(productRows.map(p => [String(p.id), p]));
-      const coinRows = coins.filter(c => c?.id && userExists(c.creator_id));
+      const coinRows = coins.filter(c =>
+        c?.id && !deletedCoinIds.has(String(c.id)) && userExists(c.creator_id)
+      );
       const coinById = new Map(coinRows.map(c => [String(c.id), c]));
       const validCoinBuys = coinBuys.filter(t => t?.coin_id && coinById.has(String(t.coin_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validCompanyBuys = companyBuys.filter(t => t?.company_id && companyById.has(String(t.company_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validProductPurchases = productPurchases.filter(p => p?.product_id && productById.has(String(p.product_id)) && userExists(p.buyer_id) && isRecent(p.created_at));
 
-      const activeUserIds = new Set(profiles.filter(p => p?.id).map(p => String(p.id)));
+      const activeUserIds = new Set(profileById.keys());
       companyRows.forEach(c => activeUserIds.add(String(c.owner_id)));
       coinRows.forEach(c => activeUserIds.add(String(c.creator_id)));
       validCoinBuys.forEach(t => activeUserIds.add(String(t.user_id)));
@@ -250,9 +268,6 @@
           radius, x, y, profileId: String(profile.id)
         });
       });
-      const worldSize = Math.max(1000, outerRadius * 2 + 1000);
-      state.world = { width: worldSize, height: worldSize };
-
       const companiesByOwner = new Map();
       companyRows.forEach(c => {
         const ownerId = String(c.owner_id);
@@ -285,7 +300,8 @@
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
               meta: String(product.product_line || 'product').toUpperCase() + ' · ' + Number(product.purchase_count || 0) + ' units sold',
-              image: product.design_data?.thumbnail || '', color: userColorById.get(ownerId) || colorFor(ownerId),
+              image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image || '',
+              color: userColorById.get(ownerId) || colorFor(ownerId),
               radius: 14, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
               ownerId, line: product.product_line
             });
@@ -365,6 +381,21 @@
         if (buyerCompanyId && String(buyerCompanyId) === String(sellerCompanyId)) return;
         addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, 1);
       });
+
+      separateNodeCollisions(nodes);
+      const bounds = nodes.reduce((b, node) => ({
+        minX: Math.min(b.minX, node.x - node.radius),
+        minY: Math.min(b.minY, node.y - node.radius),
+        maxX: Math.max(b.maxX, node.x + node.radius),
+        maxY: Math.max(b.maxY, node.y + node.radius)
+      }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+      const shiftX = 260 - bounds.minX;
+      const shiftY = 260 - bounds.minY;
+      nodes.forEach(node => { node.x += shiftX; node.y += shiftY; });
+      state.world = {
+        width: Math.max(900, bounds.maxX - bounds.minX + 520),
+        height: Math.max(900, bounds.maxY - bounds.minY + 520)
+      };
 
       state.nodes = nodes;
       state.edges = edges;
@@ -507,33 +538,126 @@
     const rowEnd = Math.ceil(maxY / stepY);
     const colStart = Math.floor(minX / stepX) - 1;
     const colEnd = Math.ceil(maxX / stepX) + 1;
-    const maxScore = Math.max(1, ...users.map(user => Number(user.score || 1)));
+    const cells = [];
     for (let row = rowStart; row <= rowEnd; row++) {
       const offset = (row & 1) ? stepX / 2 : 0;
       for (let col = colStart; col <= colEnd; col++) {
-        const x = col * stepX + offset;
-        const y = row * stepY;
-        let owner = null;
-        let best = Infinity;
-        for (const user of users) {
-          const dx = x - user.x, dy = y - user.y;
-          const weight = Math.max(0.12, Math.sqrt(Number(user.score || 1) / maxScore));
-          const distance = (dx * dx + dy * dy) / weight;
-          if (distance < best) { best = distance; owner = user; }
-        }
-        ctx.beginPath();
-        for (let corner = 0; corner < 6; corner++) {
-          const angle = Math.PI / 3 * corner + Math.PI / 6;
-          const px = x + size * Math.cos(angle), py = y + size * Math.sin(angle);
-          if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fillStyle = owner ? rgba(owner.color, 0.62) : '#050608';
-        ctx.fill();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = owner ? rgba(owner.color, 0.76) : 'rgba(255,255,255,.055)';
-        ctx.stroke();
+        cells.push({ x: col * stepX + offset, y: row * stepY, owner: null });
       }
+    }
+
+    if (users.length) {
+      const totalShare = users.reduce((sum, user) => sum + Math.max(0, Number(user.marketShare) || 0), 0) || users.length;
+      const quotas = users.map((user, index) => {
+        const exact = cells.length * (totalShare > 0
+          ? Math.max(0, Number(user.marketShare) || 0) / totalShare
+          : 1 / users.length);
+        return { user, index, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
+      });
+      let unassigned = cells.length - quotas.reduce((sum, q) => sum + q.count, 0);
+      quotas.slice().sort((a, b) => b.remainder - a.remainder).forEach(q => {
+        if (unassigned > 0) { q.count++; unassigned--; }
+      });
+
+      const candidates = [];
+      cells.forEach((cell, cellIndex) => {
+        users.forEach((user, userIndex) => {
+          const dx = cell.x - user.x, dy = cell.y - user.y;
+          const share = Math.max(0.000001, Number(user.marketShare) || (1 / users.length));
+          const distance = (dx * dx + dy * dy) / Math.pow(share, 0.38);
+          candidates.push({ cellIndex, userIndex, distance });
+        });
+      });
+      candidates.sort((a, b) => a.distance - b.distance);
+      const remaining = quotas.map(q => q.count);
+      const assigned = new Uint8Array(cells.length);
+      let placed = 0;
+      for (const candidate of candidates) {
+        if (placed >= cells.length) break;
+        if (assigned[candidate.cellIndex] || remaining[candidate.userIndex] <= 0) continue;
+        assigned[candidate.cellIndex] = 1;
+        remaining[candidate.userIndex]--;
+        cells[candidate.cellIndex].owner = users[candidate.userIndex];
+        placed++;
+      }
+      // The quotas sum to the full grid; this fallback only handles pathological floating-point edge cases.
+      if (placed < cells.length) {
+        const fallback = users[0];
+        cells.forEach(cell => { if (!cell.owner) cell.owner = fallback; });
+      }
+    }
+
+    cells.forEach(cell => {
+      const { x, y, owner } = cell;
+      ctx.beginPath();
+      for (let corner = 0; corner < 6; corner++) {
+        const angle = Math.PI / 3 * corner + Math.PI / 6;
+        const px = x + size * Math.cos(angle), py = y + size * Math.sin(angle);
+        if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = owner ? rgba(owner.color, 0.82) : '#15171b';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = owner ? rgba(owner.color, 0.96) : 'rgba(255,255,255,.08)';
+      ctx.stroke();
+    });
+  }
+
+  function separateNodeCollisions(nodes) {
+    if (nodes.length < 2) return;
+    const cellSize = 100;
+    const gap = 12;
+    const iterations = 110;
+    const anchors = nodes.map(node => ({ x: node.x, y: node.y }));
+
+    for (let iteration = 0; iteration < iterations; iteration++) {
+      const buckets = new Map();
+      nodes.forEach((node, index) => {
+        const key = Math.floor(node.x / cellSize) + ':' + Math.floor(node.y / cellSize);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(index);
+      });
+
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        const cx = Math.floor(node.x / cellSize);
+        const cy = Math.floor(node.y / cellSize);
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const bucket = buckets.get((cx + ox) + ':' + (cy + oy));
+            if (!bucket) continue;
+            for (const j of bucket) {
+              if (j <= i) continue;
+              const other = nodes[j];
+              let dx = other.x - node.x;
+              let dy = other.y - node.y;
+              let distance = Math.hypot(dx, dy);
+              const required = node.radius + other.radius + gap;
+              if (distance >= required) continue;
+              if (distance < 0.001) {
+                const angle = (hash(node.id + '|' + other.id) % 6283) / 1000;
+                dx = Math.cos(angle);
+                dy = Math.sin(angle);
+                distance = 1;
+              }
+              const push = (required - distance) * 0.52;
+              const nx = dx / distance, ny = dy / distance;
+              node.x -= nx * push;
+              node.y -= ny * push;
+              other.x += nx * push;
+              other.y += ny * push;
+            }
+          }
+        }
+      }
+
+      // Keep the network recognizably clustered around its market layout while resolving overlaps.
+      const anchorStrength = 0.012;
+      nodes.forEach((node, index) => {
+        node.x += (anchors[index].x - node.x) * anchorStrength;
+        node.y += (anchors[index].y - node.y) * anchorStrength;
+      });
     }
   }
 
