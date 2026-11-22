@@ -11719,7 +11719,7 @@ $('#profileImage')?.addEventListener('change', async (e) => {
 });
 
 // ---------- GrindWorld user color ----------
-$('#accountUserColor')?.addEventListener('input', async (e) => {
+$('#accountUserColor')?.addEventListener('change', async (e) => {
   if (!currentUser || !sb) return;
   const color = String(e.target.value || '').toLowerCase();
   if (!/^#[0-9a-f]{6}$/.test(color)) return;
