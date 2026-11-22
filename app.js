@@ -2653,6 +2653,16 @@ async function finishCpuDesign(){
   if(savedId && snapDataUrl){
     saveCpuProductThumb(savedId, activeSpec, snapDataUrl);
     applyCpuThumbToDom(savedId, name, snapDataUrl);
+    // Persist the generated CPU preview with the product so GrindWorld and other users can load it.
+    const existingDesignData = data?.design_data && typeof data.design_data === 'object'
+      ? data.design_data : {};
+    const thumbnailSync = await sb.from('product_company_products')
+      .update({ design_data: { ...existingDesignData, thumbnail: snapDataUrl } })
+      .eq('id', savedId)
+      .eq('owner_id', currentUser.id);
+    if (thumbnailSync.error) {
+      console.warn('Could not persist CPU product thumbnail:', thumbnailSync.error);
+    }
   } else if (savedId && wasEditingId) {
     const map = getCpuThumbsMap();
     delete map[savedId];
