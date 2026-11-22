@@ -5950,11 +5950,11 @@ async function renderLeaderboard() {
   ]);
   if (currentUser) await updateNetWorth();
   const delUsers = adminModStateCache.deletedUserIds || new Set();
-  const { data } = await sb.from('profiles').select('id, username, cash, net_worth, time_played, is_premium').limit(200);
+  const { data } = await sb.from('profiles').select('id, username, cash, net_worth, time_played, is_premium, is_test_account').limit(200);
   if (seq !== lbRenderSeq || modeAtStart !== lbMode) return;
 
   let list = (data || [])
-    .filter(p => !delUsers.has(String(p.id)) && String(p.username || '').toLowerCase() !== 'grind_test')
+    .filter(p => p.is_test_account !== true && !delUsers.has(String(p.id)) && String(p.username || '').trim().toLowerCase() !== 'grind_test')
     .map(getEffectiveProfileStats);
 
   const weeklyWrap = $('#lbWeeklyControls');
