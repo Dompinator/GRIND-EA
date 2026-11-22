@@ -1294,7 +1294,7 @@
           })
           .eq('id', wasEditingId)
           .eq('owner_id', currentUser.id)
-          .eq('status', 'draft')
+          .in('status', ['draft', 'published'])
           .select('id,product_name')
           .single();
         data = res.data;
@@ -1346,14 +1346,14 @@
     }
     syncPcSaveButtonUI();
     if (msgEl) msgEl.textContent = wasEditingId ? 'PC draft updated!' : 'PC saved as draft! Publish it from Products.';
-    toast(wasEditingId ? 'PC draft updated!' : 'PC draft saved!');
+    toast(wasEditingId ? 'PC product updated!' : 'PC draft saved!');
     await loadCompanyResearchAndProducts();
     renderPcProducts();
     if (typeof renderCompanyProducts === 'function') renderCompanyProducts();
   }
 
   function loadPcDraftIntoEditor(p) {
-    if (!p || !isProductDraft(p)) { toast('Only Draft PCs can be edited.'); return; }
+    if (!p) { toast('PC product not found.'); return; }
     const d = p.design_data || {};
     if (d.case_id && savedCases.some(c => c.id === d.case_id)) {
       selectedCaseId = d.case_id;
@@ -1470,7 +1470,7 @@
       '<label>Listing price ($)<input id="eaPcDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       produceBlock +
       '<div class="company-product-details-actions">' +
-        (draft ? '<button type="button" class="primary-btn" id="eaPcDetailEdit">Edit</button>' : '') +
+        '<button type="button" class="primary-btn" id="eaPcDetailEdit">Edit</button>' +
         '<button type="button" class="zoom-btn" id="eaPcDetailSavePrice">Save price</button>' +
         (draft ? '<button type="button" class="primary-btn" id="eaPcDetailPublish">Publish PC</button><button type="button" class="danger-btn" id="eaPcDetailDeleteDraft">Delete draft</button>' : '') +
       '</div>' +
