@@ -2042,9 +2042,26 @@ async function loadOutgoingCompanyTransfer() {
 async function loadCompanyDashboard() {
   if (!currentUser || !sb) return;
   if (!companyLoaded) {
-    const { data, error } = await sb.from('product_companies')
+    const savedCompanyId = localStorage.getItem('grind_active_company_id');
+    let companyQuery = sb.from('product_companies')
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
-      .eq('owner_id', currentUser.id).maybeSingle();
+      .eq('owner_id', currentUser.id);
+    if (savedCompanyId) {
+      companyQuery = companyQuery.eq('id', savedCompanyId);
+    } else {
+      companyQuery = companyQuery.order('created_at', { ascending: true }).limit(1);
+    }
+    let { data, error } = await companyQuery.maybeSingle();
+    if (!error && !data && savedCompanyId) {
+      const fallback = await sb.from('product_companies')
+        .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
+        .eq('owner_id', currentUser.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) {
       console.error('Company load error:', error);
       const msg = $('#companyCreateMessage');
