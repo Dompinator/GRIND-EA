@@ -2032,6 +2032,7 @@
       return;
     }
     const draft = isProductDraft(selected);
+    const canEdit = selected.owner_id === currentUser?.id;
     const unitValue = Math.max(0, Number(selected.product_value ?? selected.production_cost ?? 0));
     const stockCount = Number(selected.stock || 0);
     const st = getGpuProductScoreTier(selected);
@@ -2059,7 +2060,7 @@
       '<label>Listing price ($)<input id="eaGpuDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       gpuProduceBlock +
       '<div class="company-product-details-actions">' +
-      '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' +
+      (canEdit ? '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' : '') +
       '<button type="button" class="zoom-btn" id="eaGpuDetailSavePrice">Save price</button>' +
       (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailPublish">Publish product</button><button type="button" class="danger-btn" id="eaGpuDetailDeleteDraft">Delete draft</button>' : '') +
       '</div>' +
