@@ -58,15 +58,15 @@
   function finish(){
     if(!running)return;running=false;clearTimers();cancelAnimationFrame(raf);stopAudio();
     overlay.classList.add('is-closing');
-    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
+    setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('is-closing','playing','is-transitioning','is-grind');studio.classList.remove('is-gone','playing');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('grind-intro-open')},680);
   }
   function play(){
     if(running)return;running=true;clearTimers();
     overlay.classList.remove('hidden','is-closing','is-transitioning','is-grind');overlay.classList.add('playing');overlay.setAttribute('aria-hidden','false');document.body.classList.add('grind-intro-open');
-    void overlay.offsetWidth;studio.classList.remove('playing');void studio.offsetWidth;studio.classList.add('playing');
+    void overlay.offsetWidth;studio.classList.remove('playing','is-gone');void studio.offsetWidth;studio.classList.add('playing');
     initParticles();startAudio();
     schedule(()=>overlay.classList.add('is-transitioning'),11000);
-    schedule(()=>{overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},13000);
+    schedule(()=>{studio.classList.add('is-gone');overlay.classList.remove('is-transitioning');overlay.classList.add('is-grind')},12700);
     schedule(finish,20000);
   }
   playButton.addEventListener('click',play);skipButton.addEventListener('click',finish);
