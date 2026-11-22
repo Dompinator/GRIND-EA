@@ -2,7 +2,7 @@
   'use strict';
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const ACTIVE_MS = 2 * DAY_MS;
+  const ACTIVE_MS = DAY_MS;
   const state = {
     nodes: [],
     edges: [],
@@ -172,6 +172,18 @@
       const validCoinBuys = coinBuys.filter(t => t?.coin_id && coinById.has(String(t.coin_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validCompanyBuys = companyBuys.filter(t => t?.company_id && companyById.has(String(t.company_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validProductPurchases = productPurchases.filter(p => p?.product_id && productById.has(String(p.product_id)) && userExists(p.buyer_id) && isRecent(p.created_at));
+      const productDemand24h = new Map();
+      validProductPurchases.forEach(purchase => {
+        const key = String(purchase.product_id);
+        const demand = productDemand24h.get(key) || { events: 0, value: 0, quantity: 0, latestAt: null };
+        const value = Math.max(0, Number(purchase.purchase_price || 0));
+        const unitPrice = Math.max(0, Number(productById.get(key)?.listed_price || 0));
+        demand.events += 1;
+        demand.value += value;
+        demand.quantity += unitPrice > 0 ? value / unitPrice : 1;
+        if (!demand.latestAt || new Date(purchase.created_at).getTime() > new Date(demand.latestAt).getTime()) demand.latestAt = purchase.created_at;
+        productDemand24h.set(key, demand);
+      });
 
       const activeUserIds = new Set(profileById.keys());
       companyRows.forEach(c => activeUserIds.add(String(c.owner_id)));
@@ -227,11 +239,11 @@
         nodes.push(node);
         nodeById.set(node.id, node);
       };
-      const addEdge = (key, from, to, type, activityAt = null, activityCount = 0, persistent = false) => {
+      const addEdge = (key, from, to, type, activityAt = null, activityCount = 0, persistent = false, activityValue = 0) => {
         if (!nodeById.has(String(from)) || !nodeById.has(String(to))) return;
         let edge = edgeByKey.get(key);
         if (!edge) {
-          edge = { key, from: String(from), to: String(to), type, activityAt: null, activityCount: 0, persistent: false };
+          edge = { key, from: String(from), to: String(to), type, activityAt: null, activityCount: 0, activityValue: 0, persistent: false };
           edgeByKey.set(key, edge);
           edges.push(edge);
         }
@@ -240,6 +252,7 @@
           const ts = new Date(activityAt).getTime();
           if (!edge.activityAt || ts > edge.activityAt) edge.activityAt = ts;
           edge.activityCount += Math.max(1, Number(activityCount) || 1);
+          edge.activityValue += Math.max(0, Number(activityValue) || 0);
         }
       };
 
@@ -292,7 +305,7 @@
           const angle = -Math.PI / 2 + (Math.PI * 2 * index / Math.max(1, list.length));
           const companyValue = companyValueOf(company);
           const companyRadius = 16 + Math.min(24, Math.sqrt(companyValue / maxCompanyValue) * 24);
-          const companySpread = 112 + Math.min(28, Math.sqrt(companyValue / maxScore) * 22);
+          const companySpread = base.radius + companyRadius + 72 + Math.min(90, Math.log10(companyValue + 1) * 7);
           const x = base.x + Math.cos(angle) * companySpread;
           const y = base.y + Math.sin(angle) * companySpread * 0.78;
           const id = 'company:' + company.id;
@@ -306,14 +319,612 @@
           const listProducts = productsByCompany.get(String(company.id)) || [];
           listProducts.forEach((product, productIndex) => {
             const pAngle = (Math.PI * 2 * productIndex / Math.max(1, listProducts.length)) - Math.PI / 2;
-            const pX = x + Math.cos(pAngle) * 57;
-            const pY = y + Math.sin(pAngle) * 49;
             const productId = 'product:' + product.id;
-            const productPopularity = Math.max(0, Number(product.purchase_count || 0));
-            const productRadius = 13 + Math.min(17, Math.log2(productPopularity + 1) * 4.2);
+            const recentDemand = productDemand24h.get(String(product.id)) || { events: 0, value: 0, quantity: 0, latestAt: null };
+            const recentDemandScore = recentDemand.value + recentDemand.quantity * Math.max(1, Number(product.listed_price || 0));
+            const productRadius = 13 + Math.min(25, Math.log10(recentDemandScore + 1) * 5.2);
+            const productOrbit = companyRadius + productRadius + 42;
+            const pX = x + Math.cos(pAngle) * productOrbit;
+            const pY = y + Math.sin(pAngle) * productOrbit * 0.86;
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
-              meta: String(product.product_line || 'product').toUpperCase() + ' · ' + Number(product.purchase_count || 0) + ' units sold',
+              meta: String(product.product_line || 'product').toUpperCase() + ' · last 24h: ' + Math.round(recentDemand.quantity).toLocaleString() + ' bought · 
+              image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image ||
+                (typeof getCpuThumbsMap === 'function' ? (getCpuThumbsMap()?.[String(product.id)]?.dataUrl || '') : ''),
+              color: userColorById.get(ownerId) || colorFor(ownerId),
+              radius: productRadius, x: pX, y: pY, productId: String(product.id), companyId: String(company.id),
+              ownerId, line: product.product_line
+            });
+            addEdge('company-product:' + product.id, id, productId, 'product', product.created_at, 1, ownerId === String(currentUser.id));
+          });
+        });
+      });
+
+      const coinPopularity = new Map();
+      validCoinBuys.forEach(trade => {
+        const key = String(trade.coin_id);
+        coinPopularity.set(key, (coinPopularity.get(key) || 0) + 1);
+      });
+      const coinHolderCounts = new Map();
+      holdings.forEach(holding => {
+        if (Number(holding.shares || 0) > 0 && coinById.has(String(holding.coin_id))) {
+          const key = String(holding.coin_id);
+          coinHolderCounts.set(key, (coinHolderCounts.get(key) || 0) + 1);
+        }
+      });
+      const coinsByCreator = new Map();
+      coinRows.forEach(c => {
+        const creatorId = String(c.creator_id);
+        if (!coinsByCreator.has(creatorId)) coinsByCreator.set(creatorId, []);
+        coinsByCreator.get(creatorId).push(c);
+      });
+      coinsByCreator.forEach((list, creatorId) => {
+        const base = userPosition.get(creatorId);
+        if (!base) return;
+        list.forEach((coin, index) => {
+          const angle = Math.PI * 2 * index / Math.max(1, list.length) + Math.PI / 5;
+          const recentCoinValue = validCoinBuys.filter(trade => String(trade.coin_id) === String(coin.id))
+            .reduce((sum, trade) => sum + Math.max(0, Number(trade.amount_usd || 0)), 0);
+          const coinRadius = 14 + Math.min(24, Math.log10(recentCoinValue + 1) * 5);
+          const x = base.x + Math.cos(angle) * (base.radius + coinRadius + 72);
+          const y = base.y + Math.sin(angle) * (base.radius + coinRadius + 72) * 0.84;
+          const id = 'coin:' + coin.id;
+          const popularity = (coinPopularity.get(String(coin.id)) || 0) + (coinHolderCounts.get(String(coin.id)) || 0);
+          addNode({
+            id, kind: 'coin', label: coin.name || coin.ticker || 'Coin',
+            meta: '$' + String(coin.ticker || '').toUpperCase() + ' · ' + Number(coin.price || 1).toFixed(2),
+            image: coin.image_url || '', color: userColorById.get(creatorId) || colorFor(creatorId), radius: coinRadius,
+            x, y, coinId: String(coin.id), ownerId: creatorId
+          });
+          addEdge('coin-creator:' + coin.id, 'user:' + creatorId, id, 'coin-owner', coin.created_at, 1, creatorId === String(currentUser.id));
+        });
+      });
+
+      // Keep durable links to assets the signed-in user currently owns.
+      holdings.forEach(holding => {
+        if (String(holding.user_id) !== String(currentUser.id) || Number(holding.shares || 0) <= 0) return;
+        if (coinById.has(String(holding.coin_id))) {
+          addEdge('my-coin-holding:' + holding.coin_id, 'user:' + currentUser.id,
+            'coin:' + holding.coin_id, 'my-holding', null, 0, true);
+        }
+      });
+      companyHoldings.forEach(holding => {
+        if (String(holding.user_id) !== String(currentUser.id) || Number(holding.shares || 0) <= 0) return;
+        if (companyById.has(String(holding.company_id))) {
+          addEdge('my-company-holding:' + holding.company_id, 'user:' + currentUser.id,
+            'company:' + holding.company_id, 'my-holding', null, 0, true);
+        }
+      });
+
+      const coinBuyerEdges = new Map();
+      validCoinBuys.forEach(t => {
+        const key = String(t.user_id) + '|' + String(t.coin_id);
+        const prev = coinBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
+        if (!prev || new Date(t.created_at).getTime() > new Date(prev.created_at).getTime()) {
+          coinBuyerEdges.set(key, { ...t, activityCount: count });
+        } else {
+          prev.activityCount = count;
+        }
+      });
+      coinBuyerEdges.forEach(t => {
+        const coin = coinById.get(String(t.coin_id));
+        if (!coin || String(coin.creator_id) === String(t.user_id)) return;
+        addEdge('coin-buyer:' + t.user_id + ':' + t.coin_id, 'user:' + t.user_id, 'coin:' + t.coin_id, 'coin-buy', t.created_at, t.activityCount || 1);
+      });
+
+      const companyBuyerEdges = new Map();
+      validCompanyBuys.forEach(t => {
+        const key = String(t.user_id) + '|' + String(t.company_id);
+        const prev = companyBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
+        if (!prev || new Date(t.created_at).getTime() > new Date(prev.created_at).getTime()) {
+          companyBuyerEdges.set(key, { ...t, activityCount: count });
+        } else {
+          prev.activityCount = count;
+        }
+      });
+      companyBuyerEdges.forEach(t => {
+        const company = companyById.get(String(t.company_id));
+        if (!company || String(company.owner_id) === String(t.user_id)) return;
+        addEdge('company-investor:' + t.user_id + ':' + t.company_id, 'user:' + t.user_id, 'company:' + t.company_id, 'company-buy', t.created_at, t.activityCount || 1);
+      });
+
+      // Persistent real PC bill-of-material links: finished PC -> component products.
+      productRows.forEach(pcProduct => {
+        const design = pcProduct.design_data && typeof pcProduct.design_data === 'object' ? pcProduct.design_data : {};
+        if (!design.pc_build && String(pcProduct.product_line || '').toLowerCase() !== 'pc') return;
+        const componentIds = Array.isArray(design.component_ids) ? design.component_ids : [];
+        componentIds.forEach(componentId => {
+          const componentKey = String(componentId || '');
+          if (!productById.has(componentKey) || componentKey === String(pcProduct.id)) return;
+          addEdge('pc-component:' + pcProduct.id + ':' + componentKey,
+            'product:' + pcProduct.id, 'product:' + componentKey, 'component-use', pcProduct.created_at, 1, true);
+        });
+      });
+
+      const productBuyerEdges = new Map();
+      validProductPurchases.forEach(p => {
+        const buyerCompanyId = p.buyer_company_id && companyById.has(String(p.buyer_company_id))
+          ? String(p.buyer_company_id) : '';
+        const buyerNodeId = buyerCompanyId ? 'company:' + buyerCompanyId : 'user:' + p.buyer_id;
+        const key = buyerNodeId + '|' + String(p.product_id);
+        const prev = productBuyerEdges.get(key);
+        const count = (prev?.activityCount || 0) + 1;
+        if (!prev || new Date(p.created_at).getTime() > new Date(prev.created_at).getTime()) {
+          productBuyerEdges.set(key, { ...p, activityCount: count });
+        } else {
+          prev.activityCount = count;
+        }
+      });
+      productBuyerEdges.forEach(p => {
+        const buyerCompanyId = p.buyer_company_id && companyById.has(String(p.buyer_company_id))
+          ? String(p.buyer_company_id) : '';
+        const buyerNodeId = buyerCompanyId ? 'company:' + buyerCompanyId : 'user:' + p.buyer_id;
+        const sellerCompanyId = productById.get(String(p.product_id))?.company_id;
+        if (buyerCompanyId && String(buyerCompanyId) === String(sellerCompanyId)) return;
+        addEdge('product-buyer:' + buyerNodeId + ':' + p.product_id, buyerNodeId, 'product:' + p.product_id, 'product-buy', p.created_at, p.activityCount || 1, false, productDemand24h.get(String(p.product_id))?.value || Number(p.purchase_price || 0));
+      });
+
+      const keepCurrentView = state.loaded;
+      const previousCamera = { ...state.camera };
+      layoutNodesInOpenSpace(nodes);
+      state.nodes = nodes;
+      state.edges = edges;
+      state.nodeById = nodeById;
+      state.loaded = true;
+      state.lastLoadedAt = Date.now();
+      $('grindWorldStats').textContent =
+        nodes.filter(n => n.kind === 'user').length + ' users · ' +
+        nodes.filter(n => n.kind === 'company').length + ' companies · ' +
+        nodes.filter(n => n.kind === 'product').length + ' products · ' +
+        nodes.filter(n => n.kind === 'coin').length + ' coins · ' +
+        edges.filter(e => e.activityAt && Date.now() - e.activityAt <= ACTIVE_MS).length + ' active connections';
+      $('grindWorldLoading')?.classList.add('hidden');
+      if (keepCurrentView) {
+        state.camera = previousCamera;
+        clampCamera();
+        draw();
+      } else {
+        fitView();
+      }
+      startAnimation();
+    } catch (error) {
+      console.error('GrindWorld load failed:', error);
+      $('grindWorldLoading').textContent = 'Could not load the network. Try Refresh.';
+      $('grindWorldStats').textContent = 'Network data could not be loaded.';
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  function fitView() {
+    if (!state.width || !state.height) return;
+    state.camera.x = state.world.width / 2;
+    state.camera.y = state.world.height / 2;
+    const fit = Math.min(state.width / state.world.width, state.height / state.world.height) * 0.94;
+    state.minZoom = Math.max(0.005, Math.min(1.4, fit));
+    state.camera.zoom = state.minZoom;
+    clampCamera();
+    draw();
+  }
+
+  function clampCamera() {
+    const halfWidth = state.width / (2 * state.camera.zoom);
+    const halfHeight = state.height / (2 * state.camera.zoom);
+    state.camera.x = state.world.width <= halfWidth * 2
+      ? state.world.width / 2
+      : Math.max(halfWidth, Math.min(state.world.width - halfWidth, state.camera.x));
+    state.camera.y = state.world.height <= halfHeight * 2
+      ? state.world.height / 2
+      : Math.max(halfHeight, Math.min(state.world.height - halfHeight, state.camera.y));
+  }
+
+  function zoomAt(screenX, screenY, factor) {
+    const old = state.camera.zoom;
+    const next = Math.max(state.minZoom, Math.min(2.5, old * factor));
+    const worldX = (screenX - state.width / 2) / old + state.camera.x;
+    const worldY = (screenY - state.height / 2) / old + state.camera.y;
+    state.camera.zoom = next;
+    state.camera.x = worldX - (screenX - state.width / 2) / next;
+    state.camera.y = worldY - (screenY - state.height / 2) / next;
+    clampCamera();
+    draw();
+  }
+
+  function onWheel(event) {
+    event.preventDefault();
+    const rect = state.canvas.getBoundingClientRect();
+    zoomAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.12 : 0.89);
+  }
+
+  function onPointerDown(event) {
+    if (!state.canvas) return;
+    state.canvas.setPointerCapture?.(event.pointerId);
+    state.pointer = {
+      id: event.pointerId, x: event.clientX, y: event.clientY,
+      startX: event.clientX, startY: event.clientY, moved: false
+    };
+  }
+
+  function onPointerMove(event) {
+    if (!state.pointer || state.pointer.id !== event.pointerId) return;
+    const dx = event.clientX - state.pointer.x;
+    const dy = event.clientY - state.pointer.y;
+    if (Math.abs(event.clientX - state.pointer.startX) + Math.abs(event.clientY - state.pointer.startY) > 5) {
+      state.pointer.moved = true;
+    }
+    state.pointer.x = event.clientX;
+    state.pointer.y = event.clientY;
+    if (state.pointer.moved) {
+      state.camera.x -= dx / state.camera.zoom;
+      state.camera.y -= dy / state.camera.zoom;
+      clampCamera();
+      draw();
+    }
+  }
+
+  function onPointerUp(event) {
+    if (!state.pointer || state.pointer.id !== event.pointerId) return;
+    const pointer = state.pointer;
+    state.pointer = null;
+    if (!pointer.moved) {
+      const rect = state.canvas.getBoundingClientRect();
+      const wx = (event.clientX - rect.left - state.width / 2) / state.camera.zoom + state.camera.x;
+      const wy = (event.clientY - rect.top - state.height / 2) / state.camera.zoom + state.camera.y;
+      const hit = [...state.nodes].reverse().find(node =>
+        Math.hypot(node.x - wx, node.y - wy) <= Math.max(18, node.radius + 7)
+      );
+      selectNode(hit?.id || null);
+    }
+  }
+
+  function selectNode(id) {
+    state.selectedId = id;
+    const node = id ? state.nodeById.get(id) : null;
+    const panel = $('grindWorldSelection');
+    if (!node) {
+      panel?.classList.add('hidden');
+      draw();
+      return;
+    }
+    const typeNames = { user: 'USER', company: 'COMPANY', product: 'PRODUCT', coin: 'COIN' };
+    $('grindWorldSelectionType').textContent = typeNames[node.kind] || 'NETWORK NODE';
+    $('grindWorldSelectionName').textContent = node.label;
+    $('grindWorldSelectionMeta').textContent = node.meta || '';
+    panel?.classList.remove('hidden');
+    draw();
+  }
+
+  function imageFor(url) {
+    if (!url || typeof url !== 'string') return null;
+    if (state.images.has(url)) return state.images.get(url);
+    const img = new Image();
+    state.images.set(url, img);
+    img.onload = () => draw();
+    img.onerror = () => state.images.set(url, null);
+    img.src = url;
+    return img;
+  }
+
+  function roundedCircle(ctx, x, y, radius, fill, stroke, lineWidth = 2) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.lineWidth = lineWidth;
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+    }
+  }
+
+  function separateNodeCollisions(nodes) {
+    if (nodes.length < 2) return;
+    const cellSize = 100;
+    const gap = 12;
+    const iterations = 65;
+
+    for (let iteration = 0; iteration < iterations; iteration++) {
+      const buckets = new Map();
+      nodes.forEach((node, index) => {
+        const key = Math.floor(node.x / cellSize) + ':' + Math.floor(node.y / cellSize);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(index);
+      });
+
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        const cx = Math.floor(node.x / cellSize);
+        const cy = Math.floor(node.y / cellSize);
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const bucket = buckets.get((cx + ox) + ':' + (cy + oy));
+            if (!bucket) continue;
+            for (const j of bucket) {
+              if (j <= i) continue;
+              const other = nodes[j];
+              let dx = other.x - node.x;
+              let dy = other.y - node.y;
+              let distance = Math.hypot(dx, dy);
+              const required = node.radius + other.radius + gap;
+              if (distance >= required) continue;
+              if (distance < 0.001) {
+                const angle = (hash(node.id + '|' + other.id) % 6283) / 1000;
+                dx = Math.cos(angle);
+                dy = Math.sin(angle);
+                distance = 1;
+              }
+              const push = (required - distance) * 0.52;
+              const nx = dx / distance, ny = dy / distance;
+              node.x -= nx * push;
+              node.y -= ny * push;
+              other.x += nx * push;
+              other.y += ny * push;
+            }
+          }
+        }
+      }
+
+    }
+  }
+
+  function layoutNodesInOpenSpace(nodes) {
+    const users = nodes.filter(node => node.kind === 'user');
+    const count = Math.max(1, users.length);
+    const side = Math.max(6400, Math.sqrt(count) * 1200);
+    const width = side * 1.18;
+    const height = side;
+    const padding = 520;
+    const minUserGap = 640;
+    const orderedUsers = [...users].sort((a, b) => hash(a.id) - hash(b.id));
+    const placedUsers = [];
+
+    // Place accounts first, with generous space between each account.
+    orderedUsers.forEach((user, index) => {
+      let placed = false;
+      for (let attempt = 0; attempt < 1200; attempt++) {
+        const sx = hash(user.id + ':account-x:' + attempt);
+        const sy = hash(user.id + ':account-y:' + attempt);
+        const x = padding + (sx / 4294967295) * (width - padding * 2);
+        const y = padding + (sy / 4294967295) * (height - padding * 2);
+        if (placedUsers.every(other =>
+          Math.hypot(other.x - x, other.y - y) >= minUserGap + user.radius + other.radius
+        )) {
+          user.x = x;
+          user.y = y;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        // A deterministic expanding spiral is a fallback for unusually dense worlds.
+        const angle = index * 2.399963229728653;
+        const distance = minUserGap * Math.sqrt(index + 1);
+        user.x = width / 2 + Math.cos(angle) * distance;
+        user.y = height / 2 + Math.sin(angle) * distance;
+      }
+      placedUsers.push(user);
+    });
+
+    const usersByProfile = new Map(users.map(user => [String(user.profileId), user]));
+    const companiesById = new Map(nodes.filter(node => node.kind === 'company')
+      .map(node => [String(node.companyId), node]));
+
+    // Preserve ownership proximity: companies orbit their owner, products their company,
+    // and coins their creator. The offsets were assigned when the nodes were built.
+    nodes.forEach(node => {
+      if (node.kind === 'company') {
+        const owner = usersByProfile.get(String(node.ownerId));
+        if (owner) {
+          const ownerOrigin = { x: 0, y: 0 };
+          node.x = owner.x + (node.x - ownerOrigin.x);
+          node.y = owner.y + (node.y - ownerOrigin.y);
+        }
+      } else if (node.kind === 'coin') {
+        const owner = usersByProfile.get(String(node.ownerId));
+        if (owner) {
+          node.x += owner.x;
+          node.y += owner.y;
+        }
+      }
+    });
+
+    // Product offsets were originally relative to their company's local position.
+    nodes.filter(node => node.kind === 'product').forEach(node => {
+      const company = companiesById.get(String(node.companyId));
+      if (company) {
+        // Their original coordinates were based on a company centered around (roughly) zero.
+        // Recover the offset from the original company placement encoded by the product node.
+        const productsForCompany = nodes.filter(candidate =>
+          candidate.kind === 'product' && candidate.companyId === node.companyId
+        );
+        const index = productsForCompany.indexOf(node);
+        const angle = (Math.PI * 2 * index / Math.max(1, productsForCompany.length)) - Math.PI / 2;
+        node.x = company.x + Math.cos(angle) * (company.radius + node.radius + 42);
+        node.y = company.y + Math.sin(angle) * (company.radius + node.radius + 42) * 0.86;
+      }
+    });
+
+    const bounds = nodes.reduce((b, node) => ({
+      minX: Math.min(b.minX, node.x - node.radius),
+      minY: Math.min(b.minY, node.y - node.radius),
+      maxX: Math.max(b.maxX, node.x + node.radius),
+      maxY: Math.max(b.maxY, node.y + node.radius)
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const shiftX = padding - bounds.minX;
+    const shiftY = padding - bounds.minY;
+    nodes.forEach(node => { node.x += shiftX; node.y += shiftY; });
+    state.world = {
+      width: Math.max(width, bounds.maxX - bounds.minX + padding * 2),
+      height: Math.max(height, bounds.maxY - bounds.minY + padding * 2)
+    };
+  }
+
+    function draw() {
+    const ctx = state.ctx;
+    if (!ctx || !state.width || !state.height) return;
+    const dpr = state.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#030305';
+    ctx.fillRect(0, 0, state.canvas.width, state.canvas.height);
+    ctx.setTransform(
+      dpr * state.camera.zoom, 0, 0, dpr * state.camera.zoom,
+      dpr * (state.width / 2 - state.camera.x * state.camera.zoom),
+      dpr * (state.height / 2 - state.camera.y * state.camera.zoom)
+    );
+
+    const now = Date.now();
+    state.edges.forEach(edge => {
+      const from = state.nodeById.get(edge.from);
+      const to = state.nodeById.get(edge.to);
+      if (!from || !to) return;
+      const active = edge.activityAt && Date.now() - edge.activityAt <= ACTIVE_MS;
+      if (!active && !edge.persistent) return;
+      const color = from.color || to.color || '#7c8798';
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const distance = Math.hypot(dx, dy);
+      const arcHeight = Math.min(190, Math.max(24, distance * 0.13));
+      const controlX = (from.x + to.x) / 2;
+      const controlY = (from.y + to.y) / 2 - arcHeight;
+      const activity = Math.max(1, Number(edge.activityCount) || 1);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
+      ctx.lineWidth = active
+        ? Math.min(10, 1.1 + Math.log2(activity + 1) * 1.8)
+        : 1.0;
+      ctx.strokeStyle = validHex(color)
+        ? rgba(color, active ? .62 : .28)
+        : (active ? 'rgba(148,163,184,.55)' : 'rgba(148,163,184,.22)');
+      ctx.stroke();
+
+      if (active && now - edge.activityAt <= 9000) {
+        const count = Math.min(3, Math.max(1, Math.ceil(Math.log2((edge.activityCount || 1) + 1))));
+        for (let i = 0; i < count; i++) {
+          const phase = ((now / (1550 + i * 230)) + (hash(edge.key) % 997) / 997 + i / count) % 1;
+          const inverse = 1 - phase;
+          const px = inverse * inverse * from.x + 2 * inverse * phase * controlX + phase * phase * to.x;
+          const py = inverse * inverse * from.y + 2 * inverse * phase * controlY + phase * phase * to.y;
+          ctx.beginPath();
+          ctx.arc(px, py, 3.1 + (i % 2) * 1.1, 0, Math.PI * 2);
+          ctx.fillStyle = '#f5d0fe';
+          ctx.shadowBlur = 13;
+          ctx.shadowColor = color;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+    });
+
+    state.nodes.forEach(node => {
+      const isSelected = state.selectedId === node.id;
+      const color = node.color || '#a78bfa';
+      const radius = node.radius;
+      const ring = node.kind === 'user' ? '#f5f3ff' :
+        node.kind === 'company' ? '#38bdf8' :
+        node.kind === 'product' ? '#fbbf24' : '#34d399';
+      ctx.save();
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius + 8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#ffffff';
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      roundedCircle(ctx, node.x, node.y, radius + 3, 'rgba(5,5,10,.96)', ring, 1.8);
+      const img = imageFor(node.image);
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, node.x - radius, node.y - radius, radius * 2, radius * 2);
+        ctx.restore();
+      } else {
+        roundedCircle(ctx, node.x, node.y, radius, color, null);
+        ctx.fillStyle = '#09090d';
+        ctx.font = '800 ' + Math.max(9, radius * 0.72) + 'px Inter,Arial,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const letter = node.kind === 'product'
+          ? String(node.line || 'P').slice(0, 2).toUpperCase()
+          : node.kind === 'coin' ? '$' : String(node.label || '?').trim().slice(0, 1).toUpperCase();
+        ctx.fillText(letter, node.x, node.y + 0.5);
+      }
+      if (state.camera.zoom > 0.24) {
+        ctx.font = '600 ' + Math.max(9, Math.min(13, 11 / state.camera.zoom * 0.55)) + 'px Inter,Arial,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,.9)';
+        ctx.strokeText(node.label.slice(0, 23), node.x, node.y + radius + 5);
+        ctx.fillStyle = '#e5e7eb';
+        ctx.fillText(node.label.slice(0, 23), node.x, node.y + radius + 5);
+      }
+      ctx.restore();
+    });
+  }
+
+  function startAnimation() {
+    if (state.raf || document.hidden || currentPage !== 'grindworld') return;
+    const tick = () => {
+      state.raf = 0;
+      if (document.hidden || currentPage !== 'grindworld') return;
+      const moving = state.edges.some(edge => edge.activityAt && Date.now() - edge.activityAt <= 9000);
+      draw();
+      if (moving) state.raf = requestAnimationFrame(tick);
+    };
+    state.raf = requestAnimationFrame(tick);
+  }
+
+  function stopAnimation() {
+    if (state.raf) cancelAnimationFrame(state.raf);
+    state.raf = 0;
+  }
+
+  function startRealtime() {
+    if (state.realtime || !sb) return;
+    try {
+      state.realtime = sb.channel('grindworld-network')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'holdings' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_stock_holdings' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'coins' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'product_companies' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'product_company_products' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'product_company_product_purchases' }, queueRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_stock_trades' }, queueRefresh)
+        .subscribe();
+    } catch (error) {
+      console.warn('GrindWorld realtime subscription unavailable:', error);
+    }
+  }
+
+  function queueRefresh() {
+    if (state.refreshTimer) clearTimeout(state.refreshTimer);
+    state.refreshTimer = setTimeout(() => {
+      state.refreshTimer = null;
+      if (currentPage === 'grindworld' && !document.hidden) load(true);
+    }, 1200);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopAnimation();
+    else if (currentPage === 'grindworld') {
+      if (Date.now() - state.lastLoadedAt > 30000) load(true);
+      startAnimation();
+    }
+  });
+
+  document.querySelector('[data-page="grindworld"]')?.addEventListener('click', activate);
+  window.GrindWorld = { activate, load, fitView };
+})(); + Math.round(recentDemand.value).toLocaleString(),
               image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image ||
                 (typeof getCpuThumbsMap === 'function' ? (getCpuThumbsMap()?.[String(product.id)]?.dataUrl || '') : ''),
               color: userColorById.get(ownerId) || colorFor(ownerId),
