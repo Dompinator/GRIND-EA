@@ -7905,5 +7905,38 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
   .ea-preview-explode-slider input{width:62px}
 }
 
+/* Interactive 3D PC Assembly Ritual Modal */
+.ea-asm-backdrop{z-index:1200}
+.ea-asm-card{width:min(980px,calc(100vw - 24px));max-height:94vh;display:grid;grid-template-rows:auto auto minmax(340px,1fr) auto;gap:10px;padding:16px 18px;overflow:hidden;border:1px solid rgba(168,85,247,.32);background:linear-gradient(180deg,#151024 0%,#0b0816 100%)}
+.ea-asm-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ea-asm-title-wrap{display:grid;gap:2px}
+.ea-asm-kicker{font-size:10px;font-weight:800;letter-spacing:.12em;color:#38bdf8}
+.ea-asm-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ea-asm-stepper{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:4px 2px}
+.ea-asm-step-item{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.ea-asm-step-item b{display:grid;place-items:center;width:18px;height:18px;border-radius:999px;background:rgba(255,255,255,.08);font-size:10px;color:#e2e8f0}
+.ea-asm-step-item.active{border-color:rgba(56,189,248,.65);background:rgba(56,189,248,.12);color:#f0f9ff}
+.ea-asm-step-item.active b{background:#0284c7;color:#fff}
+.ea-asm-step-item.done{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.1);color:#dcfce7}
+.ea-asm-step-item.done b{background:#16a34a;color:#fff}
+.ea-asm-stage-wrap{position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(56,189,248,.24);background:radial-gradient(circle at 50% 42%,#1a1530 0%,#080611 82%);min-height:360px;height:min(54vh,500px)}
+.ea-asm-stage{width:100%;height:100%;cursor:crosshair;touch-action:none}
+.ea-asm-stage canvas{display:block;width:100%;height:100%}
+.ea-asm-overlay-hint{position:absolute;top:10px;right:12px;padding:5px 10px;border-radius:8px;background:rgba(9,11,20,.72);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.1);font-size:11px;color:#cbd5e1;pointer-events:none}
+.ea-asm-center-toast{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding:7px 14px;border-radius:10px;background:rgba(15,23,42,.88);border:1px solid rgba(56,189,248,.55);color:#f0f9ff;font-size:12px;font-weight:700;pointer-events:none;box-shadow:0 10px 24px rgba(0,0,0,.45)}
+.ea-asm-hud{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(150px,.8fr) auto;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:rgba(15,12,28,.85);border:1px solid rgba(168,85,247,.25)}
+.ea-asm-hud-info{display:grid;gap:2px;min-width:0}
+.ea-asm-hud-info strong{font-size:14px;color:#f8fafc}
+.ea-asm-hud-info p{margin:0;font-size:12px;color:#cbd5e1;line-height:1.35}
+.ea-asm-progress-wrap{display:grid;gap:4px}
+.ea-asm-progress-track{height:8px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden}
+.ea-asm-progress-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#38bdf8,#a855f7);transition:width .08s linear}
+.ea-asm-progress-label{font-size:11px;font-weight:700;color:#e2e8f0;font-variant-numeric:tabular-nums;text-align:right}
+.ea-asm-act-btn{white-space:nowrap;padding:10px 16px;font-size:13px;user-select:none}
+@media(max-width:740px){
+  .ea-asm-hud{grid-template-columns:1fr}
+  .ea-asm-stage-wrap{min-height:280px;height:42vh}
+}
+
 
 

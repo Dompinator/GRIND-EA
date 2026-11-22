@@ -588,13 +588,58 @@
     const atxHeaderPos = { x: moboX + moboW * 0.44, y: moboY + moboH * 0.08, z: moboZ + 0.05 };
     addBox(motherboardGroup, 0.065, 0.38, 0.08, darkMetalMat, atxHeaderPos.x, atxHeaderPos.y, atxHeaderPos.z);
 
-    // Hinged LGA CPU Socket Retention Frame
+    // Hinged LGA CPU Socket + Articulated Metal ILM Retention Bracket & Lever
+    const asmOpts = opts.assembly && typeof opts.assembly === 'object' ? opts.assembly : {};
     const sockPad = cfg.caseSize === 'small' ? 0.56 : 0.60;
-    addBox(motherboardGroup, sockPad + 0.12, sockPad + 0.12, 0.04, brushedSilverMat, sockX, sockY, moboZ + 0.03);
-    addBox(motherboardGroup, sockPad, sockPad, 0.046, darkMetalMat, sockX, sockY, moboZ + 0.034);
+    const moboSurfaceZ = moboZ + 0.016;
+    const cpuScale = cfg.caseSize === 'small' ? 0.24 : 0.255;
+
+    // Socket base frame & pin bed
+    addBox(motherboardGroup, sockPad + 0.14, sockPad + 0.14, 0.038, darkMetalMat, sockX, sockY, moboZ + 0.028);
+    addBox(motherboardGroup, sockPad * 0.96, sockPad * 0.96, 0.044, new T.MeshStandardMaterial({ color: 0x1a202c, metalness: 0.72, roughness: 0.34 }), sockX, sockY, moboZ + 0.032);
+
+    // Hinged ILM metal clamp window (open center lets you see & paste the CPU IHS!)
+    const ilmHoodPivot = new T.Group();
+    const hoodH = sockPad + 0.14;
+    const hoodW = sockPad + 0.12;
+    const hoodBar = 0.09;
+    const hoodRestZ = moboSurfaceZ + 0.068;
+    ilmHoodPivot.position.set(sockX, sockY + hoodH / 2, hoodRestZ);
+    // Top bar, bottom latch lip, left rail, right rail around center aperture
+    addBox(ilmHoodPivot, hoodW, hoodBar, 0.024, brushedSilverMat, 0, -hoodBar / 2, 0);
+    addBox(ilmHoodPivot, hoodW * 0.78, hoodBar * 0.95, 0.024, brushedSilverMat, 0, -hoodH + hoodBar / 2, 0);
+    addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, -hoodW / 2 + hoodBar / 2, -hoodH / 2, 0);
+    addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, hoodW / 2 - hoodBar / 2, -hoodH / 2, 0);
+    // Catch tab at bottom lip
+    addBox(ilmHoodPivot, 0.16, 0.055, 0.026, brushedSilverMat, 0, -hoodH - 0.015, -0.004);
+    ilmHoodPivot.rotation.x = asmOpts.latchOpen ? -1.18 : 0;
+    motherboardGroup.add(ilmHoodPivot);
+
+    // Side steel retention lever arm
+    const ilmLeverPivot = new T.Group();
+    const leverX = sockX + hoodW / 2 + 0.055;
+    const leverBottomY = sockY - hoodH / 2 - 0.02;
+    ilmLeverPivot.position.set(leverX, leverBottomY, moboSurfaceZ + 0.038);
+    const leverStem = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, hoodH * 1.06, 12), brushedSilverMat);
+    leverStem.position.set(0, hoodH * 0.53, 0.018);
+    ilmLeverPivot.add(leverStem);
+    // Top bent cam hook & grip tip
+    addBox(ilmLeverPivot, 0.14, 0.032, 0.032, brushedSilverMat, -0.055, hoodH * 1.05, 0.018);
+    addBox(ilmLeverPivot, 0.06, 0.075, 0.042, accentMat, 0.015, hoodH * 1.02, 0.02);
+    ilmLeverPivot.rotation.x = asmOpts.latchOpen ? 1.28 : 0;
+    motherboardGroup.add(ilmLeverPivot);
 
     // 8. ACTUAL 3D CPU Assembly Mounted in Socket!
-    const moboSurfaceZ = moboZ + 0.016;
+    const cpuHolder = new T.Group();
+    const cpuDockedPos = { x: sockX, y: sockY, z: moboSurfaceZ + 0.05 + 0.08 * cpuScale };
+    cpuHolder.position.set(cpuDockedPos.x, cpuDockedPos.y, cpuDockedPos.z);
+    cpuGroup.add(cpuHolder);
+
+    const pasteAnchor = new T.Group();
+    pasteAnchor.position.set(0, 0, 0.252 * cpuScale);
+    cpuHolder.add(pasteAnchor);
+
+    let mountedCpuAsm = null;
     if (cfg.cpu) {
       let mountedRealCpu = false;
       if (typeof window.CpuDesigner3D?.buildAssembly === 'function') {
@@ -604,25 +649,25 @@
           onLogoReady: opts.onAssetReady
         });
         if (cpuAsm && cpuAsm.root) {
-          // CpuDesigner3D native PCB = 2.40 units; scale 0.25 -> 60mm LGA carrier, 41.5mm IHS!
-          const cpuScale = cfg.caseSize === 'small' ? 0.24 : 0.255;
           cpuAsm.root.rotation.x = Math.PI / 2;
           cpuAsm.root.scale.setScalar(cpuScale);
-          // Pins extend down ~-0.14 locally; offset +Z so substrate sits squarely in socket
-          cpuAsm.root.position.set(sockX, sockY, moboSurfaceZ + 0.05 + 0.08 * cpuScale);
-          cpuGroup.add(cpuAsm.root);
+          if (asmOpts.hideCpuCooler && cpuAsm.coolingGroup) {
+            cpuAsm.coolingGroup.visible = false;
+          }
+          cpuHolder.add(cpuAsm.root);
           if (cpuAsm.fanRotor) {
             cpuSpinners.push({ rotor: cpuAsm.fanRotor, axis: cpuAsm.fanAxis || 'z', speed: 8.5 });
           }
+          mountedCpuAsm = cpuAsm;
           mountedRealCpu = true;
         }
       }
       if (!mountedRealCpu) {
-        addBox(cpuGroup, 0.42, 0.42, 0.06, brushedSilverMat, sockX, sockY, moboSurfaceZ + 0.055);
+        addBox(cpuHolder, 0.42, 0.42, 0.06, brushedSilverMat, 0, 0, 0.01);
       }
     }
 
-    // Braided 24-pin ATX power cable & 8-pin EPS CPU power cable
+    // Braided 24-pin ATX power cable & GPU power cable
     const addBraidedCable = (pts, radius, hexCol) => {
       const curve = new T.CatmullRomCurve3(pts.map(([x, y, z]) => new T.Vector3(x, y, z)));
       const mat = new T.MeshStandardMaterial({ color: hexCol, roughness: 0.72, metalness: 0.15 });
@@ -635,8 +680,57 @@
       [grommetX + 0.04, moboY, trayZ - 0.01]
     ], 0.048, cableCol);
 
-    // 9. ACTUAL 3D GPU Assembly Plugged Into PCIe x16 Slot at Exact Millimeter Size!
+    // 9. ACTUAL 3D GPU Assembly Plugged Into PCIe x16 Slot at Exact Millimeter Size + 4 Bracket Screws!
     const isVerticalGpu = cfg.gpuMount === 'vertical';
+    const gpuHolder = new T.Group();
+    gpuGroup.add(gpuHolder);
+    let mountedGpuAsm = null;
+    let gpuDockedPos = { x: 0, y: pcieY, z: moboSurfaceZ + 0.4 };
+    const gpuScrews = [];
+
+    const makeScrewUnit = (px, py, pz, rx, ry, rz) => {
+      const sWrap = new T.Group();
+      sWrap.position.set(px, py, pz);
+      sWrap.rotation.set(rx, ry, rz);
+
+      // Threaded bracket boss collar on chassis
+      const boss = new T.Mesh(new T.CylinderGeometry(0.052, 0.056, 0.03, 16), frameMat);
+      boss.rotation.x = Math.PI / 2;
+      boss.position.z = -0.012;
+      sWrap.add(boss);
+
+      // Subtle glowing guide ring (highlighted during screwing step)
+      const ringMat = new T.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.0, side: T.DoubleSide });
+      const guideRing = new T.Mesh(new T.RingGeometry(0.062, 0.085, 24), ringMat);
+      guideRing.position.z = 0.008;
+      sWrap.add(guideRing);
+
+      // Screw mesh (rotates around local Z & translates in local Z as driven flush!)
+      const screwPivot = new T.Group();
+      const shaft = new T.Mesh(new T.CylinderGeometry(0.022, 0.020, 0.12, 12), brushedSilverMat);
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.z = -0.045;
+      screwPivot.add(shaft);
+
+      const head = new T.Mesh(new T.CylinderGeometry(0.052, 0.048, 0.036, 18), brushedSilverMat);
+      head.rotation.x = Math.PI / 2;
+      head.position.z = 0.022;
+      screwPivot.add(head);
+
+      // Machined Phillips / hex slot on top of screw head so rotation is super visible!
+      const slotMat = new T.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.5 });
+      const slotA = new T.Mesh(new T.BoxGeometry(0.064, 0.014, 0.01), slotMat);
+      slotA.position.z = 0.04;
+      const slotB = new T.Mesh(new T.BoxGeometry(0.014, 0.064, 0.01), slotMat);
+      slotB.position.z = 0.04;
+      screwPivot.add(slotA, slotB);
+
+      sWrap.add(screwPivot);
+      gpuGroup.add(sWrap);
+
+      return { wrap: sWrap, pivot: screwPivot, head, guideRing, ringMat, seated: !asmOpts.unscrewedGpu };
+    };
+
     if (cfg.gpu) {
       let mountedRealGpu = false;
       if (typeof window.GpuDesigner3D?.buildAssembly === 'function') {
@@ -649,7 +743,6 @@
           const gDims = gpuAsm.dims;
           const realLen = clamp(Number(gDims.safeLength || cfg.gpu.length || 280), 210, 390) / 100;
           const realWid = clamp(Number(gDims.safeWidth || cfg.gpu.width || 125), 105, 165) / 100;
-          // Exact 1 unit = 100mm physical dimensions
           const sx = realLen / gDims.w;
           const sz = realWid / gDims.d;
           const sy = (sx + sz) * 0.5;
@@ -657,22 +750,30 @@
 
           const ioCenterX = -w / 2 + wall + (gDims.w * sx) / 2 + 0.045;
           if (isVerticalGpu) {
-            // Vertical riser display: shroud & recessed spinning fans face straight out toward the glass!
             const vertY = Math.max(shroudTopY + (gDims.d * sz) / 2 + 0.18, pcieY + 0.08);
             const vertZ = moboSurfaceZ + 0.24 + (gDims.d * sz * 0.15);
             gpuAsm.root.rotation.x = Math.PI / 2;
-            gpuAsm.root.position.set(ioCenterX, vertY, vertZ);
-            // Vertical PCIe riser bracket & ribbon cable
+            gpuDockedPos = { x: ioCenterX, y: vertY, z: vertZ };
+            gpuHolder.position.set(gpuDockedPos.x, gpuDockedPos.y, gpuDockedPos.z);
+
             addBox(gpuGroup, 0.28, 0.24, 0.36, darkMetalMat, ioCenterX - gDims.w * sx * 0.13, shroudTopY + 0.12, vertZ - 0.06);
             addBox(gpuGroup, moboW * 0.38, 0.015, 0.32, darkMetalMat, moboX - moboW * 0.12, pcieY - 0.02, (moboSurfaceZ + vertZ) * 0.5);
+
+            // 4 mounting screws on vertical PCIe bracket + riser base
+            const bracketX = -w / 2 + wall + 0.075;
+            gpuScrews.push(
+              makeScrewUnit(bracketX, vertY + realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0),
+              makeScrewUnit(bracketX, vertY - realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0),
+              makeScrewUnit(ioCenterX - gDims.w * sx * 0.20, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0),
+              makeScrewUnit(ioCenterX - gDims.w * sx * 0.05, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0)
+            );
           } else {
-            // Standard horizontal PCIe x16 mount: +Z PCIe fingers flip via PI rotation to -Z into slot!
             const gpuY = pcieY;
             const gpuZ = moboSurfaceZ + 0.055 + (gDims.d * sz) * 0.485;
             gpuAsm.root.rotation.x = Math.PI;
-            gpuAsm.root.position.set(ioCenterX, gpuY, gpuZ);
+            gpuDockedPos = { x: ioCenterX, y: gpuY, z: gpuZ };
+            gpuHolder.position.set(gpuDockedPos.x, gpuDockedPos.y, gpuDockedPos.z);
 
-            // Braided GPU power cable from PSU shroud grommet to exact GPU power connector!
             const pwrWorldX = ioCenterX + (gDims.pwrCenterX || 0) * sx;
             const pwrWorldY = gpuY - (gDims.pwrY || 0) * sy;
             const pwrWorldZ = gpuZ - (gDims.pwrZ || 0) * sz;
@@ -682,9 +783,23 @@
               [pwrWorldX + 0.04, shroudTopY + 0.18, pwrWorldZ + 0.12],
               [pwrWorldX, shroudTopY - 0.02, d * 0.12]
             ], 0.036, cableCol);
+
+            // PCIe bracket clamp bar & 4 screws right along the GPU's rear mounting flange
+            const bracketX = -w / 2 + wall + 0.055;
+            const frontZ = gpuZ + realWid * 0.46;
+            const backZ = moboSurfaceZ + 0.16;
+            addBox(gpuGroup, 0.06, 0.38, 0.10, frameMat, bracketX - 0.015, gpuY, frontZ);
+            addBox(gpuGroup, 0.06, 0.38, 0.10, frameMat, bracketX - 0.015, gpuY, backZ);
+            gpuScrews.push(
+              makeScrewUnit(bracketX + 0.025, gpuY + 0.125, frontZ, 0, Math.PI * 0.32, 0),
+              makeScrewUnit(bracketX + 0.025, gpuY - 0.125, frontZ, 0, Math.PI * 0.32, 0),
+              makeScrewUnit(bracketX + 0.025, gpuY + 0.125, backZ, 0, Math.PI * 0.32, 0),
+              makeScrewUnit(bracketX + 0.025, gpuY - 0.125, backZ, 0, Math.PI * 0.32, 0)
+            );
           }
 
-          gpuGroup.add(gpuAsm.root);
+          gpuHolder.add(gpuAsm.root);
+          mountedGpuAsm = gpuAsm;
           (gpuAsm.fanRotors || []).forEach(fr => {
             if (fr && fr.rotor) cpuSpinners.push({ rotor: fr.rotor, axis: 'y', speed: fr.speed || 2.8 });
           });
@@ -702,7 +817,9 @@
         const realWid = clamp(Number(cfg.gpu.width || 125), 105, 165) / 100;
         const realThick = clamp(Number(cfg.gpu.thickness || 50), 38, 76) / 100;
         const gMat = new T.MeshStandardMaterial({ color: cfg.gpu.primaryColor || '#222733', metalness: 0.45, roughness: 0.35 });
-        addBox(gpuGroup, realLen, realThick, realWid, gMat, -w / 2 + wall + realLen / 2 + 0.05, pcieY, moboSurfaceZ + 0.06 + realWid / 2);
+        gpuDockedPos = { x: -w / 2 + wall + realLen / 2 + 0.05, y: pcieY, z: moboSurfaceZ + 0.06 + realWid / 2 };
+        gpuHolder.position.set(gpuDockedPos.x, gpuDockedPos.y, gpuDockedPos.z);
+        addBox(gpuHolder, realLen, realThick, realWid, gMat, 0, 0, 0);
       }
     }
 
@@ -730,10 +847,22 @@
       rgbGroup,
       motherboardGroup,
       cpuGroup,
+      cpuHolder,
+      cpuAsm: mountedCpuAsm,
+      pasteAnchor,
+      ilmHoodPivot,
+      ilmLeverPivot,
       gpuGroup,
+      gpuHolder,
+      gpuAsm: mountedGpuAsm,
+      gpuScrews,
       cablesGroup,
       airflowGroup,
       dims,
+      sockPos: { x: sockX, y: sockY, z: moboSurfaceZ },
+      cpuDockedPos,
+      gpuDockedPos,
+      isVerticalGpu,
       fanRotors: rotorsList,
       cpuFanSpinners: cpuSpinners,
       rgbMats: rgbList,

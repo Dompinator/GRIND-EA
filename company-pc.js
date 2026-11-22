@@ -1252,7 +1252,7 @@
     syncPcSaveButtonUI();
   }
 
-  async function savePcProduct() {
+  async function savePcProduct(skipRitual) {
     if (!currentCompany || !currentUser || !sb) return;
     const name = ($('#eaPcName')?.value || '').trim();
     const msgEl = $('#eaPcBuildMessage');
@@ -1278,6 +1278,11 @@
 
     const listedPrice = Math.max(1, Number($('#eaPcPrice')?.value) || 1);
     const pcCfg = buildPcConfigFromCaseAndParts(cObj, selectedCpuPart, selectedGpuPart, { gpuMount: pcGpuMount });
+
+    if (skipRitual !== true && typeof window.PcAssemblyRitual?.open === 'function') {
+      window.PcAssemblyRitual.open(pcCfg, { name }, () => savePcProduct(true));
+      return;
+    }
 
     let snapshot = '';
     if (activePcView === 'build') {
@@ -1749,7 +1754,7 @@
       panel.querySelector('#eaPcPickMoboBtn')?.addEventListener('click', () => toast('Motherboard companies are coming in a future update!'));
       panel.querySelector('#eaPcPickRamBtn')?.addEventListener('click', () => toast('RAM companies will be added in a future update!'));
       panel.querySelector('#eaPcPickPsuBtn')?.addEventListener('click', () => toast('Power Supply companies are coming soon!'));
-      panel.querySelector('#eaPcSaveBuild')?.addEventListener('click', savePcProduct);
+      panel.querySelector('#eaPcSaveBuild')?.addEventListener('click', () => savePcProduct(false));
       panel.querySelector('#eaPcCancelEdit')?.addEventListener('click', () => {
         resetPcDraftState();
         updateBuildSpecsReadout();
