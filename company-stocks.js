@@ -270,6 +270,7 @@
       wrap.innerHTML = '<div class="empty-state"><h3>Company not found</h3></div>';
       return;
     }
+    if (seriesError) console.warn('Company Series could not be loaded:', seriesError);
 
     const userIds = [
       comp.owner_id,
@@ -335,7 +336,7 @@
         <div id="eaPublicCompanyProducts">
           ${productsError ? '<p class="muted">Could not load this company\'s products.</p>' : (products || []).length ? `
             ${(series || []).map(folder => {
-              const members = (products || []).filter(p => p.series_id === folder.id);
+              const members = seriesError ? [] : (products || []).filter(p => p.series_id === folder.id);
               if (!members.length) return '';
               return `
                 <section class="company-series-block public-company-series">
@@ -349,10 +350,10 @@
                     </article>`).join('')}</div>
                 </section>`;
             }).join('')}
-            ${(products || []).some(p => !p.series_id) ? `
+            ${(products || []).some(p => !p.series_id || seriesError) ? `
               <section class="company-series-block public-company-series">
-                <div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📦</span><div><strong>Other Products</strong><small>${(products || []).filter(p => !p.series_id).length} unassigned products</small></div></div></div>
-                <div class="published-product-grid">${(products || []).filter(p => !p.series_id).map(p => `
+                <div class="company-series-heading"><div class="company-series-folder-title"><span class="company-series-folder-icon">📦</span><div><strong>Other Products</strong><small>${(products || []).filter(p => !p.series_id || seriesError).length} unassigned products</small></div></div></div>
+                <div class="published-product-grid">${(products || []).filter(p => !p.series_id || seriesError).map(p => `
                   <article class="published-product-card">
                     <h4>${esc(p.product_name || 'Product')}</h4><p>${esc(String(p.product_line || '').toUpperCase())}</p>
                     <strong>${fmtMoney(p.listed_price || 0)}</strong><p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
