@@ -68,7 +68,7 @@
     startRealtime();
     if (!state.pollTimer) {
       state.pollTimer = setInterval(() => {
-        if (window.currentPage === 'grindworld' && !document.hidden) load(true);
+        if (currentPage === 'grindworld' && !document.hidden) load(true);
       }, 60000);
     }
     startAnimation();
@@ -110,7 +110,7 @@
   }
 
   async function load(force = false) {
-    if (state.loading || !window.sb || !window.currentUser) return;
+    if (state.loading || !sb || !currentUser) return;
     if (!force && state.loaded && Date.now() - state.lastLoadedAt < 30000) return;
     state.loading = true;
     $('grindWorldLoading')?.classList.remove('hidden');
@@ -626,7 +626,7 @@
     if (state.raf || document.hidden) return;
     const tick = () => {
       state.raf = 0;
-      if (document.hidden || window.currentPage !== 'grindworld') return;
+      if (document.hidden || currentPage !== 'grindworld') return;
       draw();
       state.raf = requestAnimationFrame(tick);
     };
@@ -639,7 +639,7 @@
   }
 
   function startRealtime() {
-    if (state.realtime || !window.sb) return;
+    if (state.realtime || !sb) return;
     try {
       state.realtime = sb.channel('grindworld-network')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'coins' }, queueRefresh)
@@ -658,13 +658,13 @@
     if (state.refreshTimer) clearTimeout(state.refreshTimer);
     state.refreshTimer = setTimeout(() => {
       state.refreshTimer = null;
-      if (window.currentPage === 'grindworld' && !document.hidden) load(true);
+      if (currentPage === 'grindworld' && !document.hidden) load(true);
     }, 1200);
   }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopAnimation();
-    else if (window.currentPage === 'grindworld') {
+    else if (currentPage === 'grindworld') {
       if (Date.now() - state.lastLoadedAt > 30000) load(true);
       startAnimation();
     }
