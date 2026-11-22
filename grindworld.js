@@ -181,14 +181,17 @@
         const unitPrice = Math.max(0, Number(productById.get(key)?.listed_price || 0));
         demand.events += 1;
         demand.value += value;
-        demand.quantity += unitPrice > 0 ? value / unitPrice : 1;
+        const purchasedQuantity = Number(purchase.purchase_quantity);
+        demand.quantity += Number.isFinite(purchasedQuantity) && purchasedQuantity > 0
+          ? purchasedQuantity : (unitPrice > 0 ? value / unitPrice : 1);
         if (!demand.latestAt || new Date(purchase.created_at).getTime() > new Date(demand.latestAt).getTime()) demand.latestAt = purchase.created_at;
         productDemand24h.set(key, demand);
         if (purchase.buyer_company_id) {
           const pairKey = String(purchase.buyer_company_id) + '|' + key;
           const pair = companyComponentDemand24h.get(pairKey) || { value: 0, quantity: 0, latestAt: null };
           pair.value += value;
-          pair.quantity += unitPrice > 0 ? value / unitPrice : 1;
+          pair.quantity += Number.isFinite(purchasedQuantity) && purchasedQuantity > 0
+            ? purchasedQuantity : (unitPrice > 0 ? value / unitPrice : 1);
           if (!pair.latestAt || new Date(purchase.created_at).getTime() > new Date(pair.latestAt).getTime()) pair.latestAt = purchase.created_at;
           companyComponentDemand24h.set(pairKey, pair);
         }
