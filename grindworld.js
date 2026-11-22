@@ -249,16 +249,17 @@
       const userColorById = new Map(activeProfiles.map(profile => [
         String(profile.id), validHex(profile.user_color) ? profile.user_color.toLowerCase() : colorFor(profile.id)
       ]));
-      const maxScore = Math.max(1, ...[...scoreByUser.values()]);
       const marketProfiles = activeProfiles.filter(profile => !profile.is_test_account);
+      const maxScore = Math.max(1, ...marketProfiles.map(
+        profile => scoreByUser.get(String(profile.id)) || 1
+      ));
       const totalMarketPower = Math.max(1, marketProfiles.reduce(
         (sum, profile) => sum + (scoreByUser.get(String(profile.id)) || 1), 0
       ));
-      const totalPower = Math.max(1, [...scoreByUser.values()].reduce((sum, value) => sum + value, 0));
       const userPosition = new Map();
       const goldenAngle = Math.PI * (3 - Math.sqrt(5));
       const outerRadius = Math.max(260, Math.sqrt(activeProfiles.length) * 210);
-      const maxShare = Math.max(0.000001, maxScore / totalPower);
+      const maxShare = Math.max(0.000001, maxScore / totalMarketPower);
       activeProfiles.forEach((profile, index) => {
         const score = scoreByUser.get(String(profile.id)) || 1;
         const isTestAccount = Boolean(profile.is_test_account);
