@@ -772,6 +772,8 @@ async function loadProfile() {
   const prevMemTier = currentUser && currentUser.id === user.id ? getUserTier(currentUser) : null;
   currentUser = data;
   currentUser.auth_created_at = user.created_at || data.created_at || null;
+  const userColorInput = $('#accountUserColor');
+  if (userColorInput) userColorInput.value = /^#[0-9a-fA-F]{6}$/.test(data.user_color || '') ? data.user_color : '#a78bfa';
   saveSharedProfileToCache(currentUser);
 
   // Auto-sync approved premium & PRO status
@@ -11714,6 +11716,21 @@ $('#profileImage')?.addEventListener('change', async (e) => {
       toast('Error saving picture: ' + error.message);
     }
   });
+});
+
+// ---------- GrindWorld user color ----------
+$('#accountUserColor')?.addEventListener('input', async (e) => {
+  if (!currentUser || !sb) return;
+  const color = String(e.target.value || '').toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) return;
+  const { error } = await sb.from('profiles').update({ user_color: color }).eq('id', currentUser.id);
+  if (error) {
+    toast('Could not save User Color: ' + error.message);
+    return;
+  }
+  currentUser.user_color = color;
+  saveSharedProfileToCache(currentUser);
+  if (window.GrindWorld?.load) window.GrindWorld.load(true);
 });
 
 // ---------- Theme Settings (Tier-locked visual themes) ----------
