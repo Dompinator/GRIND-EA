@@ -2713,6 +2713,7 @@ async function produceMoreProduct(id, quantity, msgEl) {
   }
   if (res.error) {
     if (msgEl) msgEl.textContent = res.error.message;
+    toast(res.error.message);
     return false;
   }
   if (res.data?.cash_remaining !== undefined) currentUser.cash = Number(res.data.cash_remaining);

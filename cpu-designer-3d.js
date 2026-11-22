@@ -2374,6 +2374,488 @@
     processThumbQueue();
   }
 
+  // ---------- Standalone Reusable 3D CPU Assembly Builder ----------
+  const standaloneLogoCache = new Map();
+
+  function buildStandaloneCpuAssembly(T, rawSpec, opts = {}) {
+    if (!T) return null;
+    const spec = {
+      ...DEFAULT_STATE,
+      ...(rawSpec && typeof rawSpec === 'object' ? rawSpec : {}),
+      cores: Number(rawSpec?.cores || 0),
+      threads: Number(rawSpec?.threads || 0),
+      cooling: Number(rawSpec?.cooling || 0),
+      vCache: String(rawSpec?.vCache || rawSpec?.v_cache_type || 'none'),
+      graphics: String(rawSpec?.graphics || rawSpec?.graphics_type || ''),
+      ai: String(rawSpec?.ai || ''),
+      body: String(rawSpec?.body || 'gray'),
+      name: String(rawSpec?.name ?? 'CPU'),
+      companyName: String(rawSpec?.companyName ?? ''),
+      tier: String(rawSpec?.tier || 'F'),
+      logoUrl: String(rawSpec?.logoUrl || '')
+    };
+    const isSoft = !!opts.isSoftwareGl;
+    const dum = new T.Object3D();
+
+    // Helper: temporarily point module helpers' logo reference if cached
+    let logoImg = null;
+    const cleanLogoUrl = spec.logoUrl.trim();
+    if (cleanLogoUrl) {
+      const cached = standaloneLogoCache.get(cleanLogoUrl);
+      if (cached && cached !== 'loading') {
+        logoImg = cached;
+      } else if (cached !== 'loading') {
+        standaloneLogoCache.set(cleanLogoUrl, 'loading');
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          standaloneLogoCache.set(cleanLogoUrl, img);
+          opts.onLogoReady?.(img);
+        };
+        img.onerror = () => standaloneLogoCache.delete(cleanLogoUrl);
+        img.src = cleanLogoUrl;
+      }
+    }
+
+    const mkRounded = (width, height, depth, radius, bevel = 0.015) => {
+      const hw = width / 2, hh = height / 2;
+      const r = Math.min(radius, hw * 0.45, hh * 0.45);
+      const s = new T.Shape();
+      s.moveTo(-hw + r, -hh); s.lineTo(hw - r, -hh);
+      s.quadraticCurveTo(hw, -hh, hw, -hh + r); s.lineTo(hw, hh - r);
+      s.quadraticCurveTo(hw, hh, hw - r, hh); s.lineTo(-hw + r, hh);
+      s.quadraticCurveTo(-hw, hh, -hw, hh - r); s.lineTo(-hw, -hh + r);
+      s.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+      const g = new T.ExtrudeGeometry(s, { depth, steps: 1, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 });
+      g.rotateX(-Math.PI / 2);
+      g.center();
+      const pos = g.attributes.position;
+      const uvs = new Float32Array(pos.count * 2);
+      const sw = width + bevel * 2, sh = height + bevel * 2;
+      for (let i = 0; i < pos.count; i++) {
+        uvs[i * 2] = (pos.getX(i) + sw / 2) / sw;
+        uvs[i * 2 + 1] = 1 - (pos.getZ(i) + sh / 2) / sh;
+      }
+      g.setAttribute('uv', new T.BufferAttribute(uvs, 2));
+      g.computeVertexNormals();
+      return g;
+    };
+
+    const mkNotchedPcbGeo = () => {
+      const hw = 1.20, r = 0.08, nr = 0.095;
+      const s = new T.Shape();
+      s.moveTo(-hw + 0.16, -hw); s.lineTo(hw - r, -hw);
+      s.quadraticCurveTo(hw, -hw, hw, -hw + r); s.lineTo(hw, -nr);
+      s.absarc(hw, 0, nr, -Math.PI / 2, Math.PI / 2, true);
+      s.lineTo(hw, hw - r); s.quadraticCurveTo(hw, hw, hw - r, hw);
+      s.lineTo(-hw + r, hw); s.quadraticCurveTo(-hw, hw, -hw, hw - r);
+      s.lineTo(-hw, nr); s.absarc(-hw, 0, nr, Math.PI / 2, -Math.PI / 2, true);
+      s.lineTo(-hw, -hw + 0.16); s.closePath();
+      const g = new T.ExtrudeGeometry(s, { depth: 0.09, steps: 1, bevelEnabled: true, bevelThickness: 0.014, bevelSize: 0.014, bevelSegments: 2 });
+      g.rotateX(-Math.PI / 2);
+      g.center();
+      const pos = g.attributes.position;
+      const uvs = new Float32Array(pos.count * 2);
+      const span = hw * 2.04;
+      for (let i = 0; i < pos.count; i++) {
+        uvs[i * 2] = (pos.getX(i) + span / 2) / span;
+        uvs[i * 2 + 1] = 1 - (pos.getZ(i) + span / 2) / span;
+      }
+      g.setAttribute('uv', new T.BufferAttribute(uvs, 2));
+      g.computeVertexNormals();
+      return g;
+    };
+
+    const mkWingedFlangeGeo = () => {
+      const s = new T.Shape();
+      const wOuter = 1.04, wWing = 0.72, step = 0.20;
+      s.moveTo(-wWing, -wOuter); s.lineTo(wWing, -wOuter);
+      s.lineTo(wWing, -wOuter + step); s.lineTo(wOuter, -wOuter + step);
+      s.lineTo(wOuter, wOuter - step); s.lineTo(wWing, wOuter - step);
+      s.lineTo(wWing, wOuter); s.lineTo(-wWing, wOuter);
+      s.lineTo(-wWing, wOuter - step); s.lineTo(-wOuter, wOuter - step);
+      s.lineTo(-wOuter, -wOuter + step); s.lineTo(-wWing, -wOuter + step);
+      s.closePath();
+      const g = new T.ExtrudeGeometry(s, { depth: 0.055, steps: 1, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2 });
+      g.rotateX(-Math.PI / 2);
+      g.center();
+      g.computeVertexNormals();
+      return g;
+    };
+
+    // Build textures using caller's T
+    const body = spec.body;
+    const prevThree = THREE;
+    const prevLoadedLogoUrl = loadedLogoUrl;
+    const prevLoadedLogoImg = loadedLogoImg;
+    THREE = T;
+    if (logoImg) {
+      loadedLogoUrl = cleanLogoUrl;
+      loadedLogoImg = logoImg;
+    } else if (!cleanLogoUrl) {
+      loadedLogoUrl = '';
+      loadedLogoImg = null;
+    }
+    const pcbTexSet = createPcbTextures(body);
+    const dieTex = createSiliconDieTexture();
+    const ihsTex = createIhsEtchTexture(spec);
+    const coolLogoTex = createCoolingCapLogoTexture(spec);
+    THREE = prevThree;
+    loadedLogoUrl = prevLoadedLogoUrl;
+    loadedLogoImg = prevLoadedLogoImg;
+
+    const pcbMat = new T.MeshPhysicalMaterial({
+      color: 0xffffff,
+      map: pcbTexSet.map,
+      bumpMap: pcbTexSet.bumpMap,
+      bumpScale: 0.012,
+      roughness: body === 'titanium' ? 0.24 : body === 'silicon' ? 0.22 : body === 'carbon' ? 0.34 : 0.60,
+      metalness: body === 'titanium' ? 0.88 : body === 'silicon' ? 0.55 : body === 'carbon' ? 0.25 : 0.10,
+      clearcoat: body === 'titanium' ? 0.72 : body === 'silicon' ? 0.85 : body === 'carbon' ? 0.42 : 0.08
+    });
+    const pinColor = body === 'silicon' ? 0xd2e9ff : body === 'titanium' ? 0xe6edf5 : body === 'carbon' ? 0xf2c864 : 0xe6be5a;
+    const pinsGoldMat = new T.MeshStandardMaterial({ color: pinColor, metalness: 0.96, roughness: 0.14 });
+    const ceramicCapMat = new T.MeshStandardMaterial({ color: 0xb98d59, metalness: 0.08, roughness: 0.42 });
+    const solderEndMat = new T.MeshStandardMaterial({ color: 0xd6dde8, metalness: 0.92, roughness: 0.22 });
+    const interposerMat = new T.MeshStandardMaterial({ color: 0x202634, metalness: 0.35, roughness: 0.52 });
+    const dieSiliconMat = new T.MeshPhysicalMaterial({ color: 0xffffff, map: dieTex, metalness: 0.58, roughness: 0.11, clearcoat: 1.0, iridescence: 0.92 });
+    const iodSiliconMat = new T.MeshPhysicalMaterial({ color: 0x20324a, metalness: 0.65, roughness: 0.14, clearcoat: 0.95, iridescence: 0.65 });
+    const copperMat = new T.MeshPhysicalMaterial({ color: 0xd67c49, metalness: 0.95, roughness: 0.18 });
+    const alumFinMat = new T.MeshPhysicalMaterial({ color: 0xcbd5e1, metalness: 0.92, roughness: 0.24 });
+    const darkAnodizedMat = new T.MeshPhysicalMaterial({ color: 0x1e222e, metalness: 0.82, roughness: 0.30 });
+    const fanBladeMat = new T.MeshPhysicalMaterial({ color: 0x262c3a, metalness: 0.32, roughness: 0.26, clearcoat: 0.65 });
+    const cryoAccentMat = new T.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.85, metalness: 0.4, roughness: 0.25 });
+    const coolingLogoCapMat = new T.MeshPhysicalMaterial({ color: 0xffffff, map: coolLogoTex, metalness: 0.48, roughness: 0.28, clearcoat: 0.45 });
+
+    const ihsTopMat = new T.MeshPhysicalMaterial({
+      color: 0xffffff,
+      map: ihsTex,
+      metalness: body === 'titanium' ? 0.92 : body === 'silicon' ? 0.86 : body === 'carbon' ? 0.45 : 0.22,
+      roughness: body === 'titanium' ? 0.14 : body === 'silicon' ? 0.16 : body === 'carbon' ? 0.28 : 0.52,
+      clearcoat: body === 'titanium' ? 0.92 : body === 'carbon' ? 0.85 : body === 'silicon' ? 0.72 : 0.12,
+      transparent: true,
+      opacity: 1.0
+    });
+    const ihsFlangeMat = new T.MeshPhysicalMaterial({
+      color: body === 'silicon' ? 0x9fc2de : body === 'titanium' ? 0x8998aa : body === 'carbon' ? 0x4a4d57 : 0x7c8391,
+      metalness: body === 'gray' ? 0.55 : 0.90,
+      roughness: body === 'gray' ? 0.38 : 0.18,
+      transparent: true,
+      opacity: 1.0
+    });
+
+    const root = new T.Group();
+    const pinsGroup = new T.Group();
+    const pcbGroup = new T.Group();
+    const interposerGroup = new T.Group();
+    const diesGroup = new T.Group();
+    const threadsGroup = new T.Group();
+    const ihsGroup = new T.Group();
+    const coolingGroup = new T.Group();
+
+    // Pins & MLCC caps
+    const pinGeom = new T.CylinderGeometry(0.020, 0.013, 0.095, 7);
+    const gridN = opts.compactPins ? 13 : 17;
+    const spacing = opts.compactPins ? 0.16 : 0.125;
+    const pinPositions = [];
+    for (let ix = 0; ix < gridN; ix++) {
+      for (let iz = 0; iz < gridN; iz++) {
+        const cx = Math.abs(ix - (gridN - 1) / 2);
+        const cz = Math.abs(iz - (gridN - 1) / 2);
+        if (cx <= (gridN * 0.19) && cz <= (gridN * 0.19)) continue;
+        if (ix === 0 && iz === gridN - 1) continue;
+        pinPositions.push([(ix - (gridN - 1) / 2) * spacing, -0.095, (iz - (gridN - 1) / 2) * spacing]);
+      }
+    }
+    const pinsMesh = new T.InstancedMesh(pinGeom, pinsGoldMat, pinPositions.length);
+    pinPositions.forEach(([px, py, pz], idx) => {
+      dum.position.set(px, py, pz); dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+      pinsMesh.setMatrixAt(idx, dum.matrix);
+    });
+    pinsGroup.add(pinsMesh);
+    const capBodyGeom = new T.BoxGeometry(0.085, 0.036, 0.044);
+    const capsMesh = new T.InstancedMesh(capBodyGeom, ceramicCapMat, 16);
+    const capEndsMesh = new T.InstancedMesh(new T.BoxGeometry(0.102, 0.032, 0.042), solderEndMat, 16);
+    let ci = 0;
+    for (let x = 0; x < 4; x++) {
+      for (let z = 0; z < 4; z++) {
+        dum.position.set((x - 1.5) * 0.16, -0.068, (z - 1.5) * 0.16);
+        dum.rotation.set(0, (x + z) % 2 === 0 ? 0 : Math.PI / 2, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+        capsMesh.setMatrixAt(ci, dum.matrix); capEndsMesh.setMatrixAt(ci, dum.matrix); ci++;
+      }
+    }
+    pinsGroup.add(capsMesh, capEndsMesh);
+
+    // PCB
+    const pcbMesh = new T.Mesh(mkNotchedPcbGeo(), pcbMat);
+    pcbMesh.castShadow = !isSoft; pcbMesh.receiveShadow = true;
+    pcbGroup.add(pcbMesh);
+    const topCapPositions = [];
+    for (let k = -3; k <= 3; k++) {
+      if (k === 0) continue;
+      topCapPositions.push([k * 0.18, 0.068, -1.03]);
+      topCapPositions.push([k * 0.18, 0.068, 1.03]);
+    }
+    const topCapsMesh = new T.InstancedMesh(new T.BoxGeometry(0.065, 0.025, 0.034), ceramicCapMat, topCapPositions.length);
+    topCapPositions.forEach(([px, py, pz], idx) => {
+      dum.position.set(px, py, pz); dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+      topCapsMesh.setMatrixAt(idx, dum.matrix);
+    });
+    pcbGroup.add(topCapsMesh);
+
+    // Interposer
+    const interpBase = new T.Mesh(mkRounded(1.56, 1.56, 0.028, 0.05, 0.008), interposerMat);
+    const interpRing = new T.Mesh(mkRounded(1.60, 1.60, 0.012, 0.05, 0.004), copperMat);
+    interpRing.position.y = 0.018;
+    interposerGroup.add(interpBase, interpRing);
+    interposerGroup.position.y = 0.068;
+
+    // Cores / Dies
+    const coreCount = spec.cores;
+    const iodMesh = new T.Mesh(mkRounded(0.38, 0.30, 0.04, 0.025, 0.006), iodSiliconMat);
+    iodMesh.position.set(0, 0.025, coreCount >= 64 ? 0.86 : coreCount >= 32 ? 0.78 : 0.48);
+    diesGroup.add(iodMesh);
+    if (coreCount <= 0) {
+      const mini = new T.Mesh(mkRounded(0.34, 0.24, 0.036, 0.02, 0.006), dieSiliconMat);
+      mini.position.set(0, 0.02, -0.22);
+      diesGroup.add(mini);
+    } else {
+      const cols = coreCount >= 86 ? 11 : coreCount >= 64 ? 8 : coreCount <= 1 ? 1 : coreCount <= 4 ? 2 : coreCount <= 8 ? 4 : 8;
+      const spacingX = coreCount >= 86 ? 0.18 : coreCount >= 64 ? 0.22 : coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.72 / Math.max(1, cols - 1);
+      const spacingZ = coreCount >= 64 ? 0.15 : coreCount >= 16 ? 0.22 : coreCount >= 8 ? 0.30 : 0.40;
+      const dieW = coreCount >= 64 ? 0.135 : coreCount >= 32 ? 0.15 : coreCount >= 16 ? 0.19 : coreCount >= 8 ? 0.25 : coreCount >= 4 ? 0.42 : coreCount === 2 ? 0.54 : 0.68;
+      const dieH = coreCount >= 64 ? 0.125 : coreCount >= 32 ? 0.14 : coreCount >= 16 ? 0.17 : coreCount >= 8 ? 0.22 : coreCount >= 4 ? 0.28 : coreCount === 2 ? 0.34 : 0.40;
+      const chipGeom = mkRounded(dieW, dieH, 0.035, 0.02, 0.005);
+      const frameGeom = mkRounded(dieW + 0.035, dieH + 0.035, 0.012, 0.025, 0.003);
+      for (let i = 0; i < coreCount; i++) {
+        const col = i % cols, row = Math.floor(i / cols);
+        const cx = (col - (Math.min(cols, coreCount) - 1) / 2) * spacingX;
+        const cz = (coreCount >= 64 ? -0.72 : -0.34) + row * spacingZ;
+        const collar = new T.Mesh(frameGeom, copperMat);
+        collar.position.set(cx, 0.008, cz);
+        const chip = new T.Mesh(chipGeom, dieSiliconMat);
+        chip.position.set(cx, 0.034, cz);
+        diesGroup.add(collar, chip);
+      }
+    }
+    diesGroup.position.y = 0.095;
+
+    // Thread interconnects
+    if (spec.threads > 0) {
+      const lanes = Math.min(18, Math.max(4, spec.threads));
+      const zIod = coreCount >= 4 ? 0.32 : 0.14;
+      const zTarget = coreCount >= 4 ? -0.34 : -0.18;
+      for (let i = 0; i < lanes; i++) {
+        const t = lanes === 1 ? 0 : (i / (lanes - 1)) * 2 - 1;
+        const xStart = t * 0.16, xEnd = t * (coreCount >= 2 ? 0.44 : 0.24);
+        const curve = new T.CatmullRomCurve3([
+          new T.Vector3(xStart, 0.028, zIod),
+          new T.Vector3((xStart + xEnd) * 0.5, 0.068 + (i % 2) * 0.018, (zIod + zTarget) * 0.5),
+          new T.Vector3(xEnd, 0.028, zTarget)
+        ]);
+        const isCyan = i % 2 === 1;
+        const pipeMat = new T.MeshPhysicalMaterial({
+          color: isCyan ? 0x38bdf8 : 0xf59e0b,
+          emissive: isCyan ? 0x0284c7 : 0xb45309,
+          emissiveIntensity: 0.45, metalness: 0.85, roughness: 0.18
+        });
+        threadsGroup.add(new T.Mesh(new T.TubeGeometry(curve, 14, 0.014, 8, false), pipeMat));
+      }
+      const bar = new T.Mesh(mkRounded(1.06, 0.06, 0.018, 0.015, 0.004), copperMat);
+      bar.position.set(0, 0.024, zIod + 0.08);
+      threadsGroup.add(bar);
+    }
+    threadsGroup.position.y = 0.105;
+
+    // IHS
+    const flange = new T.Mesh(mkWingedFlangeGeo(), ihsFlangeMat);
+    flange.position.y = -0.02;
+    const crown = new T.Mesh(mkRounded(1.66, 1.66, 0.085, 0.10, 0.022), ihsTopMat);
+    crown.position.y = 0.045;
+    ihsGroup.add(flange, crown);
+    if (spec.ai) {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#21133f'; ctx.fillRect(0, 0, 256, 128);
+      ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 10; ctx.strokeRect(5, 5, 246, 118);
+      ctx.fillStyle = '#f5f3ff'; ctx.font = '900 82px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('AI', 128, 66);
+      const lblTex = new T.CanvasTexture(c); lblTex.colorSpace = T.SRGBColorSpace;
+      const backing = new T.Mesh(new T.BoxGeometry(0.42, 0.20, 0.035), darkAnodizedMat);
+      backing.position.set(0.55, 0.12, 0.84);
+      const label = new T.Mesh(new T.PlaneGeometry(0.37, 0.15), new T.MeshBasicMaterial({ map: lblTex, toneMapped: false }));
+      label.position.set(0.55, 0.12, 0.861);
+      ihsGroup.add(backing, label);
+    }
+    ihsGroup.position.y = 0.165;
+
+    // Cooling Stack (levels 1..4)
+    let rotorRef = null;
+    const coolingLevel = spec.cooling;
+    if (coolingLevel > 0) {
+      const isUltra = coolingLevel >= 4;
+      const isGreat = coolingLevel >= 2 && !isUltra;
+      const isVapor = coolingLevel === 3;
+      const bracketMesh = new T.Mesh(mkRounded(1.78, 1.78, 0.022, 0.09, 0.006), darkAnodizedMat);
+      bracketMesh.position.y = 0.01;
+      coolingGroup.add(bracketMesh);
+
+      const bolts = new T.InstancedMesh(new T.CylinderGeometry(0.045, 0.045, 0.048, 6), alumFinMat, 4);
+      [[-0.78, -0.78], [0.78, -0.78], [-0.78, 0.78], [0.78, 0.78]].forEach(([bx, bz], i) => {
+        dum.position.set(bx, 0.032, bz); dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+        bolts.setMatrixAt(i, dum.matrix);
+      });
+      coolingGroup.add(bolts);
+
+      const blockSize = isVapor ? 1.38 : isGreat ? 1.18 : 0.96;
+      const blockMesh = new T.Mesh(mkRounded(blockSize, blockSize, isVapor ? 0.14 : isGreat ? 0.11 : 0.055, 0.06, 0.010), copperMat);
+      blockMesh.position.y = isGreat ? 0.065 : 0.038;
+      coolingGroup.add(blockMesh);
+
+      const pipeRadius = isGreat ? 0.056 : 0.022;
+      const collarOuterR = isGreat ? 0.088 : 0.042;
+      const collarHeight = isGreat ? 0.065 : 0.042;
+      const finStackBottomY = isGreat ? 0.22 : 0.095;
+      const finStackTopY = isGreat ? 0.70 : 0.28;
+      const pipeEntryDepthY = isGreat ? -0.105 : -0.075;
+      const collarGeom = new T.CylinderGeometry(collarOuterR, collarOuterR * 1.1, collarHeight, 14);
+
+      if (!isGreat && !isUltra) {
+        [-0.42, -0.16, 0.16, 0.42].forEach(oz => {
+          const curve = new T.CatmullRomCurve3([
+            new T.Vector3(-0.62, pipeEntryDepthY, oz), new T.Vector3(-0.62, 0.045, oz),
+            new T.Vector3(-0.48, 0.19, oz), new T.Vector3(0, 0.22, oz),
+            new T.Vector3(0.48, 0.19, oz), new T.Vector3(0.62, 0.045, oz), new T.Vector3(0.62, pipeEntryDepthY, oz)
+          ]);
+          coolingGroup.add(new T.Mesh(new T.TubeGeometry(curve, 24, pipeRadius, 10, false), copperMat));
+          [-0.62, 0.62].forEach(cx => { const cm = new T.Mesh(collarGeom, darkAnodizedMat); cm.position.set(cx, -0.005, oz); coolingGroup.add(cm); });
+        });
+        const fins = new T.InstancedMesh(new T.BoxGeometry(1.18, 0.012, 1.14), alumFinMat, 10);
+        for (let i = 0; i < 10; i++) {
+          dum.position.set(0, finStackBottomY + (i / 9) * (finStackTopY - finStackBottomY), 0);
+          dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+          fins.setMatrixAt(i, dum.matrix);
+        }
+        coolingGroup.add(fins);
+        const capMesh = new T.Mesh(mkRounded(1.22, 1.18, 0.028, 0.05, 0.008), [coolingLogoCapMat, darkAnodizedMat]);
+        capMesh.position.y = finStackTopY + 0.024;
+        coolingGroup.add(capMesh);
+      } else if (isUltra) {
+        [-0.42, -0.16, 0.16, 0.42].forEach(oz => {
+          const curve = new T.CatmullRomCurve3([
+            new T.Vector3(-0.62, pipeEntryDepthY, oz), new T.Vector3(-0.62, 0.045, oz),
+            new T.Vector3(-0.48, 0.19, oz), new T.Vector3(0, 0.22, oz),
+            new T.Vector3(0.48, 0.19, oz), new T.Vector3(0.62, 0.045, oz), new T.Vector3(0.62, pipeEntryDepthY, oz)
+          ]);
+          coolingGroup.add(new T.Mesh(new T.TubeGeometry(curve, 24, pipeRadius, 10, false), copperMat));
+          [-0.62, 0.62].forEach(cx => { const cm = new T.Mesh(collarGeom, darkAnodizedMat); cm.position.set(cx, -0.005, oz); coolingGroup.add(cm); });
+        });
+        const fins = new T.InstancedMesh(new T.BoxGeometry(1.18, 0.018, 1.14), copperMat, 10);
+        for (let i = 0; i < 10; i++) {
+          dum.position.set(0, 0.095 + (i / 9) * 0.185, 0);
+          dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+          fins.setMatrixAt(i, dum.matrix);
+        }
+        coolingGroup.add(fins);
+        const capMesh = new T.Mesh(mkRounded(1.22, 1.18, 0.035, 0.05, 0.008), copperMat);
+        capMesh.position.y = 0.315;
+        coolingGroup.add(capMesh);
+      } else if (isVapor) {
+        const chBase = new T.Mesh(new T.BoxGeometry(1.62, 0.105, 1.62), copperMat); chBase.position.y = 0.105;
+        const gasket = new T.Mesh(new T.BoxGeometry(1.54, 0.025, 1.54), darkAnodizedMat); gasket.position.y = 0.164;
+        const chLid = new T.Mesh(new T.BoxGeometry(1.50, 0.055, 1.50), copperMat); chLid.position.y = 0.197;
+        coolingGroup.add(chBase, gasket, chLid);
+        for (let i = -3; i <= 3; i++) {
+          const ch = new T.Mesh(new T.BoxGeometry(0.035, 0.012, 1.12), alumFinMat);
+          ch.position.set(i * 0.19, 0.231, 0); coolingGroup.add(ch);
+        }
+        const evap = new T.Mesh(new T.CylinderGeometry(0.27, 0.27, 0.025, 32), darkAnodizedMat); evap.position.y = 0.239;
+        const evapC = new T.Mesh(new T.CylinderGeometry(0.19, 0.19, 0.03, 32), copperMat); evapC.position.y = 0.258;
+        coolingGroup.add(evap, evapC);
+        const vf = new T.InstancedMesh(new T.BoxGeometry(1.34, 0.46, 0.018), alumFinMat, 22);
+        for (let i = 0; i < 22; i++) {
+          dum.position.set(0, 0.50, -0.57 + i * (1.14 / 21));
+          dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+          vf.setMatrixAt(i, dum.matrix);
+        }
+        coolingGroup.add(vf);
+        const shroud = new T.Mesh(new T.TorusGeometry(0.39, 0.035, 10, 32), darkAnodizedMat);
+        shroud.rotation.y = Math.PI / 2; shroud.position.set(0, 0.51, 0.72);
+        coolingGroup.add(shroud);
+        rotorRef = new T.Group(); rotorRef.position.set(0, 0.51, 0.72);
+        const hub = new T.Mesh(new T.CylinderGeometry(0.105, 0.105, 0.09, 20), alumFinMat); hub.rotation.x = Math.PI / 2; rotorRef.add(hub);
+        for (let b = 0; b < 9; b++) {
+          const bp = new T.Group(); bp.rotation.z = (b / 9) * Math.PI * 2;
+          const bl = new T.Mesh(new T.BoxGeometry(0.015, 0.25, 0.075), fanBladeMat); bl.position.y = 0.20; bl.rotation.z = 0.35;
+          bp.add(bl); rotorRef.add(bp);
+        }
+        coolingGroup.add(rotorRef);
+        const badge = new T.Mesh(mkRounded(0.72, 0.24, 0.025, 0.045, 0.008), [coolingLogoCapMat, darkAnodizedMat]);
+        badge.position.set(0, 0.755, -0.39);
+        coolingGroup.add(badge);
+      } else {
+        [-0.46, -0.16, 0.16, 0.46].forEach(oz => {
+          const cL = new T.CatmullRomCurve3([new T.Vector3(-0.32, pipeEntryDepthY, oz), new T.Vector3(-0.34, 0.08, oz), new T.Vector3(-0.62, 0.24, oz), new T.Vector3(-0.56, finStackTopY + 0.08, oz)]);
+          const cR = new T.CatmullRomCurve3([new T.Vector3(0.32, pipeEntryDepthY, oz), new T.Vector3(0.34, 0.08, oz), new T.Vector3(0.62, 0.24, oz), new T.Vector3(0.56, finStackTopY + 0.08, oz)]);
+          coolingGroup.add(new T.Mesh(new T.TubeGeometry(cL, 22, pipeRadius, 10, false), copperMat));
+          coolingGroup.add(new T.Mesh(new T.TubeGeometry(cR, 22, pipeRadius, 10, false), copperMat));
+          [-0.32, 0.32].forEach(cx => { const cm = new T.Mesh(collarGeom, darkAnodizedMat); cm.position.set(cx, 0.012, oz); coolingGroup.add(cm); });
+        });
+        const fins = new T.InstancedMesh(new T.BoxGeometry(0.52, 0.015, 1.44), darkAnodizedMat, 26);
+        let fi = 0;
+        [-0.56, 0.56].forEach(tx => {
+          for (let i = 0; i < 13; i++) {
+            dum.position.set(tx, finStackBottomY + (i / 12) * (finStackTopY - finStackBottomY), 0);
+            dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+            fins.setMatrixAt(fi++, dum.matrix);
+          }
+        });
+        coolingGroup.add(fins);
+        const topP = mkRounded(0.56, 1.48, 0.03, 0.04, 0.008);
+        const stG = new T.BoxGeometry(0.42, 0.012, 0.045);
+        [-0.56, 0.56].forEach(tx => {
+          const tp = new T.Mesh(topP, alumFinMat); tp.position.set(tx, finStackTopY + 0.04, 0);
+          const st = new T.Mesh(stG, cryoAccentMat); st.position.set(tx, finStackTopY + 0.062, 0);
+          coolingGroup.add(tp, st);
+        });
+        const br = new T.Mesh(mkRounded(0.76, 0.76, 0.032, 0.06, 0.010), [coolingLogoCapMat, darkAnodizedMat]);
+        br.position.set(0, finStackTopY + 0.075, 0);
+        coolingGroup.add(br);
+        const fanY = (finStackBottomY + finStackTopY) * 0.48;
+        const sh = new T.Mesh(new T.TorusGeometry(0.40, 0.032, 10, 28), darkAnodizedMat);
+        sh.rotation.y = Math.PI / 2; sh.position.set(0, fanY, 0);
+        coolingGroup.add(sh);
+        rotorRef = new T.Group(); rotorRef.position.set(0, fanY, 0);
+        const hub = new T.Mesh(new T.CylinderGeometry(0.105, 0.105, 0.08, 20), alumFinMat); hub.rotation.z = Math.PI / 2; rotorRef.add(hub);
+        for (let b = 0; b < 9; b++) {
+          const pv = new T.Group(); pv.rotation.x = (b / 9) * Math.PI * 2;
+          const bl = new T.Mesh(new T.BoxGeometry(0.015, 0.26, 0.08), fanBladeMat); bl.position.y = 0.21; bl.rotation.y = 0.45;
+          pv.add(bl); rotorRef.add(pv);
+        }
+        coolingGroup.add(rotorRef);
+      }
+      coolingGroup.position.y = 0.255;
+    }
+
+    root.add(pinsGroup, pcbGroup, interposerGroup, diesGroup, threadsGroup, ihsGroup, coolingGroup);
+    return {
+      root,
+      pinsGroup,
+      pcbGroup,
+      interposerGroup,
+      diesGroup,
+      threadsGroup,
+      ihsGroup,
+      coolingGroup,
+      fanRotor: rotorRef,
+      fanAxis: coolingLevel === 3 ? 'z' : 'x',
+      ihsMats: [ihsTopMat, ihsFlangeMat]
+    };
+  }
+
+  window.CpuDesigner3D = {
+    buildAssembly: buildStandaloneCpuAssembly
+  };
   window.updateCpuDesigner3D = updateCpuDesigner3D;
   window.captureCpuHeroSnapshot = captureCpuHeroSnapshot;
   window.enqueueCpuThumbnail = enqueueCpuThumbnail;

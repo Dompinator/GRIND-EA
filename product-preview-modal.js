@@ -183,8 +183,37 @@
           ai: p.design_data?.ai || '',
           vCache: p.v_cache_type || 'none',
           name: p.product_name || 'CPU',
-          tier: p.cpu_tier || 'F'
+          tier: p.cpu_tier || 'F',
+          companyName: p.product_companies?.company_name || '',
+          logoUrl: p.product_companies?.logo_data_url || ''
         };
+
+    if (typeof window.CpuDesigner3D?.buildAssembly === 'function') {
+      const asm = window.CpuDesigner3D.buildAssembly(THREE, spec, {
+        isSoftwareGl,
+        onLogoReady: () => {
+          if (activeProduct === p && !modalEl?.classList.contains('hidden')) {
+            clearRoot();
+            buildCpuPreview(p);
+          }
+        }
+      });
+      if (asm && asm.root) {
+        rootGroup.add(asm.root);
+        if (asm.ihsMats?.length) cpuLidMats.push(...asm.ihsMats);
+        if (asm.fanRotor) rotors.push({ obj: asm.fanRotor, axis: asm.fanAxis || 'z', speed: 6.5 });
+        explodeParts.push(
+          { obj: asm.pinsGroup, axis: 'y', base: asm.pinsGroup.position.y, delta: -0.52 },
+          { obj: asm.pcbGroup, axis: 'y', base: asm.pcbGroup.position.y, delta: -0.22 },
+          { obj: asm.interposerGroup, axis: 'y', base: asm.interposerGroup.position.y, delta: 0.04 },
+          { obj: asm.diesGroup, axis: 'y', base: asm.diesGroup.position.y, delta: 0.22 },
+          { obj: asm.threadsGroup, axis: 'y', base: asm.threadsGroup.position.y, delta: 0.42 },
+          { obj: asm.ihsGroup, axis: 'y', base: asm.ihsGroup.position.y, delta: 0.72 },
+          { obj: asm.coolingGroup, axis: 'y', base: asm.coolingGroup.position.y, delta: 1.18 }
+        );
+        return;
+      }
+    }
 
     const bodyCol = spec.body === 'titanium' ? 0x9aa4b5 : spec.body === 'carbon' ? 0x1b1e26 : spec.body === 'silicon' ? 0x133355 : 0x4b5260;
     const ihsCol = spec.body === 'carbon' ? 0x262a35 : spec.body === 'silicon' ? 0xc8dff2 : spec.body === 'titanium' ? 0xdde5ef : 0xc0c6d0;
@@ -342,6 +371,36 @@
           finStyle: 'silver', pipeStyle: 'copper', powerType: '12v2x6', ioStyle: 'steel',
           elements: []
         };
+
+    if (typeof window.GpuDesigner3D?.buildAssembly === 'function') {
+      const asm = window.GpuDesigner3D.buildAssembly(THREE, cfg, {
+        isSoftwareGl,
+        onAssetReady: () => {
+          if (activeProduct === p && !modalEl?.classList.contains('hidden')) {
+            clearRoot();
+            buildGpuPreview(p);
+          }
+        }
+      });
+      if (asm && asm.root) {
+        rootGroup.add(asm.root);
+        (asm.fanRotors || []).forEach(fr => {
+          if (fr?.rotor) rotors.push({ obj: fr.rotor, axis: 'y', speed: (fr.speed || 2.5) * 2.2 });
+        });
+        (asm.rainbowRgbMats || []).forEach(rm => {
+          if (rm?.mat) rainbowMats.push({ mat: rm.mat, offset: rm.offset || 0 });
+        });
+        explodeParts.push(
+          { obj: asm.backplateLayer, axis: 'y', base: asm.backplateLayer.position.y, delta: -0.44 },
+          { obj: asm.pcbLayer, axis: 'y', base: asm.pcbLayer.position.y, delta: -0.15 },
+          { obj: asm.heatsinkLayer, axis: 'y', base: asm.heatsinkLayer.position.y, delta: 0.12 },
+          { obj: asm.shroudLayer, axis: 'y', base: asm.shroudLayer.position.y, delta: 0.42 },
+          { obj: asm.fansGroup, axis: 'y', base: asm.fansGroup.position.y, delta: 0.42 },
+          { obj: asm.elementsGroup, axis: 'y', base: asm.elementsGroup.position.y, delta: 0.42 }
+        );
+        return;
+      }
+    }
 
     const lenScale = clamp(Number(cfg.length || 300), 210, 360) / 300;
     const widScale = clamp(Number(cfg.width || 125), 105, 150) / 125;
@@ -572,181 +631,72 @@
     explodeParts.push({ obj: shroudG, axis: 'y', base: 0, delta: 0.36 });
   }
 
-  // ---------- PC 3D Builder (Read-Only Preview with Explode) ----------
+  // ---------- PC 3D Builder (Read-Only Real-Scale Preview with Explode) ----------
   function buildPcPreview(p) {
     const dData = p.design_data || {};
-    const cfg = {
-      caseSize: dData.case_size || dData.case_config?.caseSize || p.body_type || 'small',
-      material: dData.case_material || dData.case_config?.material || 'steel',
-      frontStyle: dData.front_style || dData.case_config?.frontStyle || 'mesh',
-      primaryColor: dData.primary_color || dData.case_config?.primaryColor || '#1a1f2b',
-      accentColor: dData.accent_color || dData.case_config?.accentColor || '#a855f7',
-      rgbEnabled: !!(dData.rgb_enabled ?? dData.case_config?.rgbEnabled),
-      rgbMode: dData.rgb_mode || dData.case_config?.rgbMode || 'solid',
-      rgbColor: dData.rgb_color || dData.case_config?.rgbColor || '#a855f7',
-      fans: Array.isArray(dData.fans) ? dData.fans : (dData.case_config?.fans || []),
-      cpu: dData.components?.cpu || null,
-      gpu: dData.components?.gpu || null
-    };
+    const cfg = typeof window.buildPcConfigFromProduct === 'function'
+      ? window.buildPcConfigFromProduct(p)
+      : {
+          caseSize: dData.case_size || dData.case_config?.caseSize || p.body_type || 'small',
+          material: dData.case_material || dData.case_config?.material || 'steel',
+          frontStyle: dData.front_style || dData.case_config?.frontStyle || 'mesh',
+          primaryColor: dData.primary_color || dData.case_config?.primaryColor || '#1a1f2b',
+          accentColor: dData.accent_color || dData.case_config?.accentColor || '#a855f7',
+          rgbEnabled: !!(dData.rgb_enabled ?? dData.case_config?.rgbEnabled),
+          rgbMode: dData.rgb_mode || dData.case_config?.rgbMode || 'solid',
+          rgbColor: dData.rgb_color || dData.case_config?.rgbColor || '#a855f7',
+          gpuMount: dData.gpu_mount || 'horizontal',
+          openPanel: pcOpenGlass,
+          showAirflow: true,
+          fans: Array.isArray(dData.fans) ? dData.fans : (dData.case_config?.fans || []),
+          cpu: dData.components?.cpu || null,
+          gpu: dData.components?.gpu || null
+        };
+    cfg.openPanel = pcOpenGlass;
+    cfg.showAirflow = true;
 
-    const dims = cfg.caseSize === 'large'
-      ? { w: 1.52, h: 1.56, d: 0.72, wall: 0.04 }
-      : cfg.caseSize === 'medium'
-        ? { w: 1.28, h: 1.32, d: 0.62, wall: 0.036 }
-        : { w: 1.04, h: 1.04, d: 0.52, wall: 0.032 };
-    const { w, h, d, wall } = dims;
-
-    const primCol = new THREE.Color(cfg.primaryColor);
-    const accCol = new THREE.Color(cfg.accentColor);
-    const shellMat = new THREE.MeshStandardMaterial({ color: primCol, metalness: cfg.material === 'aluminum' ? 0.78 : 0.38, roughness: cfg.material === 'aluminum' ? 0.28 : 0.52 });
-    const frameMat = new THREE.MeshStandardMaterial({ color: primCol.clone().multiplyScalar(0.72), metalness: 0.55, roughness: 0.42 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x0f1219, metalness: 0.6, roughness: 0.44 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: accCol, metalness: 0.65, roughness: 0.26 });
-    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xa5b4fc, metalness: 0.05, roughness: 0.08, transparent: true, opacity: 0.24, depthWrite: false });
-
-    const chassisG = new THREE.Group();
-    const frontG = new THREE.Group();
-    const glassG = new THREE.Group();
-    const hwG = new THREE.Group();
-    const fansG = new THREE.Group();
-    const airG = new THREE.Group();
-
-    // Base + Feet + Rear + Spine + PSU shroud
-    addBox(chassisG, w, wall, d, shellMat, 0, -h / 2 + wall / 2, 0);
-    [[-w * 0.4, -d * 0.36], [w * 0.4, -d * 0.36], [-w * 0.4, d * 0.36], [w * 0.4, d * 0.36]].forEach(([fx, fz]) => {
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.058, 0.06, 14), frameMat);
-      foot.position.set(fx, -h / 2 - 0.03, fz);
-      chassisG.add(foot);
-    });
-    addBox(chassisG, wall, h - wall * 2, d, shellMat, -w / 2 + wall / 2, 0, 0);
-    addBox(chassisG, w - wall * 2, h - wall * 2, wall * 0.85, frameMat, 0, 0, -d / 2 + wall * 0.42);
-    const shroudH = h * 0.22, shroudW = w * 0.78;
-    addBox(chassisG, shroudW, 0.022, d - wall * 2, frameMat, -w / 2 + wall + shroudW / 2, -h / 2 + wall + shroudH, 0);
-    addBox(chassisG, 0.022, shroudH, d - wall * 2, frameMat, -w / 2 + wall + shroudW, -h / 2 + wall + shroudH / 2, 0);
-    addBox(chassisG, w * 0.34, shroudH * 0.74, d * 0.66, darkMat, -w * 0.28, -h / 2 + wall + shroudH * 0.44, 0);
-
-    // Top panel (explodes upward)
-    const topG = new THREE.Group();
-    addBox(topG, w, wall, d, shellMat, 0, h / 2 - wall / 2, 0);
-    addBox(topG, w * 0.68, 0.008, d * 0.64, darkMat, -w * 0.06, h / 2 + 0.003, 0);
-    rootGroup.add(topG);
-    explodeParts.push({ obj: topG, axis: 'y', base: 0, delta: 0.42 });
-
-    // Front Panel (explodes +X)
-    const frontX = w / 2 - wall / 2;
-    if (cfg.frontStyle === 'solid') {
-      addBox(frontG, wall, h - wall * 1.4, d - 0.01, shellMat, frontX, 0, 0);
-      addBox(frontG, 0.014, h * 0.7, 0.028, accentMat, frontX + wall * 0.45, 0, d * 0.34);
-    } else {
-      addBox(frontG, wall * 0.75, h, 0.04, frameMat, frontX, 0, -d / 2 + 0.02);
-      addBox(frontG, wall * 0.75, h, 0.04, frameMat, frontX, 0, d / 2 - 0.02);
-      addBox(frontG, wall * 0.75, 0.045, d, frameMat, frontX, h / 2 - 0.022, 0);
-      addBox(frontG, wall * 0.75, 0.045, d, frameMat, frontX, -h / 2 + 0.022, 0);
-      addBox(frontG, 0.014, h - 0.08, d - 0.08, cfg.frontStyle === 'glass' ? glassMat : darkMat, frontX + 0.008, 0, 0);
-    }
-    rootGroup.add(chassisG, frontG);
-    explodeParts.push({ obj: frontG, axis: 'x', base: 0, delta: 0.44 });
-
-    // Tempered Glass Side Door (hinge + explodes +Z)
-    pcGlassDoorObj = glassG;
-    glassG.position.set(-w / 2 + wall, 0, d / 2 - 0.012);
-    glassG.rotation.y = pcOpenGlass ? -0.92 : 0;
-    addBox(glassG, w - wall * 1.1, h - wall * 1.1, 0.014, glassMat, (w - wall) / 2, 0, 0);
-    addBox(glassG, 0.032, h - wall * 1.1, 0.018, frameMat, 0.016, 0, 0);
-    addBox(glassG, 0.028, h - wall * 1.1, 0.018, frameMat, w - wall * 1.25, 0, 0);
-    rootGroup.add(glassG);
-    explodeParts.push({ obj: glassG, axis: 'z', base: d / 2 - 0.012, delta: 0.56 });
-
-    // Motherboard + Installed CPU & GPU (explodes +Z gently to show internals)
-    const moboZ = -d / 2 + wall + 0.032;
-    const moboW = cfg.caseSize === 'small' ? w * 0.56 : w * 0.54;
-    const moboH = cfg.caseSize === 'small' ? h * 0.58 : h * 0.62;
-    const moboX = -w * 0.12, moboY = h * 0.09;
-    addBox(hwG, moboW, moboH, 0.022, darkMat, moboX, moboY, moboZ);
-    const sockX = moboX - moboW * 0.04, sockY = moboY + moboH * 0.18;
-    addBox(hwG, 0.16, 0.16, 0.02, frameMat, sockX, sockY, moboZ + 0.018);
-    if (cfg.cpu) {
-      addBox(hwG, 0.135, 0.135, 0.028, new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.8, roughness: 0.25 }), sockX, sockY, moboZ + 0.036);
-      addBox(hwG, 0.15, 0.15, 0.10, accentMat, sockX, sockY, moboZ + 0.095);
-    }
-    if (cfg.gpu) {
-      const lenMm = clamp(Number(cfg.gpu.design_data?.length || cfg.gpu.length || 280), 210, 360);
-      const thickMm = clamp(Number(cfg.gpu.design_data?.thickness || cfg.gpu.thickness || 50), 38, 76);
-      const gpuLen = Math.min(w * 0.72, 0.36 + ((lenMm - 210) / 150) * (w * 0.24));
-      const gpuThick = 0.065 + ((thickMm - 38) / 38) * 0.055;
-      const gpuDepth = Math.min(d * 0.56, 0.24);
-      const gpuY = moboY - moboH * 0.18;
-      const gpuX = -w / 2 + wall + gpuLen / 2 + 0.025;
-      const gpuZ = moboZ + 0.032 + gpuDepth / 2;
-      const gPrim = new THREE.MeshStandardMaterial({ color: new THREE.Color(cfg.gpu.design_data?.primary_color || cfg.gpu.primaryColor || '#222733'), metalness: 0.45, roughness: 0.36 });
-      const gAcc = new THREE.MeshStandardMaterial({ color: new THREE.Color(cfg.gpu.design_data?.accent_color || cfg.gpu.accentColor || '#a855f7'), metalness: 0.7, roughness: 0.25 });
-      addBox(hwG, gpuLen, gpuThick, gpuDepth, gPrim, gpuX, gpuY, gpuZ);
-      addBox(hwG, gpuLen * 0.72, 0.018, 0.014, gAcc, gpuX, gpuY, gpuZ + gpuDepth / 2 + 0.005);
-    }
-    rootGroup.add(hwG);
-    explodeParts.push({ obj: hwG, axis: 'z', base: 0, delta: 0.28 });
-
-    // Fans + RGB + Airflow
-    if (cfg.rgbEnabled) {
-      const rCol = new THREE.Color(cfg.rgbColor || cfg.accentColor);
-      const rMat = new THREE.MeshStandardMaterial({ color: rCol, emissive: rCol, emissiveIntensity: 2.0 });
-      if (cfg.rgbMode === 'rainbow') rainbowMats.push({ mat: rMat, offset: 0 });
-      addBox(chassisG, 0.016, h * 0.82, 0.02, rMat, w / 2 - 0.008, 0, d / 2 - 0.05);
-      addBox(chassisG, shroudW * 0.9, 0.016, 0.016, rMat, -w / 2 + wall + shroudW / 2, -h / 2 + wall + shroudH + 0.012, d * 0.36);
-    }
-
-    (cfg.fans || []).forEach((fan, idx) => {
-      const fg = new THREE.Group();
-      const radius = fan.fanType === 'pc_smart_fans' ? 0.145 : fan.fanType === 'pc_medium_fans' ? 0.125 : 0.105;
-      const rotor = new THREE.Group();
-      const bladeMat = new THREE.MeshStandardMaterial({ color: fan.bladeColor === 'white' ? 0xeef2f6 : 0x262c38, metalness: 0.35, roughness: 0.4 });
-      for (let b = 0; b < 7; b++) {
-        const bp = new THREE.Group();
-        bp.rotation.z = (b / 7) * Math.PI * 2;
-        const bm = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.7, radius * 0.22, 0.008), bladeMat);
-        bm.position.x = radius * 0.52;
-        bm.rotation.x = 0.45;
-        bp.add(bm);
-        rotor.add(bp);
+    if (typeof window.PcDesigner3D?.buildAssembly === 'function') {
+      const asm = window.PcDesigner3D.buildAssembly(THREE, cfg, {
+        isSoftwareGl,
+        onAssetReady: () => {
+          if (activeProduct === p && !modalEl?.classList.contains('hidden')) {
+            clearRoot();
+            buildPcPreview(p);
+          }
+        }
+      });
+      if (asm && asm.root) {
+        rootGroup.add(asm.root);
+        pcGlassDoorObj = asm.glassDoorGroup;
+        pcAirflowObj = asm.airflowGroup;
+        pcAirflowObj.visible = pcShowAirflow;
+        const s = asm.dims?.camScale || 1;
+        explodeParts.push(
+          { obj: asm.topPanelGroup, axis: 'y', base: asm.topPanelGroup.position.y, delta: 0.95 * s },
+          { obj: asm.frontGroup, axis: 'x', base: asm.frontGroup.position.x, delta: 1.05 * s },
+          { obj: asm.glassDoorGroup, axis: 'z', base: asm.glassDoorGroup.position.z, delta: 1.35 * s },
+          { obj: asm.motherboardGroup, axis: 'z', base: asm.motherboardGroup.position.z, delta: 0.42 * s },
+          { obj: asm.cpuGroup, axis: 'z', base: asm.cpuGroup.position.z, delta: 0.85 * s },
+          { obj: asm.gpuGroup, axis: 'z', base: asm.gpuGroup.position.z, delta: 1.12 * s },
+          { obj: asm.cablesGroup, axis: 'z', base: asm.cablesGroup.position.z, delta: 0.52 * s }
+        );
+        (asm.fanRotors || []).forEach(fr => {
+          if (fr?.rotor) rotors.push({ obj: fr.rotor, axis: 'z', speed: -(fr.speed || 7.0) });
+        });
+        (asm.cpuFanSpinners || []).forEach(fr => {
+          if (fr?.rotor) rotors.push({ obj: fr.rotor, axis: fr.axis || 'y', speed: -(fr.speed || 5.0) });
+        });
+        (asm.rgbMats || []).forEach(mat => {
+          if (mat?.userData?.rgbMode === 'rainbow') rainbowMats.push({ mat, offset: mat.userData.offset || 0 });
+        });
+        (asm.airflowArrows || []).forEach(a => airflowArrows.push(a));
+        return;
       }
-      fg.add(rotor);
-      rotors.push({ obj: rotor, axis: 'z', speed: -7.0 - idx * 0.4 });
+    }
 
-      const posT = clamp(Number(fan.position ?? 0.5), 0.12, 0.88);
-      const mount = fan.mount || 'front';
-      if (mount === 'front') {
-        fg.position.set(w / 2 - wall - 0.04, -h * 0.34 + posT * h * 0.68, 0);
-        fg.rotation.y = Math.PI / 2;
-      } else if (mount === 'rear') {
-        fg.position.set(-w / 2 + wall + 0.04, posT * h * 0.34, 0);
-        fg.rotation.y = -Math.PI / 2;
-      } else if (mount === 'top') {
-        fg.position.set(-w * 0.3 + posT * w * 0.6, h / 2 - wall - 0.04, 0);
-        fg.rotation.x = Math.PI / 2;
-      } else {
-        fg.position.set(posT * w * 0.36, -h / 2 + wall + shroudH + 0.036, 0);
-        fg.rotation.x = -Math.PI / 2;
-      }
-      fansG.add(fg);
-
-      const isIntake = mount === 'front' || mount === 'bottom';
-      const arrowMat = new THREE.MeshStandardMaterial({ color: isIntake ? 0x38bdf8 : 0xf97316, emissive: isIntake ? 0x38bdf8 : 0xf97316, emissiveIntensity: 1.4 });
-      const stream = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 10), arrowMat);
-      shaft.rotation.z = Math.PI / 2;
-      const head = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 12), arrowMat);
-      head.rotation.z = -Math.PI / 2;
-      head.position.x = 0.095;
-      stream.add(shaft, head);
-      stream.position.copy(fg.position);
-      if (mount === 'front' || mount === 'rear') stream.rotation.y = Math.PI;
-      else stream.rotation.z = Math.PI / 2;
-      airflowArrows.push({ mesh: stream, basePos: stream.position.clone(), mount });
-      airG.add(stream);
-    });
-    airG.visible = pcShowAirflow;
-    pcAirflowObj = airG;
-    rootGroup.add(fansG, airG);
+    // Minimal fallback if PcDesigner3D isn't loaded
+    const box = new THREE.Mesh(new THREE.BoxGeometry(3.7, 3.45, 2.08), new THREE.MeshStandardMaterial({ color: 0x1a1f2b }));
+    rootGroup.add(box);
   }
 
   function applyExplodeAndStates(dt) {
@@ -777,12 +727,15 @@
       else if (preset === 'back') Object.assign(camTargetPos, { x: 0.25, y: -2.35, z: 2.85 });
       else Object.assign(camTargetPos, { x: 2.9, y: 2.45, z: -3.15 });
     } else if (activeKind === 'pc') {
-      const s = activeProduct?.design_data?.case_size === 'large' ? 1.24 : activeProduct?.design_data?.case_size === 'medium' ? 1.1 : 0.96;
-      if (preset === 'interior') Object.assign(camTargetPos, { x: 0.15 * s, y: 0.25 * s, z: 2.55 * s });
-      else if (preset === 'front') Object.assign(camTargetPos, { x: 2.45 * s, y: 0.35 * s, z: 0.75 * s });
-      else if (preset === 'rear') Object.assign(camTargetPos, { x: -2.45 * s, y: 0.35 * s, z: 0.65 * s });
-      else if (preset === 'top') Object.assign(camTargetPos, { x: 0.1 * s, y: 2.65 * s, z: 0.95 * s });
-      else Object.assign(camTargetPos, { x: 2.25 * s, y: 1.4 * s, z: 2.4 * s });
+      const szKey = activeProduct?.design_data?.case_size || activeProduct?.design_data?.case_config?.caseSize || activeProduct?.body_type || 'small';
+      const s = szKey === 'large' ? 1.44 : szKey === 'medium' ? 1.24 : 1.0;
+      if (preset === 'interior') {
+        Object.assign(camTargetPos, { x: 0.45 * s, y: 0.45 * s, z: 6.45 * s });
+        Object.assign(camTargetLook, { x: -0.15 * s, y: 0.1 * s, z: 0 });
+      } else if (preset === 'front') Object.assign(camTargetPos, { x: 6.4 * s, y: 0.6 * s, z: 1.85 * s });
+      else if (preset === 'rear') Object.assign(camTargetPos, { x: -6.4 * s, y: 0.6 * s, z: 1.75 * s });
+      else if (preset === 'top') Object.assign(camTargetPos, { x: 0.25 * s, y: 6.8 * s, z: 2.35 * s });
+      else Object.assign(camTargetPos, { x: 4.95 * s, y: 2.95 * s, z: 5.55 * s });
     } else {
       if (preset === 'top') Object.assign(camTargetPos, { x: 0, y: 3.7, z: 0.35 });
       else if (preset === 'side') Object.assign(camTargetPos, { x: 0.05, y: 0.45, z: 3.45 });
@@ -920,7 +873,7 @@
         rm.mat.emissive.setHSL(hue, 0.95, 0.54);
       }
       airflowArrows.forEach((a, idx) => {
-        const pulse = Math.sin(elapsedSec * 4.5 + idx * 0.9) * 0.032;
+        const pulse = Math.sin(elapsedSec * 4.5 + idx * 0.9) * 0.07;
         a.mesh.position.copy(a.basePos);
         if (a.mount === 'front' || a.mount === 'rear') a.mesh.position.x -= pulse;
         else a.mesh.position.y += pulse;
@@ -1035,18 +988,18 @@
 
     scene.add(new THREE.HemisphereLight(0xe4ecff, 0x181426, 1.3));
     const key = new THREE.DirectionalLight(0xfff5e8, 2.3);
-    key.position.set(3.8, 5.5, 4.0);
+    key.position.set(activeKind === 'pc' ? 7.5 : 3.8, activeKind === 'pc' ? 10.5 : 5.5, activeKind === 'pc' ? 9.5 : 4.0);
     scene.add(key);
     const rim = new THREE.DirectionalLight(0xa78bfa, 1.4);
-    rim.position.set(-4.0, 2.5, -3.5);
+    rim.position.set(activeKind === 'pc' ? -8.5 : -4.0, activeKind === 'pc' ? 5.2 : 2.5, activeKind === 'pc' ? -6.5 : -3.5);
     scene.add(rim);
 
-    camera = new THREE.PerspectiveCamera(36, 16 / 10, 0.1, 60);
+    camera = new THREE.PerspectiveCamera(38, 16 / 10, 0.1, 80);
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 1.3;
-    controls.maxDistance = 8.5;
+    controls.minDistance = activeKind === 'pc' ? 2.4 : 1.3;
+    controls.maxDistance = activeKind === 'pc' ? 18.0 : 8.5;
     controls.addEventListener('start', () => { camAnimActive = false; });
 
     rootGroup = new THREE.Group();

@@ -2513,5 +2513,554 @@
     sizeHudEl = null;
   }
 
-  window.GpuDesigner3D = { DEFAULT_CUSTOM_POINTS, mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, captureHeroSnapshot, enqueueThumbnail, resize, dispose };
+  // ---------- Standalone Reusable 3D GPU Assembly Builder ----------
+  const standaloneGpuLogoCache = new Map();
+
+  function buildStandaloneGpuAssembly(T, rawCfg, opts = {}) {
+    if (!T) return null;
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      ...(rawCfg && typeof rawCfg === 'object' ? rawCfg : {}),
+      elements: Array.isArray(rawCfg?.elements) ? rawCfg.elements.map(e => ({ ...e })) : DEFAULT_CONFIG.elements.map(e => ({ ...e }))
+    };
+    const isSoft = !!opts.isSoftwareGl;
+    const invertSideDecals = !!opts.invertSideDecals;
+
+    const safeLength = clamp(Math.round(Number(cfg.length) || 300), GPU_MIN_LEN, GPU_MAX_LEN);
+    const safeWidth = clampWidthForLength(cfg.width, safeLength);
+    const safeThickMm = clamp(Math.round(Number(cfg.thickness) || 52), 38, 76);
+
+    const lenScale = safeLength / 300;
+    const widScale = safeWidth / 125;
+    const thickScale = clamp(safeThickMm / 52, 0.72, 1.48);
+
+    const w = 2.85 * lenScale;
+    const d = 1.18 * widScale;
+    const h = 0.25 * thickScale;
+
+    const bodyType = cfg.body || 'plastic';
+    const customShapeCfg = bodyType === 'custom'
+      ? {
+          points: Array.isArray(cfg.customShape?.points) && cfg.customShape.points.length >= 3
+            ? cfg.customShape.points
+            : DEFAULT_CUSTOM_POINTS,
+          extrudeDepth: clamp(Number(cfg.customShape?.extrudeDepth ?? 1.0), 0.55, 1.75),
+          bevel: clamp(Number(cfg.customShape?.bevel ?? 0.018), 0.002, 0.04),
+          material: cfg.customShape?.material || 'plastic'
+        }
+      : null;
+    const renderMaterialBody = bodyType === 'custom'
+      ? (customShapeCfg.material === 'metallic' || customShapeCfg.material === 'carbon' ? customShapeCfg.material : 'plastic')
+      : bodyType;
+    const finishType = cfg.finish || 'satin';
+    const shapeType = cfg.shroud || 'rounded';
+    const primaryColor = cfg.primaryColor || '#222733';
+    const accentColor = cfg.accentColor || '#a855f7';
+    const backplateStyle = cfg.backplate === false ? 'off' : (cfg.backplateStyle || 'flow_through');
+    const finStyle = cfg.finStyle || 'silver';
+    const pipeStyle = cfg.pipeStyle || 'copper';
+    const powerType = cfg.powerType || '12v2x6';
+    const ioStyle = cfg.ioStyle || 'steel';
+
+    const fanElements = (cfg.elements || []).filter(e => e.kind === 'fan').slice(0, 6);
+    const fanLayouts = computeSafeFanLayouts(fanElements, w, d, shapeType);
+    const outerShroudH = h * 0.62 * (customShapeCfg ? customShapeCfg.extrudeDepth : 1.0);
+    const mainShroudY = h * 0.26 + (customShapeCfg ? (outerShroudH - h * 0.62) * 0.35 : 0);
+    const deckH = 0.034;
+    const deckY = mainShroudY + outerShroudH * 0.44;
+    const boreCenterY = mainShroudY + 0.02;
+    const boreDepth = outerShroudH + 0.02;
+
+    // Local clean Three builders bound to caller's T
+    const mkBox = (parent, bw, bh, bd, material, x = 0, y = 0, z = 0) => {
+      const mesh = new T.Mesh(new T.BoxGeometry(bw, bh, bd), material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = !isSoft;
+      mesh.receiveShadow = !isSoft;
+      parent.add(mesh);
+      return mesh;
+    };
+
+    const mkShroudGeo = (sw, sh, sd, holes, isDeck, flowCutout) => {
+      const prevThree = THREE;
+      THREE = T;
+      const g = createShroudGeometryWithHoles(sw, sh, sd, shapeType, holes, false, isDeck, flowCutout, customShapeCfg);
+      THREE = prevThree;
+      return g;
+    };
+
+    // Build clean procedural textures under T
+    const prevThree = THREE;
+    THREE = T;
+    const mkBodyMat = (bType, pHex, darken = 1.0) => {
+      const col = new T.Color(pHex || '#222733');
+      if (darken !== 1.0) col.multiplyScalar(darken);
+      const isMatte = finishType === 'matte';
+      const isGloss = finishType === 'gloss';
+      if (bType === 'metallic') {
+        const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#edf1f7'; ctx.fillRect(0, 0, 512, 256);
+        for (let y = 0; y < 256; y++) { ctx.fillStyle = `rgba(15,23,42,${(y % 3) * 0.02})`; ctx.fillRect(0, y, 512, 1); }
+        const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace;
+        return new T.MeshPhysicalMaterial({ color: col, map: tex, bumpMap: tex, bumpScale: 0.004, metalness: isMatte ? 0.72 : 0.88, roughness: isMatte ? 0.40 : isGloss ? 0.14 : 0.22, clearcoat: isMatte ? 0.08 : isGloss ? 0.78 : 0.30, anisotropy: 0.7 });
+      }
+      if (bType === 'carbon') {
+        const sz = 128; const cc = document.createElement('canvas'); cc.width = cc.height = sz;
+        const cx = cc.getContext('2d'); cx.fillStyle = '#8b93a3'; cx.fillRect(0, 0, sz, sz);
+        for (let y = 0; y < sz; y += 16) for (let x = 0; x < sz; x += 16) {
+          const ev = (((x + ((y / 16) % 2) * 8)) % 32) === 0;
+          cx.fillStyle = ev ? '#c8d0de' : '#4a5160'; cx.fillRect(x, y, 14, 7);
+          cx.fillStyle = ev ? '#aeb6c5' : '#586070'; cx.fillRect(x + 2, y + 8, 12, 7);
+        }
+        const tex = new T.CanvasTexture(cc); tex.colorSpace = T.SRGBColorSpace; tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.repeat.set(12, 5);
+        const lum = col.getHSL({ h: 0, s: 0, l: 0 }).l;
+        const tint = lum < 0.14 ? col.clone().lerp(new T.Color(0x282f3e), 0.35) : col;
+        return new T.MeshPhysicalMaterial({ color: tint, map: tex, bumpMap: tex, bumpScale: 0.006, metalness: isGloss ? 0.28 : 0.20, roughness: isMatte ? 0.58 : isGloss ? 0.26 : 0.44, clearcoat: isMatte ? 0.06 : isGloss ? 0.68 : 0.26 });
+      }
+      return new T.MeshPhysicalMaterial({ color: col, metalness: isGloss ? 0.20 : 0.14, roughness: isMatte ? 0.62 : isGloss ? 0.18 : 0.44, clearcoat: isMatte ? 0.04 : isGloss ? 0.72 : 0.18 });
+    };
+
+    const pcbCanvas = document.createElement('canvas'); pcbCanvas.width = 512; pcbCanvas.height = 256;
+    const pCtx = pcbCanvas.getContext('2d'); pCtx.fillStyle = '#071510'; pCtx.fillRect(0, 0, 512, 256);
+    pCtx.strokeStyle = 'rgba(56,178,128,0.34)'; pCtx.lineWidth = 1.4;
+    for (let i = 0; i < 36; i++) { const yy = 12 + (i * 232) / 36; pCtx.beginPath(); pCtx.moveTo(10, yy); pCtx.lineTo(498, yy + (i % 2 ? 6 : -6)); pCtx.stroke(); }
+    pCtx.strokeStyle = 'rgba(218,176,86,0.55)'; pCtx.lineWidth = 2.5; pCtx.strokeRect(8, 8, 496, 240);
+    const pcbTex = new T.CanvasTexture(pcbCanvas); pcbTex.colorSpace = T.SRGBColorSpace;
+
+    const pcieC = document.createElement('canvas'); pcieC.width = 256; pcieC.height = 32;
+    const pfCtx = pcieC.getContext('2d'); pfCtx.fillStyle = '#12261e'; pfCtx.fillRect(0, 0, 256, 32);
+    pfCtx.fillStyle = '#eab308';
+    for (let x = 4; x < 252; x += 6) { if (x > 48 && x < 58) continue; pfCtx.fillRect(x, 3, 3.5, 26); }
+    const pcieTex = new T.CanvasTexture(pcieC); pcieTex.colorSpace = T.SRGBColorSpace;
+    THREE = prevThree;
+
+    const accentMat = new T.MeshPhysicalMaterial({ color: new T.Color(accentColor), metalness: renderMaterialBody === 'metallic' ? 0.78 : 0.44, roughness: 0.22, clearcoat: 0.45 });
+    const trimMetal = new T.MeshPhysicalMaterial({ color: 0xc2cbd6, metalness: 0.92, roughness: 0.2 });
+    const darkMat = new T.MeshPhysicalMaterial({ color: 0x11151e, metalness: 0.55, roughness: 0.36 });
+    const goldMat = new T.MeshStandardMaterial({ color: 0xe2bc5e, metalness: 0.94, roughness: 0.18 });
+    const copperMat = new T.MeshPhysicalMaterial({ color: 0xd47a45, metalness: 0.95, roughness: 0.18 });
+    const pipeColor = pipeStyle === 'nickel' ? 0xcfd7e4 : pipeStyle === 'black' ? 0x1d222e : 0xd47a45;
+    const pipeMat = new T.MeshPhysicalMaterial({ color: pipeColor, metalness: pipeStyle === 'black' ? 0.75 : 0.95, roughness: pipeStyle === 'black' ? 0.32 : 0.17 });
+    const finColor = finStyle === 'black' ? 0x1e2430 : finStyle === 'copper' ? 0xd47a45 : 0xc8d2df;
+    const finMat = new T.MeshPhysicalMaterial({ color: finColor, metalness: 0.90, roughness: finStyle === 'black' ? 0.34 : 0.24 });
+    const ioBracketMat = ioStyle === 'black' ? new T.MeshPhysicalMaterial({ color: 0x1a1e28, metalness: 0.85, roughness: 0.28 }) : trimMetal;
+    const pcbMat = new T.MeshPhysicalMaterial({ map: pcbTex, metalness: 0.2, roughness: 0.48, clearcoat: 0.14 });
+    const dum = new T.Object3D();
+
+    const root = new T.Group();
+    const bpLayer = new T.Group();
+    const pcbL = new T.Group();
+    const hsLayer = new T.Group();
+    const shLayer = new T.Group();
+    const fnGroup = new T.Group();
+    const elGroup = new T.Group();
+
+    // 1. Backplate
+    let backBottomY = -h * 0.42 - 0.02;
+    if (backplateStyle !== 'off') {
+      const bpMat = mkBodyMat(renderMaterialBody, primaryColor, 0.92);
+      const flowCut = backplateStyle === 'flow_through' ? { cx: w * 0.26, rw: w * 0.27, rd: d * 0.62 } : null;
+      const bpGeo = mkShroudGeo(w * 0.96, 0.032, d * 0.95, [], false, flowCut);
+      const bp = new T.Mesh(bpGeo, bpMat);
+      bp.position.y = -h * 0.62 - 0.058;
+      bp.castShadow = !isSoft; bp.receiveShadow = !isSoft;
+      bpLayer.add(bp);
+      bpGeo.computeBoundingBox();
+      backBottomY = bp.position.y + bpGeo.boundingBox.min.y;
+      const bpU = bp.position.y - 0.017;
+      if (backplateStyle === 'louvered') {
+        for (let i = 0; i < 11; i++) {
+          const rib = mkBox(bpLayer, 0.022, 0.01, d * 0.56, darkMat, -w * 0.02 + i * w * 0.04, bpU, 0);
+          rib.rotation.y = 0.32;
+        }
+      } else if (backplateStyle === 'solid') {
+        mkBox(bpLayer, w * 0.72, 0.01, 0.018, trimMetal, 0, bpU, 0);
+      } else {
+        mkBox(bpLayer, w * 0.29, 0.01, 0.018, accentMat, w * 0.26, bpU, d * 0.31);
+        mkBox(bpLayer, w * 0.29, 0.01, 0.018, accentMat, w * 0.26, bpU, -d * 0.31);
+      }
+      mkBox(bpLayer, w * 0.58, 0.009, 0.016, accentMat, -w * 0.10, bpU, -d * 0.37);
+      const xb1 = mkBox(bpLayer, 0.32, 0.012, 0.036, trimMetal, -0.05, bpU - 0.003, 0); xb1.rotation.y = Math.PI / 4;
+      const xb2 = mkBox(bpLayer, 0.32, 0.012, 0.036, trimMetal, -0.05, bpU - 0.003, 0); xb2.rotation.y = -Math.PI / 4;
+    }
+
+    // 2. PCB + Die + VRAM + PCIe + Power Connectors + I/O Bracket
+    mkBox(pcbL, w * 0.96, 0.032, d * 0.92, pcbMat, 0, -h * 0.42, 0);
+    const dieX = -0.05, dieY = -h * 0.42 + 0.022;
+    mkBox(pcbL, 0.42, 0.016, 0.42, new T.MeshStandardMaterial({ color: 0x16322b, metalness: 0.3, roughness: 0.45 }), dieX, dieY, 0);
+    mkBox(pcbL, 0.21, 0.018, 0.21, new T.MeshPhysicalMaterial({ color: 0x1e4d73, metalness: 0.65, roughness: 0.12, iridescence: 0.9 }), dieX, dieY + 0.012, 0);
+    const vramMat = new T.MeshPhysicalMaterial({ color: 0x191d26, metalness: 0.35, roughness: 0.34 });
+    const vramCoords = [[-0.31, -0.14], [-0.31, 0], [-0.31, 0.14], [-0.14, -0.29], [0, -0.29], [0.14, -0.29], [0.21, -0.14], [0.21, 0.14], [-0.14, 0.29], [0.04, 0.29]];
+    const vramMesh = new T.InstancedMesh(new T.BoxGeometry(0.085, 0.016, 0.068), vramMat, vramCoords.length);
+    vramCoords.forEach(([vx, vz], idx) => {
+      dum.position.set(dieX + vx, dieY + 0.004, vz); dum.rotation.set(0, Math.abs(vx) > 0.2 ? Math.PI / 2 : 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+      vramMesh.setMatrixAt(idx, dum.matrix);
+    });
+    pcbL.add(vramMesh);
+
+    const pcieMat = new T.MeshStandardMaterial({ map: pcieTex, metalness: 0.72, roughness: 0.25 });
+    mkBox(pcbL, w * 0.44, 0.022, 0.088, pcieMat, -w * 0.13, -h * 0.42, d * 0.485);
+
+    const pwrZ = -d * 0.462;
+    const pwrCount = powerType === '3x8pin' ? 3 : powerType === '2x8pin' ? 2 : 1;
+    const sockW = powerType === '12v2x6' ? 0.20 : 0.145;
+    const sockGap = 0.165;
+    const pwrCenterX = powerType === '3x8pin' ? w * 0.15 : w * 0.21;
+    const cavityMat = new T.MeshStandardMaterial({ color: 0x07090e, roughness: 0.7 });
+    const cols = powerType === '12v2x6' ? 6 : 4;
+    const pinM = new T.InstancedMesh(new T.BoxGeometry(0.012, 0.012, 0.024), goldMat, pwrCount * cols * 2);
+    let pi = 0;
+    for (let s = 0; s < pwrCount; s++) {
+      const sx = pwrCenterX + (s - (pwrCount - 1) / 2) * sockGap;
+      mkBox(pcbL, sockW, 0.068, 0.085, darkMat, sx, -h * 0.42 + 0.032, pwrZ);
+      mkBox(pcbL, sockW * 0.80, 0.044, 0.02, cavityMat, sx, -h * 0.42 + 0.034, pwrZ - 0.036);
+      const stepX = (sockW * 0.65) / Math.max(1, cols - 1);
+      for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
+        dum.position.set(sx - (sockW * 0.325) + c * stepX, -h * 0.42 + 0.026 + r * 0.018, pwrZ - 0.04);
+        dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+        pinM.setMatrixAt(pi++, dum.matrix);
+      }
+    }
+    pcbL.add(pinM);
+
+    const ioX = -w * 0.5 - 0.018;
+    mkBox(pcbL, 0.026, h * 1.12, d * 0.94, ioBracketMat, ioX, 0, 0);
+    mkBox(pcbL, 0.065, 0.028, d * 0.94, ioBracketMat, ioX + 0.01, -h * 0.55, 0);
+    for (let v = 0; v < 5; v++) mkBox(pcbL, 0.032, 0.016, d * 0.12, darkMat, ioX - 0.002, h * 0.28, -d * 0.34 + v * d * 0.17);
+    for (let i = 0; i < 4; i++) {
+      const pz = -d * 0.3 + i * d * 0.2;
+      mkBox(pcbL, 0.038, 0.042, 0.105, ioBracketMat, ioX - 0.012, -h * 0.1, pz);
+      mkBox(pcbL, 0.042, 0.022, 0.082, darkMat, ioX - 0.015, -h * 0.1, pz);
+    }
+
+    // 3. Heatsink Fins + Vapor Chamber + Heatpipes
+    const finCount = clamp(Math.round(w * 28), 38, 86);
+    const finMesh = new T.InstancedMesh(new T.BoxGeometry(0.006, h * 0.58, d * 0.85), finMat, finCount);
+    for (let i = 0; i < finCount; i++) {
+      dum.position.set(-w * 0.455 + (i / (finCount - 1)) * w * 0.91, -h * 0.05, 0);
+      dum.rotation.set(0, 0, 0); dum.scale.set(1, 1, 1); dum.updateMatrix();
+      finMesh.setMatrixAt(i, dum.matrix);
+    }
+    hsLayer.add(finMesh);
+    mkBox(hsLayer, 0.44, 0.034, 0.42, copperMat, -0.05, -h * 0.32, 0);
+    for (let i = 0; i < 5; i++) {
+      const zOff = (-0.34 + i * 0.17) * d;
+      const curve = new T.CatmullRomCurve3([
+        new T.Vector3(-w * 0.43, -h * 0.02, zOff * 0.84),
+        new T.Vector3(-w * 0.14, -h * 0.2, zOff * 0.44),
+        new T.Vector3(w * 0.14, -h * 0.12, zOff * 0.88),
+        new T.Vector3(w * 0.44, -h * 0.01, zOff * 0.82)
+      ]);
+      hsLayer.add(new T.Mesh(new T.TubeGeometry(curve, 18, 0.019, 10, false), pipeMat));
+    }
+
+    // 4. Shroud + Deck
+    const shroudMat = mkBodyMat(renderMaterialBody, primaryColor, 1.0);
+    const primLum = new T.Color(primaryColor).getHSL({ h: 0, s: 0, l: 0 }).l;
+    const deckMat = mkBodyMat(renderMaterialBody, primaryColor, primLum > 0.45 ? 0.78 : 0.76);
+    const mainShroud = new T.Mesh(mkShroudGeo(w, outerShroudH, d, fanLayouts, false, null), shroudMat);
+    mainShroud.position.y = mainShroudY; mainShroud.castShadow = !isSoft; mainShroud.receiveShadow = !isSoft;
+    shLayer.add(mainShroud);
+    const deckMesh = new T.Mesh(mkShroudGeo(w * DECK_W_RATIO, deckH, d * DECK_D_RATIO, fanLayouts, true, null), deckMat);
+    deckMesh.position.y = deckY;
+    shLayer.add(deckMesh);
+    mkBox(shLayer, w * 0.72, 0.014, 0.014, accentMat, 0, deckY + 0.012, d * 0.462);
+    mkBox(shLayer, w * 0.72, 0.014, 0.014, accentMat, 0, deckY + 0.012, -d * 0.462);
+    if (shapeType === 'founders') {
+      const railY = deckY + deckH * 0.5 + 0.008;
+      mkBox(shLayer, w * 0.88, 0.012, 0.026, trimMetal, 0, railY, d * 0.415);
+      mkBox(shLayer, w * 0.88, 0.012, 0.026, trimMetal, 0, railY, -d * 0.415);
+      mkBox(shLayer, 0.028, 0.012, d * 0.84, trimMetal, w * 0.44, railY, 0);
+      mkBox(shLayer, 0.028, 0.012, d * 0.84, trimMetal, -w * 0.44, railY, 0);
+    }
+
+    // 5. Recessed Fans
+    const rotorList = [];
+    const rgbList = [];
+    const prevBladePrev = THREE;
+    THREE = T;
+    const unitStdBlade = createBladeGeoFor(T, false);
+    const unitCurvedBlade = createBladeGeoFor(T, true);
+    THREE = prevBladePrev;
+
+    fanLayouts.forEach(fl => {
+      const fg = new T.Group();
+      fg.position.set(fl.fx, boreCenterY, 0);
+      const r = fl.r;
+      const isSm = fl.fanType === 'gpu_small_fans';
+      const isMd = fl.fanType === 'gpu_medium_fans';
+      const isSmt = fl.fanType === 'gpu_smart_fans';
+      const rgbHalo = !!fl.rgbRing;
+
+      const ringMat = new T.MeshPhysicalMaterial({
+        color: (isSmt || rgbHalo) ? accentMat.color : isMd ? 0xbec7d5 : isSm ? 0x8691a2 : 0x454d5e,
+        metalness: (isSmt || isMd) ? 0.9 : 0.48,
+        roughness: (isSmt || isMd) ? 0.2 : 0.36,
+        emissive: (isSmt || rgbHalo) ? accentMat.color : new T.Color(0x000000),
+        emissiveIntensity: rgbHalo ? 1.15 : (isSmt ? 0.28 : 0)
+      });
+      const cowlPts = [
+        new T.Vector2(r * 0.985, boreDepth * 0.42),
+        new T.Vector2(r * 0.995, boreDepth * 0.515),
+        new T.Vector2(r * 1.032, boreDepth * 0.518),
+        new T.Vector2(r * 1.045, boreDepth * 0.49),
+        new T.Vector2(r * 1.028, boreDepth * 0.44)
+      ];
+      fg.add(new T.Mesh(new T.LatheGeometry(cowlPts, 32), ringMat));
+
+      const sleeveMat = new T.MeshStandardMaterial({ color: new T.Color(primaryColor).multiplyScalar(0.45), metalness: 0.45, roughness: 0.4, side: T.DoubleSide });
+      fg.add(new T.Mesh(new T.CylinderGeometry(r * 1.025, r * 1.025, boreDepth * 1.01, 32, 1, true), sleeveMat));
+
+      const rotor = new T.Group();
+      rotor.position.y = boreDepth * 0.14;
+      fg.add(rotor);
+
+      const bladeCount = isSmt ? 13 : isMd ? 11 : isSm ? 9 : 7;
+      const bladePitch = isSmt ? 0.46 : isMd ? 0.42 : 0.36;
+      const bladeHex = fl.bladeColor === 'white' ? 0xe2e8f0 : fl.bladeColor === 'silver' ? 0x9aa4b5 : fl.bladeColor === 'graphite' ? 0x3b4456 : fl.bladeColor === 'accent' ? accentMat.color : (isSmt ? 0x262d3d : isMd ? 0x1e2432 : 0x141720);
+      const bladeMat = new T.MeshPhysicalMaterial({ color: bladeHex, metalness: fl.bladeColor === 'silver' ? 0.82 : isSmt ? 0.48 : 0.26, roughness: 0.30, clearcoat: 0.55 });
+      const bGeo = (isMd || isSmt) ? unitCurvedBlade : unitStdBlade;
+      for (let i = 0; i < bladeCount; i++) {
+        const pv = new T.Group(); pv.rotation.y = (i / bladeCount) * Math.PI * 2;
+        const bl = new T.Mesh(bGeo, bladeMat);
+        bl.scale.set(r, 1, r); bl.position.set(r * 0.23, 0, 0); bl.rotation.x = bladePitch;
+        if (isMd || isSmt) bl.rotation.z = 0.08;
+        pv.add(bl); rotor.add(pv);
+      }
+      if (isSmt || isMd) rotor.add(new T.Mesh(new T.CylinderGeometry(r * 0.945, r * 0.945, 0.018, 28, 1, true), bladeMat));
+
+      const hubCol = fl.hubStyle === 'chrome' ? 0xd8e0eb : fl.hubStyle === 'gold' ? 0xe2bc5e : fl.hubStyle === 'dark' ? 0x1c212c : fl.hubStyle === 'accent' ? accentMat.color : ((isSmt || isMd) ? 0xcfd7e3 : 0x2f3646);
+      const hubMat = new T.MeshPhysicalMaterial({ color: hubCol, metalness: (fl.hubStyle === 'chrome' || fl.hubStyle === 'gold') ? 0.92 : 0.55, roughness: 0.22 });
+      rotor.add(new T.Mesh(new T.LatheGeometry([
+        new T.Vector2(0, 0.022), new T.Vector2(r * 0.18, 0.022), new T.Vector2(r * 0.24, 0.015), new T.Vector2(r * 0.255, -0.018), new T.Vector2(0, -0.018)
+      ], 22), hubMat));
+      const cRing = new T.Mesh(new T.RingGeometry(r * 0.125, r * 0.165, 22), ringMat);
+      cRing.rotation.x = -Math.PI / 2; cRing.position.y = 0.0235;
+      rotor.add(cRing);
+
+      fnGroup.add(fg);
+      rotorList.push({ rotor, speed: isSmt ? 3.4 : isMd ? 2.6 : isSm ? 2.9 : 2.1 });
+    });
+
+    // 6. Placed Decals, Logos, Accent Bars, Vent Grilles & RGB Strips
+    const mainBevel = (shapeType === 'compact' || shapeType === 'stealth') ? 0.011 : 0.018;
+    const deckBevel = (shapeType === 'compact' || shapeType === 'stealth') ? 0.008 : 0.011;
+    const bounds = {
+      w, d, outerShroudH,
+      shroudMidY: mainShroudY,
+      frontZ: d * 0.5 + mainBevel,
+      backZ: -d * 0.5 - mainBevel,
+      rightX: w * 0.5 + mainBevel,
+      leftX: -w * 0.5 - 0.045,
+      deckTopY: deckY + deckH * 0.5 + deckBevel,
+      backBottomY
+    };
+
+    const mkDecalTextTex = (text, colorHex) => {
+      const clean = String(text || 'GPU').trim().slice(0, 24) || 'GPU';
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+      const ctx = c.getContext('2d'); ctx.clearRect(0, 0, 512, 128);
+      ctx.font = '900 58px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(8,10,18,0.85)'; ctx.lineWidth = 8;
+      ctx.strokeText(clean, 256, 66, 476);
+      ctx.fillStyle = colorHex || '#ffffff'; ctx.fillText(clean, 256, 66, 476);
+      const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
+      return t;
+    };
+
+    const mkDecalLogoTex = (url) => {
+      const clean = String(url || '').trim();
+      let img = clean ? standaloneGpuLogoCache.get(clean) : null;
+      if (clean && !img) {
+        standaloneGpuLogoCache.set(clean, 'loading');
+        const im = new Image(); im.crossOrigin = 'anonymous';
+        im.onload = () => { standaloneGpuLogoCache.set(clean, im); opts.onAssetReady?.(); };
+        im.onerror = () => standaloneGpuLogoCache.delete(clean);
+        im.src = clean;
+      }
+      const c = document.createElement('canvas'); c.width = 192; c.height = 192;
+      const ctx = c.getContext('2d'); ctx.clearRect(0, 0, 192, 192);
+      if (img && img !== 'loading') {
+        const s = Math.min(168 / img.width, 168 / img.height);
+        ctx.drawImage(img, (192 - img.width * s) / 2, (192 - img.height * s) / 2, img.width * s, img.height * s);
+      } else {
+        ctx.strokeStyle = accentColor || '#c084fc'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(96, 96, 64, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#f8fafc'; ctx.font = '900 40px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('GPU', 96, 98);
+      }
+      const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
+      return t;
+    };
+
+    const mountDecal = (el, placement, tex, pw, ph, isText, colorHex, glow) => {
+      const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+      const zPos = clamp(Number(el.zPosition ?? (placement === 'top' ? 0.88 : 0.5)), 0.08, 0.92);
+      const xCoord = -bounds.w / 2 + bounds.w * pos;
+      const zAcross = (-bounds.d / 2 + bounds.d * zPos) * 0.78;
+      const zAlongEnd = (-bounds.d / 2 + bounds.d * pos) * 0.68;
+      const col = new T.Color(colorHex || '#ffffff');
+      const mat = new T.MeshStandardMaterial({
+        map: tex, transparent: true, alphaTest: 0.04, roughness: 0.24, metalness: 0.2,
+        emissive: isText ? col : new T.Color(0x000000),
+        emissiveMap: isText ? tex : null,
+        emissiveIntensity: isText ? (glow ? 1.35 : 0.35) : 0,
+        polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3
+      });
+      const g = new T.Group();
+      let mesh = new T.Mesh(new T.PlaneGeometry(pw, ph), mat);
+      mesh.renderOrder = 3;
+      if (placement === 'top') {
+        g.position.set(xCoord, bounds.deckTopY + 0.015, zAcross);
+        mesh.rotation.x = -Math.PI / 2;
+      } else if (placement === 'back') {
+        g.position.set(xCoord, bounds.backBottomY - 0.015, (-bounds.d / 2 + bounds.d * clamp(Number(el.zPosition ?? 0.5), 0.12, 0.88)) * 0.72);
+        mesh.rotation.x = Math.PI / 2;
+      } else if (placement === 'opposite' || placement === 'front') {
+        g.position.set(xCoord, bounds.shroudMidY, bounds.frontZ + 0.016);
+        if (invertSideDecals) mesh.rotation.z = Math.PI;
+      } else if (placement === 'right') {
+        const endW = Math.min(pw, bounds.d * 0.78);
+        mesh.geometry.dispose();
+        mesh.geometry = new T.PlaneGeometry(endW, endW * (ph / pw));
+        g.position.set(bounds.rightX + 0.016, bounds.shroudMidY, zAlongEnd);
+        mesh.rotation.y = Math.PI / 2;
+      } else if (placement === 'left') {
+        const endW = Math.min(pw, bounds.d * 0.72);
+        mesh.geometry.dispose();
+        mesh.geometry = new T.PlaneGeometry(endW, endW * (ph / pw));
+        g.position.set(bounds.leftX - 0.016, bounds.shroudMidY - 0.02, zAlongEnd);
+        mesh.rotation.y = -Math.PI / 2;
+      } else {
+        g.position.set(xCoord, bounds.shroudMidY, bounds.backZ - 0.016);
+        mesh.rotation.y = Math.PI;
+        if (invertSideDecals) mesh.rotation.z = Math.PI;
+      }
+      g.add(mesh);
+      elGroup.add(g);
+    };
+
+    for (const el of (cfg.elements || [])) {
+      if (el.kind === 'text') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.55, 1.6);
+        const placement = el.placement || 'side';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'opposite' || placement === 'front' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const ph = isEdge ? clamp(outerShroudH * 0.85 * scale, 0.09, outerShroudH * 1.1) : Math.min(d * 0.28 * scale, 0.32);
+        const pw = Math.min(w * 0.72, ph * 3.85);
+        const tex = mkDecalTextTex(el.text || 'GPU', el.color || '#ffffff');
+        if (placement === 'both_sides') {
+          mountDecal(el, 'side', tex, pw, ph, true, el.color, !!el.glow);
+          mountDecal(el, 'opposite', tex, pw, ph, true, el.color, !!el.glow);
+        } else mountDecal(el, placement, tex, pw, ph, true, el.color, !!el.glow);
+      } else if (el.kind === 'logo') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.6);
+        const placement = el.placement || 'back';
+        const isEdge = placement === 'side' || placement === 'rear' || placement === 'opposite' || placement === 'front' || placement === 'both_sides' || placement === 'right' || placement === 'left';
+        const sz = isEdge ? clamp(outerShroudH * 0.92 * scale, 0.1, outerShroudH * 1.15) : Math.min(d * 0.52, 0.38) * scale;
+        const tex = mkDecalLogoTex(el.logoUrl || '');
+        if (placement === 'both_sides') {
+          mountDecal(el, 'side', tex, sz, sz, false);
+          mountDecal(el, 'opposite', tex, sz, sz, false);
+        } else mountDecal(el, placement, tex, sz, sz, false);
+      } else if (el.kind === 'accent_bar') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.4, 2.0);
+        const placement = el.placement || 'top';
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const zPos = clamp(Number(el.zPosition ?? 0.86), 0.08, 0.92);
+        const xCoord = -w / 2 + w * pos;
+        const zAcross = (-d / 2 + d * zPos) * 0.78;
+        const barW = Math.min(w * 0.75, 0.52 * scale);
+        const barMat = new T.MeshPhysicalMaterial({ color: new T.Color(el.color || accentColor || '#a855f7'), metalness: 0.78, roughness: 0.22 });
+        if (placement === 'side' || placement === 'rear') mkBox(elGroup, barW, Math.max(0.02, outerShroudH * 0.22), 0.018, barMat, xCoord, mainShroudY, bounds.backZ - 0.012);
+        else if (placement === 'back') mkBox(elGroup, barW, 0.014, 0.042, barMat, xCoord, backBottomY - 0.01, zAcross);
+        else mkBox(elGroup, barW, 0.015, 0.046, barMat, xCoord, bounds.deckTopY + 0.008, zAcross);
+      } else if (el.kind === 'vent_grille') {
+        const scale = clamp(Number(el.size ?? 1.0), 0.5, 1.8);
+        const placement = el.placement || 'top';
+        const pos = clamp(Number(el.position ?? 0.5), 0.12, 0.88);
+        const zPos = clamp(Number(el.zPosition ?? 0.86), 0.08, 0.92);
+        const xCoord = -w / 2 + w * pos;
+        const zAcross = (-d / 2 + d * zPos) * 0.78;
+        const gw = Math.min(w * 0.55, 0.36 * scale), gd = Math.min(d * 0.42, 0.16 * scale);
+        const vg = new T.Group();
+        mkBox(vg, gw, 0.012, gd, new T.MeshPhysicalMaterial({ color: 0x1a1f2b, metalness: 0.72, roughness: 0.32 }), 0, 0, 0);
+        if (placement === 'back') vg.position.set(xCoord, backBottomY - 0.009, zAcross);
+        else if (placement === 'side' || placement === 'rear') { vg.rotation.x = Math.PI / 2; vg.position.set(xCoord, mainShroudY, bounds.backZ - 0.010); }
+        else vg.position.set(xCoord, bounds.deckTopY + 0.006, zAcross);
+        elGroup.add(vg);
+      } else if (el.kind === 'rgb_strip') {
+        const isRainbow = el.colorMode === 'rainbow' || el.color === 'rainbow' || !!el.rainbow;
+        const mode = el.placement || 'side';
+        const col = new T.Color(isRainbow ? '#a855f7' : (el.color || accentColor || '#a855f7'));
+        const mkRgbMat = (off = 0) => {
+          const sc = isRainbow ? new T.Color().setHSL(off % 1, 0.95, 0.54) : col;
+          const m = new T.MeshStandardMaterial({ color: sc, emissive: sc.clone(), emissiveIntensity: 1.75, roughness: 0.18, metalness: 0.1 });
+          if (isRainbow) rgbList.push({ mat: m, offset: off });
+          return m;
+        };
+        const addRail = (spanW, hB, dB, yP, zP) => {
+          if (!isRainbow) { mkBox(elGroup, spanW, hB, dB, mkRgbMat(0), 0, yP, zP); return; }
+          const segs = 12, segW = spanW / segs;
+          for (let i = 0; i < segs; i++) mkBox(elGroup, segW + 0.002, hB, dB, mkRgbMat(i / segs), -spanW / 2 + segW * (i + 0.5), yP, zP);
+        };
+        if (mode === 'top' || mode === 'halo') {
+          addRail(w * 0.84, 0.018, 0.018, bounds.deckTopY + 0.008, d * 0.43);
+          addRail(w * 0.84, 0.018, 0.018, bounds.deckTopY + 0.008, -d * 0.43);
+        }
+        if (mode === 'side' || mode === 'halo') {
+          addRail(w * 0.86, 0.02, 0.018, mainShroudY + outerShroudH * 0.25, bounds.frontZ + 0.006);
+          addRail(w * 0.86, 0.02, 0.018, mainShroudY + outerShroudH * 0.25, bounds.backZ - 0.006);
+        }
+        if (mode === 'slash') {
+          for (let s = 0; s < 3; s++) {
+            const bar = mkBox(elGroup, 0.022, 0.016, d * 0.22, mkRgbMat(s * 0.22), w * 0.31 + s * 0.065, bounds.deckTopY + 0.008, -d * 0.30);
+            bar.rotation.y = 0.46;
+          }
+        }
+      }
+    }
+
+    root.add(bpLayer, pcbL, hsLayer, shLayer, fnGroup, elGroup);
+    return {
+      root,
+      backplateLayer: bpLayer,
+      pcbLayer: pcbL,
+      heatsinkLayer: hsLayer,
+      shroudLayer: shLayer,
+      fansGroup: fnGroup,
+      elementsGroup: elGroup,
+      fanRotors: rotorList,
+      rainbowRgbMats: rgbList,
+      dims: { w, d, h, safeLength, safeWidth, safeThickMm, pwrCenterX, pwrY: -h * 0.42 + 0.032, pwrZ: -d * 0.462 }
+    };
+  }
+
+  function createBladeGeoFor(T, isCurved) {
+    const bladeLen = 0.70;
+    const bladeWid = isCurved ? 0.22 : 0.25;
+    const bShape = new T.Shape();
+    bShape.moveTo(0, -bladeWid * 0.3);
+    bShape.quadraticCurveTo(bladeLen * 0.5, -bladeWid * (isCurved ? 0.68 : 0.48), bladeLen, -bladeWid * 0.16);
+    bShape.lineTo(bladeLen * 0.98, bladeWid * 0.34);
+    bShape.quadraticCurveTo(bladeLen * 0.44, bladeWid * 0.48, 0, bladeWid * 0.28);
+    bShape.closePath();
+    const geo = new T.ExtrudeGeometry(bShape, { depth: 0.008, bevelEnabled: true, bevelSize: 0.0018, bevelThickness: 0.0018, bevelSegments: 1, curveSegments: 6 });
+    geo.rotateX(Math.PI / 2);
+    return geo;
+  }
+
+  window.GpuDesigner3D = {
+    DEFAULT_CUSTOM_POINTS,
+    buildAssembly: buildStandaloneGpuAssembly,
+    mount,
+    update,
+    setSizeMode,
+    setCameraPreset,
+    focusPlacement,
+    captureSnapshot,
+    captureHeroSnapshot,
+    enqueueThumbnail,
+    resize,
+    dispose
+  };
 })();

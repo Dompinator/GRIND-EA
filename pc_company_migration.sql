@@ -47,21 +47,40 @@ CREATE POLICY "pc_cases_delete_own"
   FOR DELETE
   USING (auth.uid() = owner_id);
 
--- 2) Allow 'pc' & 'custom' GPU body in product_companies & product_company_products check constraints
-ALTER TABLE public.product_companies
-  DROP CONSTRAINT IF EXISTS product_companies_product_lines_check;
+-- 2) Dynamically drop any old CHECK constraints on product_lines, product_line, body_type, and research_key,
+--    then recreate them with NOT VALID so existing rows never block the migration.
+DO $$
+DECLARE
+  v_rec record;
+BEGIN
+  FOR v_rec IN
+    SELECT c.conname, c.conrelid::regclass AS tbl
+    FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = cl.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.contype = 'c'
+      AND (
+        (cl.relname = 'product_companies' AND pg_get_constraintdef(c.oid) ILIKE '%product_lines%')
+        OR (cl.relname = 'product_company_products' AND (
+          pg_get_constraintdef(c.oid) ILIKE '%product_line%'
+          OR pg_get_constraintdef(c.oid) ILIKE '%body_type%'
+        ))
+        OR (cl.relname = 'product_company_research' AND pg_get_constraintdef(c.oid) ILIKE '%research_key%')
+      )
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS %I', v_rec.tbl, v_rec.conname);
+  END LOOP;
+END $$;
+
 ALTER TABLE public.product_companies
   ADD CONSTRAINT product_companies_product_lines_check
   CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc']::text[]) NOT VALID;
 
 ALTER TABLE public.product_company_products
-  DROP CONSTRAINT IF EXISTS product_company_products_product_line_check;
-ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_product_line_check
   CHECK (product_line IN ('cpu', 'gpu', 'pc')) NOT VALID;
 
-ALTER TABLE public.product_company_products
-  DROP CONSTRAINT IF EXISTS product_company_products_body_type_check;
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_body_type_check
   CHECK (body_type IS NULL OR body_type IN (
@@ -71,9 +90,6 @@ ALTER TABLE public.product_company_products
   )) NOT VALID;
 
 -- 3) Update research_key check constraint to allow CPU + GPU + CHIP + PC keys
-ALTER TABLE public.product_company_research
-  DROP CONSTRAINT IF EXISTS product_company_research_research_key_check;
-
 ALTER TABLE public.product_company_research
   ADD CONSTRAINT product_company_research_research_key_check
   CHECK (research_key IN (
@@ -140,39 +156,39 @@ BEGIN
 
   CASE p_research_key
     -- GPU
-    WHEN 'gpu_metallic_body' THEN v_cost := 650;
-    WHEN 'gpu_carbon_body' THEN v_cost := 4500; v_pre := 'gpu_metallic_body';
-    WHEN 'gpu_rgb' THEN v_cost := 1400;
-    WHEN 'gpu_small_fans' THEN v_cost := 450;
-    WHEN 'gpu_medium_fans' THEN v_cost := 1800; v_pre := 'gpu_small_fans';
-    WHEN 'gpu_smart_fans' THEN v_cost := 8000; v_pre := 'gpu_medium_fans';
+    WHEN 'gpu_metallic_body' THEN v_cost := 3500;
+    WHEN 'gpu_carbon_body' THEN v_cost := 7800; v_pre := 'gpu_metallic_body';
+    WHEN 'gpu_rgb' THEN v_cost := 4800;
+    WHEN 'gpu_small_fans' THEN v_cost := 125;
+    WHEN 'gpu_medium_fans' THEN v_cost := 800; v_pre := 'gpu_small_fans';
+    WHEN 'gpu_smart_fans' THEN v_cost := 2800; v_pre := 'gpu_medium_fans';
     WHEN 'gpu_backplate_solid' THEN v_cost := 600;
     WHEN 'gpu_backplate_expanded' THEN v_cost := 1200; v_pre := 'gpu_backplate_solid';
     -- CHIP
-    WHEN 'chip_ok_speed' THEN v_cost := 200;
-    WHEN 'chip_decent_speed' THEN v_cost := 550; v_pre := 'chip_ok_speed';
-    WHEN 'chip_good_speed' THEN v_cost := 1200; v_pre := 'chip_decent_speed';
-    WHEN 'chip_fast_speed' THEN v_cost := 2800; v_pre := 'chip_good_speed';
-    WHEN 'chip_insane_speed' THEN v_cost := 6000; v_pre := 'chip_fast_speed';
-    WHEN 'chip_super_speed' THEN v_cost := 12000; v_pre := 'chip_insane_speed';
-    WHEN 'chip_decent_power' THEN v_cost := 400;
-    WHEN 'chip_good_power' THEN v_cost := 1100; v_pre := 'chip_decent_power';
-    WHEN 'chip_strong_power' THEN v_cost := 3000; v_pre := 'chip_good_power';
-    WHEN 'chip_super_powerful' THEN v_cost := 7500; v_pre := 'chip_strong_power';
-    WHEN 'chip_vram_1gb_simple' THEN v_cost := 200;
-    WHEN 'chip_vram_2gb_simple' THEN v_cost := 450; v_pre := 'chip_vram_1gb_simple';
-    WHEN 'chip_vram_4gb_simple' THEN v_cost := 950; v_pre := 'chip_vram_2gb_simple';
+    WHEN 'chip_ok_speed' THEN v_cost := 75;
+    WHEN 'chip_decent_speed' THEN v_cost := 150; v_pre := 'chip_ok_speed';
+    WHEN 'chip_good_speed' THEN v_cost := 300; v_pre := 'chip_decent_speed';
+    WHEN 'chip_fast_speed' THEN v_cost := 650; v_pre := 'chip_good_speed';
+    WHEN 'chip_insane_speed' THEN v_cost := 1500; v_pre := 'chip_fast_speed';
+    WHEN 'chip_super_speed' THEN v_cost := 4500; v_pre := 'chip_insane_speed';
+    WHEN 'chip_decent_power' THEN v_cost := 250;
+    WHEN 'chip_good_power' THEN v_cost := 800; v_pre := 'chip_decent_power';
+    WHEN 'chip_strong_power' THEN v_cost := 2600; v_pre := 'chip_good_power';
+    WHEN 'chip_super_powerful' THEN v_cost := 6800; v_pre := 'chip_strong_power';
+    WHEN 'chip_vram_1gb_simple' THEN v_cost := 80;
+    WHEN 'chip_vram_2gb_simple' THEN v_cost := 190; v_pre := 'chip_vram_1gb_simple';
+    WHEN 'chip_vram_4gb_simple' THEN v_cost := 450; v_pre := 'chip_vram_2gb_simple';
     WHEN 'chip_vram_6gb_simple' THEN v_cost := 1800; v_pre := 'chip_vram_4gb_simple';
-    WHEN 'chip_vram_4gb_advanced' THEN v_cost := 1400;
-    WHEN 'chip_vram_6gb_advanced' THEN v_cost := 2600; v_pre := 'chip_vram_4gb_advanced';
-    WHEN 'chip_vram_8gb_advanced' THEN v_cost := 4200; v_pre := 'chip_vram_6gb_advanced';
-    WHEN 'chip_vram_12gb_advanced' THEN v_cost := 7000; v_pre := 'chip_vram_8gb_advanced';
-    WHEN 'chip_vram_16gb_advanced' THEN v_cost := 11500; v_pre := 'chip_vram_12gb_advanced';
-    WHEN 'chip_vram_32gb_advanced' THEN v_cost := 19000; v_pre := 'chip_vram_16gb_advanced';
+    WHEN 'chip_vram_4gb_advanced' THEN v_cost := 2600; v_pre := 'chip_vram_6gb_simple';
+    WHEN 'chip_vram_6gb_advanced' THEN v_cost := 3600; v_pre := 'chip_vram_4gb_advanced';
+    WHEN 'chip_vram_8gb_advanced' THEN v_cost := 5400; v_pre := 'chip_vram_6gb_advanced';
+    WHEN 'chip_vram_12gb_advanced' THEN v_cost := 8600; v_pre := 'chip_vram_8gb_advanced';
+    WHEN 'chip_vram_16gb_advanced' THEN v_cost := 9800; v_pre := 'chip_vram_12gb_advanced';
+    WHEN 'chip_vram_32gb_advanced' THEN v_cost := 12800; v_pre := 'chip_vram_16gb_advanced';
     WHEN 'chip_custom_pcb_color' THEN v_cost := 125;
-    WHEN 'chip_emerald_pcb' THEN v_cost := 125; v_pre := 'chip_custom_pcb_color';
+    WHEN 'chip_emerald_pcb' THEN v_cost := 250; v_pre := 'chip_custom_pcb_color';
     WHEN 'chip_anti_crush_color' THEN v_cost := 125;
-    WHEN 'chip_copper_shim' THEN v_cost := 125; v_pre := 'chip_anti_crush_color';
+    WHEN 'chip_copper_shim' THEN v_cost := 250; v_pre := 'chip_anti_crush_color';
     -- PC Company
     WHEN 'pc_rgb_case' THEN v_cost := 500;
     WHEN 'pc_medium_case' THEN v_cost := 600;
@@ -281,7 +297,7 @@ BEGIN
 END;
 $$;
 
--- 6) Produce PC Units + Pay Component Maker Companies RPC
+-- 6) Produce PC Units + Validate & Deduct Component Stock + Pay Component Maker Companies RPC
 CREATE OR REPLACE FUNCTION public.produce_pc_product(
   p_product_id uuid,
   p_quantity integer DEFAULT 1
@@ -299,8 +315,9 @@ DECLARE
   v_unit_cost numeric := 0;
   v_total_cost numeric := 0;
   v_buyer_cash numeric := 0;
-  v_part_id uuid;
   v_part record;
+  v_comp_item record;
+  v_req_qty integer := 0;
   v_part_payout numeric := 0;
   v_payouts jsonb := '[]'::jsonb;
   v_qty integer := GREATEST(1, LEAST(100000, COALESCE(p_quantity, 1)));
@@ -324,23 +341,55 @@ BEGIN
 
   v_case_cost := GREATEST(0, COALESCE((v_pc.design_data->>'case_build_cost')::numeric, 0));
 
-  IF jsonb_typeof(v_pc.design_data->'component_ids') = 'array' THEN
-    FOR v_part_id IN
-      SELECT (elem #>> '{}')::uuid
-      FROM jsonb_array_elements(v_pc.design_data->'component_ids') AS elem
+  -- Pass 1: Aggregate component IDs (from component_ids array or components.cpu/gpu fallback),
+  -- lock component rows FOR UPDATE, validate published status & sufficient stock, and compute parts cost.
+  FOR v_comp_item IN
+    WITH raw_ids AS (
+      SELECT (elem #>> '{}')::uuid AS part_id
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(v_pc.design_data->'component_ids') = 'array'
+          THEN v_pc.design_data->'component_ids'
+          ELSE '[]'::jsonb
+        END
+      ) AS elem
       WHERE (elem #>> '{}') ~ '^[0-9a-fA-F-]{36}$'
-    LOOP
-      SELECT p.id, p.product_name, p.company_id, p.owner_id, p.listed_price, c.company_name
-      INTO v_part
-      FROM public.product_company_products p
-      JOIN public.product_companies c ON c.id = p.company_id
-      WHERE p.id = v_part_id;
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'cpu'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'cpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'gpu'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'gpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+    )
+    SELECT part_id, COUNT(*)::integer AS per_pc_qty
+    FROM raw_ids
+    GROUP BY part_id
+    ORDER BY part_id
+  LOOP
+    SELECT p.id, p.product_name, p.company_id, p.owner_id, p.listed_price, p.stock, p.status, c.company_name
+    INTO v_part
+    FROM public.product_company_products p
+    JOIN public.product_companies c ON c.id = p.company_id
+    WHERE p.id = v_comp_item.part_id
+    FOR UPDATE OF p;
 
-      IF v_part.id IS NOT NULL THEN
-        v_parts_cost := v_parts_cost + GREATEST(0, COALESCE(v_part.listed_price, 0));
-      END IF;
-    END LOOP;
-  END IF;
+    IF v_part.id IS NULL THEN
+      RAISE EXCEPTION 'A component used in this PC no longer exists';
+    END IF;
+
+    IF v_part.status <> 'published' THEN
+      RAISE EXCEPTION '% is no longer published and cannot be used to produce PCs', v_part.product_name;
+    END IF;
+
+    v_req_qty := v_comp_item.per_pc_qty * v_qty;
+    IF COALESCE(v_part.stock, 0) < v_req_qty THEN
+      RAISE EXCEPTION 'Not enough stock of % (% in stock, % needed to produce % PCs)',
+        v_part.product_name, COALESCE(v_part.stock, 0), v_req_qty, v_qty;
+    END IF;
+
+    v_parts_cost := v_parts_cost + (GREATEST(0, COALESCE(v_part.listed_price, 0)) * v_comp_item.per_pc_qty);
+  END LOOP;
 
   v_unit_cost := v_case_cost + v_parts_cost;
   IF v_unit_cost <= 0 THEN
@@ -359,46 +408,67 @@ BEGIN
   WHERE id = v_uid
   RETURNING cash INTO v_buyer_cash;
 
-  IF jsonb_typeof(v_pc.design_data->'component_ids') = 'array' THEN
-    FOR v_part_id IN
-      SELECT (elem #>> '{}')::uuid
-      FROM jsonb_array_elements(v_pc.design_data->'component_ids') AS elem
+  -- Pass 2: Deduct component stock, increment purchase_count, and pay component makers.
+  FOR v_comp_item IN
+    WITH raw_ids AS (
+      SELECT (elem #>> '{}')::uuid AS part_id
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(v_pc.design_data->'component_ids') = 'array'
+          THEN v_pc.design_data->'component_ids'
+          ELSE '[]'::jsonb
+        END
+      ) AS elem
       WHERE (elem #>> '{}') ~ '^[0-9a-fA-F-]{36}$'
-    LOOP
-      SELECT p.id, p.product_name, p.company_id, p.owner_id, p.listed_price, c.company_name
-      INTO v_part
-      FROM public.product_company_products p
-      JOIN public.product_companies c ON c.id = p.company_id
-      WHERE p.id = v_part_id
-      FOR UPDATE OF p;
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'cpu'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'cpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'gpu'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'gpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+    )
+    SELECT part_id, COUNT(*)::integer AS per_pc_qty
+    FROM raw_ids
+    GROUP BY part_id
+    ORDER BY part_id
+  LOOP
+    SELECT p.id, p.product_name, p.company_id, p.owner_id, p.listed_price, p.stock, c.company_name
+    INTO v_part
+    FROM public.product_company_products p
+    JOIN public.product_companies c ON c.id = p.company_id
+    WHERE p.id = v_comp_item.part_id;
 
-      IF v_part.id IS NOT NULL THEN
-        v_part_payout := ROUND((GREATEST(0, COALESCE(v_part.listed_price, 0)) * v_qty)::numeric, 2);
+    IF v_part.id IS NOT NULL THEN
+      v_req_qty := v_comp_item.per_pc_qty * v_qty;
+      v_part_payout := ROUND((GREATEST(0, COALESCE(v_part.listed_price, 0)) * v_req_qty)::numeric, 2);
 
-        IF v_part_payout > 0 THEN
-          UPDATE public.profiles
-          SET cash = ROUND((COALESCE(cash, 0) + v_part_payout)::numeric, 2)
-          WHERE id = v_part.owner_id;
+      UPDATE public.product_company_products
+      SET purchase_count = COALESCE(purchase_count, 0) + v_req_qty,
+          stock = COALESCE(stock, 0) - v_req_qty
+      WHERE id = v_part.id
+      RETURNING stock INTO v_part.stock;
 
-          UPDATE public.product_companies
-          SET total_revenue = COALESCE(total_revenue, 0) + v_part_payout
-          WHERE id = v_part.company_id;
-        END IF;
+      IF v_part_payout > 0 THEN
+        UPDATE public.profiles
+        SET cash = ROUND((COALESCE(cash, 0) + v_part_payout)::numeric, 2)
+        WHERE id = v_part.owner_id;
 
-        UPDATE public.product_company_products
-        SET purchase_count = COALESCE(purchase_count, 0) + v_qty,
-            stock = GREATEST(0, COALESCE(stock, 0) - v_qty)
-        WHERE id = v_part.id;
-
-        v_payouts := v_payouts || jsonb_build_object(
-          'product_id', v_part.id,
-          'product_name', v_part.product_name,
-          'company_name', v_part.company_name,
-          'payout', v_part_payout
-        );
+        UPDATE public.product_companies
+        SET total_revenue = COALESCE(total_revenue, 0) + v_part_payout
+        WHERE id = v_part.company_id;
       END IF;
-    END LOOP;
-  END IF;
+
+      v_payouts := v_payouts || jsonb_build_object(
+        'product_id', v_part.id,
+        'product_name', v_part.product_name,
+        'company_name', v_part.company_name,
+        'quantity_used', v_req_qty,
+        'stock_remaining', v_part.stock,
+        'payout', v_part_payout
+      );
+    END IF;
+  END LOOP;
 
   UPDATE public.product_company_products
   SET stock = COALESCE(stock, 0) + v_qty
