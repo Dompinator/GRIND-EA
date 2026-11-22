@@ -328,7 +328,7 @@
             const pY = y + Math.sin(pAngle) * productOrbit * 0.86;
             addNode({
               id: productId, kind: 'product', label: product.product_name || 'Product',
-              meta: String(product.product_line || 'product').toUpperCase() + ' · last 24h: ' + Math.round(recentDemand.quantity).toLocaleString() + ' bought · 
+              meta: String(product.product_line || 'product').toUpperCase() + ' · last 24h: ' + Math.round(recentDemand.quantity).toLocaleString() + ' bought · $' + Math.round(recentDemand.value).toLocaleString(),
               image: product.design_data?.thumbnail || product.design_data?.image_url || product.design_data?.image ||
                 (typeof getCpuThumbsMap === 'function' ? (getCpuThumbsMap()?.[String(product.id)]?.dataUrl || '') : ''),
               color: userColorById.get(ownerId) || colorFor(ownerId),
@@ -792,8 +792,9 @@
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
+      const valueWeight = Math.log10(Math.max(0, Number(edge.activityValue) || 0) + 1);
       ctx.lineWidth = active
-        ? Math.min(10, 1.1 + Math.log2(activity + 1) * 1.8)
+        ? Math.min(12, 1.2 + Math.log2(activity + 1) * 1.45 + valueWeight * 0.8)
         : 1.0;
       ctx.strokeStyle = validHex(color)
         ? rgba(color, active ? .62 : .28)
