@@ -8091,3 +8091,23 @@ body[data-theme="rose-amethyst"] .featured-slot-badge {
 @keyframes introGrindEpicIn{0%{opacity:0;transform:scale(.48) translateY(75px);filter:blur(30px)}42%{opacity:1;filter:blur(0)}66%{transform:scale(1.08) translateY(-5px)}82%{transform:scale(.985)}100%{opacity:1;transform:scale(1);filter:blur(0)}}
 @keyframes introTaglineIn{from{opacity:0;transform:translateY(14px);letter-spacing:.9em}to{opacity:1;transform:translateY(0);letter-spacing:.42em}}
 @keyframes introProgress{0%{width:0}100%{width:100%}}
+
+/* Faster, bigger blockbuster pacing while keeping the full 20-second intro */
+.grind-intro.playing::before{animation:introNebula 9s ease-in-out forwards}
+.grind-intro.playing .grind-intro-stage::before{animation:introGodRays 11s cubic-bezier(.16,1,.3,1) forwards}
+.grind-intro.playing .grind-intro-stage::after{animation:introShockwave 8s ease-out forwards}
+.grind-intro-studio.playing{animation:introStudioEpicIn 2.4s cubic-bezier(.12,1,.22,1) .18s forwards}
+.grind-intro.is-transitioning .grind-intro-studio{animation:introStudioEpicOut .95s cubic-bezier(.16,1,.3,1) forwards}
+.grind-intro.is-transitioning .grind-intro-transition-mark{animation:introGMark .95s cubic-bezier(.12,.9,.2,1) forwards}
+.grind-intro.is-grind .grind-intro-grind{animation:introGrindEpicIn 1.65s cubic-bezier(.12,1,.22,1) forwards}
+.grind-intro.is-grind .grind-intro-transition-mark{animation:introGOut .55s ease forwards}
+.grind-intro.is-grind .grind-intro-grind-word{animation:introWordPulse 3.2s ease-in-out 1.7s infinite alternate}
+.grind-intro.is-grind .grind-intro-tagline{animation:introTaglineIn .8s ease .7s forwards}
+.grind-intro.is-grind .grind-intro-overline{animation:introTaglineIn .65s ease .35s forwards}
+.grind-intro.playing .grind-intro-particles{transition:opacity .4s}
+.grind-intro-grind-word{will-change:transform,filter}
+@keyframes introStudioEpicIn{0%{opacity:0;transform:scale(.65) rotate(-2deg);filter:blur(28px)}55%{opacity:1;filter:blur(0);transform:scale(1.04) rotate(0)}78%{transform:scale(.985)}100%{opacity:1;transform:scale(1)}}
+@keyframes introStudioEpicOut{0%{opacity:1;transform:scale(1);filter:blur(0)}100%{opacity:0;transform:scale(1.45);filter:blur(28px)}}
+@keyframes introGMark{0%{opacity:0;transform:scale(.05) rotate(-120deg);filter:blur(30px)}55%{opacity:1;transform:scale(1.35) rotate(12deg);filter:blur(0);text-shadow:0 0 70px #fff,0 0 220px #9c62ff}100%{opacity:1;transform:scale(1) rotate(0);filter:blur(0)}}
+@keyframes introGrindEpicIn{0%{opacity:0;transform:scale(.18) translateY(110px);filter:blur(45px)}38%{opacity:1;filter:blur(0);transform:scale(1.12) translateY(-10px)}58%{transform:scale(.94) translateY(3px)}76%{transform:scale(1.035)}100%{opacity:1;transform:scale(1);filter:blur(0)}}
+@keyframes introWordPulse{from{transform:scale(1);filter:drop-shadow(0 12px 0 rgba(28,11,54,.8)) drop-shadow(0 0 26px rgba(171,126,255,.7)) drop-shadow(0 0 90px rgba(122,64,255,.65))}to{transform:scale(1.035);filter:drop-shadow(0 12px 0 rgba(28,11,54,.8)) drop-shadow(0 0 42px rgba(210,185,255,.95)) drop-shadow(0 0 140px rgba(122,64,255,.9))}}
