@@ -5,13 +5,30 @@
 (function () {
   'use strict';
 
+  const DEFAULT_CUSTOM_POINTS = [
+    [-0.96, -0.88],
+    [-0.58, -0.98],
+    [0.58, -0.98],
+    [0.98, -0.62],
+    [0.98, 0.62],
+    [0.58, 0.98],
+    [-0.58, 0.98],
+    [-0.96, 0.88]
+  ];
+
   const DEFAULT_CONFIG = {
     length: 300,       // 210..360 mm
     width: 125,        // 105..150 mm
     thickness: 52,     // 38..76 mm
-    body: 'plastic',   // plastic | metallic | carbon
+    body: 'plastic',   // plastic | metallic | carbon | custom
     finish: 'satin',   // satin | matte | gloss
     shroud: 'rounded', // rounded | angular | compact | founders | stealth | triple
+    customShape: {
+      points: DEFAULT_CUSTOM_POINTS.map(p => [...p]),
+      extrudeDepth: 1.0,
+      bevel: 0.018,
+      material: 'plastic'
+    },
     primaryColor: '#222733',
     accentColor: '#a855f7',
     backplate: false,
@@ -563,55 +580,117 @@
     return items;
   }
 
-  function createShroudGeometryWithHoles(w, h, d, shapeType, holesList, fastMode = false, isDeck = false, rectCutout = null) {
+  function polySignedArea(pts) {
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[(i + 1) % pts.length];
+      area += x1 * y2 - x2 * y1;
+    }
+    return area * 0.5;
+  }
+
+  function pointInPolygon(px, py, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i];
+      const [xj, yj] = pts[j];
+      const intersect = ((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-9) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function distToPolygonEdges(px, py, pts) {
+    let minD = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i];
+      const [bx, by] = pts[(i + 1) % pts.length];
+      const abx = bx - ax, aby = by - ay;
+      const lenSq = abx * abx + aby * aby;
+      const t = lenSq > 1e-8 ? clamp(((px - ax) * abx + (py - ay) * aby) / lenSq, 0, 1) : 0;
+      const cx = ax + t * abx, cy = ay + t * aby;
+      const d = Math.hypot(px - cx, py - cy);
+      if (d < minD) minD = d;
+    }
+    return minD;
+  }
+
+  function createShroudGeometryWithHoles(w, h, d, shapeType, holesList, fastMode = false, isDeck = false, rectCutout = null, customShape = null) {
     const hw = w / 2;
     const hd = d / 2;
     const shape = new THREE.Shape();
+    let customWorldPts = null;
 
-    if (shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple') {
-      const c1 = isDeck ? Math.min(0.14, w * 0.065, d * 0.14) : Math.min(0.16, w * 0.075, d * 0.15);
-      const asym = shapeType === 'triple' ? 1.55 : shapeType === 'founders' ? 1.15 : 1.35;
-      shape.moveTo(-hw + c1, -hd);
-      shape.lineTo(hw - c1 * asym, -hd);
-      shape.lineTo(hw, -hd + c1 * 1.3);
-      shape.lineTo(hw, hd - c1 * 1.3);
-      shape.lineTo(hw - c1 * (shapeType === 'triple' ? 0.9 : asym), hd);
-      shape.lineTo(-hw + c1, hd);
-      shape.lineTo(-hw, hd - c1);
-      shape.lineTo(-hw, -hd + c1);
-      shape.closePath();
-    } else if (shapeType === 'compact' || shapeType === 'stealth') {
-      const r = shapeType === 'stealth' ? Math.min(0.06, w * 0.03, d * 0.06) : Math.min(0.036, w * 0.02, d * 0.04);
-      shape.moveTo(-hw + r, -hd);
-      shape.lineTo(hw - r, -hd);
-      shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
-      shape.lineTo(hw, hd - r);
-      shape.quadraticCurveTo(hw, hd, hw - r, hd);
-      shape.lineTo(-hw + r, hd);
-      shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
-      shape.lineTo(-hw, -hd + r);
-      shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
-    } else {
-      const r = isDeck ? Math.min(0.18, w * 0.085, d * 0.22) : Math.min(0.20, w * 0.095, d * 0.24);
-      shape.moveTo(-hw + r, -hd);
-      shape.lineTo(hw - r, -hd);
-      shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
-      shape.lineTo(hw, hd - r);
-      shape.quadraticCurveTo(hw, hd, hw - r, hd);
-      shape.lineTo(-hw + r, hd);
-      shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
-      shape.lineTo(-hw, -hd + r);
-      shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+    if (customShape && Array.isArray(customShape.points) && customShape.points.length >= 3) {
+      let pts = customShape.points
+        .filter(p => Array.isArray(p) && p.length >= 2)
+        .map(([nx, nz]) => [clamp(Number(nx) || 0, -1, 1) * hw, clamp(Number(nz) || 0, -1, 1) * hd]);
+      if (pts.length >= 3) {
+        if (polySignedArea(pts) < 0) pts = pts.slice().reverse();
+        customWorldPts = pts;
+        shape.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) {
+          shape.lineTo(pts[i][0], pts[i][1]);
+        }
+        shape.closePath();
+      }
     }
 
-    const bevel = isDeck
-      ? ((shapeType === 'compact' || shapeType === 'stealth') ? 0.008 : 0.011)
-      : ((shapeType === 'compact' || shapeType === 'stealth') ? 0.011 : 0.018);
+    if (!customWorldPts) {
+      if (shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple') {
+        const c1 = isDeck ? Math.min(0.14, w * 0.065, d * 0.14) : Math.min(0.16, w * 0.075, d * 0.15);
+        const asym = shapeType === 'triple' ? 1.55 : shapeType === 'founders' ? 1.15 : 1.35;
+        shape.moveTo(-hw + c1, -hd);
+        shape.lineTo(hw - c1 * asym, -hd);
+        shape.lineTo(hw, -hd + c1 * 1.3);
+        shape.lineTo(hw, hd - c1 * 1.3);
+        shape.lineTo(hw - c1 * (shapeType === 'triple' ? 0.9 : asym), hd);
+        shape.lineTo(-hw + c1, hd);
+        shape.lineTo(-hw, hd - c1);
+        shape.lineTo(-hw, -hd + c1);
+        shape.closePath();
+      } else if (shapeType === 'compact' || shapeType === 'stealth') {
+        const r = shapeType === 'stealth' ? Math.min(0.06, w * 0.03, d * 0.06) : Math.min(0.036, w * 0.02, d * 0.04);
+        shape.moveTo(-hw + r, -hd);
+        shape.lineTo(hw - r, -hd);
+        shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+        shape.lineTo(hw, hd - r);
+        shape.quadraticCurveTo(hw, hd, hw - r, hd);
+        shape.lineTo(-hw + r, hd);
+        shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+        shape.lineTo(-hw, -hd + r);
+        shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+      } else {
+        const r = isDeck ? Math.min(0.18, w * 0.085, d * 0.22) : Math.min(0.20, w * 0.095, d * 0.24);
+        shape.moveTo(-hw + r, -hd);
+        shape.lineTo(hw - r, -hd);
+        shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+        shape.lineTo(hw, hd - r);
+        shape.quadraticCurveTo(hw, hd, hw - r, hd);
+        shape.lineTo(-hw + r, hd);
+        shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+        shape.lineTo(-hw, -hd + r);
+        shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+      }
+    }
+
+    const customBevel = customWorldPts ? clamp(Number(customShape?.bevel ?? 0.018), 0.002, 0.04) : null;
+    const bevel = customBevel !== null
+      ? (isDeck ? Math.min(0.016, customBevel * 0.65) : customBevel)
+      : isDeck
+        ? ((shapeType === 'compact' || shapeType === 'stealth') ? 0.008 : 0.011)
+        : ((shapeType === 'compact' || shapeType === 'stealth') ? 0.011 : 0.018);
 
     // Always bore smooth circular fan cutouts directly through both main shroud & deck!
     for (const hSpec of holesList) {
       const desiredR = (isDeck ? hSpec.deckHoleR : hSpec.mainHoleR) || (hSpec.r * 1.028 + bevel);
-      const holeR = Math.min(desiredR, hw - Math.abs(hSpec.fx) - 0.01, hd - 0.012);
+      let holeR = Math.min(desiredR, hw - Math.abs(hSpec.fx) - 0.01, hd - 0.012);
+      if (customWorldPts) {
+        if (!pointInPolygon(hSpec.fx, 0, customWorldPts)) continue;
+        const edgeDist = distToPolygonEdges(hSpec.fx, 0, customWorldPts);
+        holeR = Math.min(holeR, edgeDist - 0.018);
+      }
       if (holeR > 0.06) {
         const hole = new THREE.Path();
         hole.absarc(hSpec.fx, 0, holeR, 0, Math.PI * 2, true);
@@ -636,7 +715,6 @@
         win.quadraticCurveTo(cx - rx, rz, cx - rx, rz - rr);
         win.lineTo(cx - rx, -rz + rr);
         win.quadraticCurveTo(cx - rx, -rz, cx - rx + rr, -rz);
-        // Ensure clockwise winding for hole
         const pts = win.getPoints(16).reverse();
         const cwWin = new THREE.Path(pts);
         shape.holes.push(cwWin);
@@ -648,7 +726,7 @@
       bevelEnabled: true,
       bevelThickness: bevel,
       bevelSize: bevel,
-      bevelSegments: fastMode ? 1 : (shapeType === 'angular' ? 2 : 3),
+      bevelSegments: fastMode ? 1 : (shapeType === 'angular' || customWorldPts ? 2 : 3),
       curveSegments: fastMode ? 20 : 40
     });
     geo.rotateX(-Math.PI / 2);
@@ -1300,6 +1378,19 @@
     const h = 0.25 * thickScale;
 
     const bodyType = config.body || 'plastic';
+    const customShapeCfg = bodyType === 'custom'
+      ? {
+          points: Array.isArray(config.customShape?.points) && config.customShape.points.length >= 3
+            ? config.customShape.points
+            : DEFAULT_CUSTOM_POINTS,
+          extrudeDepth: clamp(Number(config.customShape?.extrudeDepth ?? 1.0), 0.55, 1.75),
+          bevel: clamp(Number(config.customShape?.bevel ?? 0.018), 0.002, 0.04),
+          material: config.customShape?.material || 'plastic'
+        }
+      : null;
+    const renderMaterialBody = bodyType === 'custom'
+      ? (customShapeCfg.material === 'metallic' || customShapeCfg.material === 'carbon' ? customShapeCfg.material : 'plastic')
+      : bodyType;
     const finishType = config.finish || 'satin';
     const shapeType = config.shroud || 'rounded';
     const primaryColor = config.primaryColor || '#222733';
@@ -1313,17 +1404,18 @@
     const fanElements = (config.elements || []).filter(e => e.kind === 'fan').slice(0, 6);
     const fanLayouts = computeSafeFanLayouts(fanElements, w, d, shapeType);
 
-    const outerShroudH = h * 0.62;
-    const mainShroudY = h * 0.26;
+    const outerShroudH = h * 0.62 * (customShapeCfg ? customShapeCfg.extrudeDepth : 1.0);
+    const mainShroudY = h * 0.26 + (customShapeCfg ? (outerShroudH - h * 0.62) * 0.35 : 0);
     const deckH = 0.034;
     const deckY = mainShroudY + outerShroudH * 0.44;
     const boreCenterY = mainShroudY + 0.02;
     const boreDepth = outerShroudH + 0.02;
 
-    const structSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${backplateStyle}|${finStyle}|${pipeStyle}|${powerType}|${ioStyle}`;
-    const shroudSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${fastMode ? 1 : 0}|` +
+    const customSig = customShapeCfg ? JSON.stringify(customShapeCfg) : '';
+    const structSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${renderMaterialBody}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${backplateStyle}|${finStyle}|${pipeStyle}|${powerType}|${ioStyle}|${customSig}`;
+    const shroudSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${renderMaterialBody}|${finishType}|${shapeType}|${primaryColor}|${accentColor}|${fastMode ? 1 : 0}|${customSig}|` +
       fanLayouts.map(l => `${l.fx.toFixed(4)}:${l.r.toFixed(4)}`).join(',');
-    const fanGeomSig = `${safeLength}|${safeWidth}|${safeThickMm}|${bodyType}|${primaryColor}|${accentColor}|` +
+    const fanGeomSig = `${safeLength}|${safeWidth}|${safeThickMm}|${renderMaterialBody}|${primaryColor}|${accentColor}|` +
       fanLayouts.map(l => `${l.id}:${l.fanType}:${l.bladeColor}:${l.hubStyle}:${l.rgbRing ? 1 : 0}:${l.r.toFixed(4)}`).join('|');
     const nonFanElements = (config.elements || []).filter(e => e.kind !== 'fan');
     const decalsSig = `${structSig}|` + JSON.stringify(nonFanElements);
@@ -1331,7 +1423,7 @@
 
     const accentMat = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(accentColor),
-      metalness: bodyType === 'metallic' ? 0.78 : 0.44,
+      metalness: renderMaterialBody === 'metallic' ? 0.78 : 0.44,
       roughness: 0.22,
       clearcoat: 0.45
     });
@@ -1359,14 +1451,14 @@
 
       let backBottomY = -h * 0.42 - 0.02;
       if (backplateStyle !== 'off') {
-        const bpMat = makeBodyMaterial(bodyType, primaryColor, 0.92, finishType);
+        const bpMat = makeBodyMaterial(renderMaterialBody, primaryColor, 0.92, finishType);
         const flowCutout = backplateStyle === 'flow_through'
           ? { cx: w * 0.26, rw: w * 0.27, rd: d * 0.62 }
           : null;
         const bpGeo = createShroudGeometryWithHoles(
           w * 0.96, 0.032, d * 0.95,
           shapeType === 'angular' || shapeType === 'founders' || shapeType === 'triple' ? 'angular' : 'compact',
-          [], false, false, flowCutout
+          [], false, false, flowCutout, customShapeCfg
         );
         const bp = new THREE.Mesh(bpGeo, bpMat);
         bp.position.y = -h * 0.62 - 0.058;
@@ -1550,18 +1642,18 @@
       lastShroudSig = shroudSig;
       disposeGroupContents(shroudLayer);
 
-      const shroudMat = makeBodyMaterial(bodyType, primaryColor, 1.0, finishType);
+      const shroudMat = makeBodyMaterial(renderMaterialBody, primaryColor, 1.0, finishType);
       const primaryLuminance = new THREE.Color(primaryColor).getHSL({ h: 0, s: 0, l: 0 }).l;
-      const deckMat = makeBodyMaterial(bodyType, primaryColor, primaryLuminance > 0.45 ? 0.78 : 0.76, finishType);
+      const deckMat = makeBodyMaterial(renderMaterialBody, primaryColor, primaryLuminance > 0.45 ? 0.78 : 0.76, finishType);
 
-      const mainShroudGeo = createShroudGeometryWithHoles(w, outerShroudH, d, shapeType, fanLayouts, fastMode, false);
+      const mainShroudGeo = createShroudGeometryWithHoles(w, outerShroudH, d, shapeType, fanLayouts, fastMode, false, null, customShapeCfg);
       const mainShroud = new THREE.Mesh(mainShroudGeo, shroudMat);
       mainShroud.position.y = mainShroudY;
       mainShroud.castShadow = !isSoftwareGl;
       mainShroud.receiveShadow = !isSoftwareGl;
       shroudLayer.add(mainShroud);
 
-      const deckGeo = createShroudGeometryWithHoles(w * DECK_W_RATIO, deckH, d * DECK_D_RATIO, shapeType, fanLayouts, fastMode, true);
+      const deckGeo = createShroudGeometryWithHoles(w * DECK_W_RATIO, deckH, d * DECK_D_RATIO, shapeType, fanLayouts, fastMode, true, null, customShapeCfg);
       const deckMesh = new THREE.Mesh(deckGeo, deckMat);
       deckMesh.position.y = deckY;
       shroudLayer.add(deckMesh);
@@ -2421,5 +2513,5 @@
     sizeHudEl = null;
   }
 
-  window.GpuDesigner3D = { mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, captureHeroSnapshot, enqueueThumbnail, resize, dispose };
+  window.GpuDesigner3D = { DEFAULT_CUSTOM_POINTS, mount, update, setSizeMode, setCameraPreset, focusPlacement, captureSnapshot, captureHeroSnapshot, enqueueThumbnail, resize, dispose };
 })();

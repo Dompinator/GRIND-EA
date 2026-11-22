@@ -16,6 +16,47 @@
   let editingGpuOldName = '';
   let selectedGpuPageProductId = null;
 
+  const DEFAULT_CUSTOM_POINTS = [
+    [-0.96, -0.88],
+    [-0.58, -0.98],
+    [0.58, -0.98],
+    [0.98, -0.62],
+    [0.98, 0.62],
+    [0.58, 0.98],
+    [-0.58, 0.98],
+    [-0.96, 0.88]
+  ];
+  const CUSTOM_SHAPE_PRESETS = {
+    reference: [
+      [-0.96, -0.88], [-0.58, -0.98], [0.58, -0.98], [0.98, -0.62],
+      [0.98, 0.62], [0.58, 0.98], [-0.58, 0.98], [-0.96, 0.88]
+    ],
+    stealth_wing: [
+      [-0.98, -0.76], [-0.35, -0.98], [0.35, -0.84], [0.98, -0.98],
+      [0.90, 0.0], [0.98, 0.98], [0.35, 0.84], [-0.35, 0.98], [-0.98, 0.76]
+    ],
+    twin_notch: [
+      [-0.96, -0.92], [-0.22, -0.92], [0.0, -0.72], [0.22, -0.92], [0.96, -0.92],
+      [0.98, 0.92], [0.22, 0.92], [0.0, 0.72], [-0.22, 0.92], [-0.96, 0.92]
+    ],
+    octa_edge: [
+      [-0.98, -0.45], [-0.62, -0.98], [0.62, -0.98], [0.98, -0.45],
+      [0.98, 0.45], [0.62, 0.98], [-0.62, 0.98], [-0.98, 0.45]
+    ],
+    aero_blade: [
+      [-0.98, -0.94], [0.42, -0.94], [0.98, -0.42], [0.84, 0.0],
+      [0.98, 0.42], [0.42, 0.94], [-0.98, 0.94], [-0.88, 0.0]
+    ]
+  };
+  const cloneCustomShape = cs => ({
+    points: Array.isArray(cs?.points) && cs.points.length >= 3
+      ? cs.points.map(p => [Math.max(-1, Math.min(1, Number(p[0]) || 0)), Math.max(-1, Math.min(1, Number(p[1]) || 0))])
+      : DEFAULT_CUSTOM_POINTS.map(p => [...p]),
+    extrudeDepth: Math.max(0.55, Math.min(1.65, Number(cs?.extrudeDepth ?? 1.0))),
+    bevel: Math.max(0.002, Math.min(0.036, Number(cs?.bevel ?? 0.018))),
+    material: cs?.material === 'metallic' || cs?.material === 'carbon' ? cs.material : 'plastic'
+  });
+
   // Modular GPU build state (no forced company name/logo; added via Add Element)
   let gpuLength = 300;
   let gpuWidth = 125;
@@ -23,6 +64,7 @@
   let gpuBody = 'plastic';
   let gpuFinish = 'satin';
   let gpuShroud = 'rounded';
+  let gpuCustomShape = cloneCustomShape(null);
   let gpuPrimary = '#222733';
   let gpuAccent = '#a855f7';
   let gpuBackplateStyle = 'off';
@@ -113,7 +155,7 @@
 
   const isGpu = () => !!(currentCompany?.product_lines || []).includes('gpu');
   const isPc = () => !!(currentCompany?.product_lines || []).includes('pc');
-  const researched = k => k === 'basic' || k === 'plastic' || (companyResearchRows || []).some(x => x.research_key === k);
+  const researched = k => k === 'basic' || k === 'plastic' || k === 'custom' || (companyResearchRows || []).some(x => x.research_key === k);
   const researchName = k => GPU_RESEARCH.find(r => r.key === k)?.name || (k === 'none' ? 'Base' : k === 'basic' ? 'Basic Fan' : k);
   const chipVramLabel = k => (!k || k === 'none') ? 'No V-RAM' : researchName(k);
 
@@ -198,6 +240,7 @@
       body: d.body || p?.body_type || 'plastic',
       finish: d.finish || 'satin',
       shroud: d.shroud || 'rounded',
+      customShape: d.custom_shape ? cloneCustomShape(d.custom_shape) : cloneCustomShape(null),
       primaryColor: d.primary_color || '#222733',
       accentColor: d.accent_color || '#a855f7',
       backplate: d.backplate !== false && d.backplate_style !== 'off',
@@ -214,6 +257,7 @@
           ]
     };
   }
+  window.buildGpuConfigFromProduct = buildGpuConfigFromProduct;
 
   function formatGpuSpecLine(p) {
     const d = p?.design_data || {};
@@ -398,6 +442,7 @@
     gpuBody = 'plastic';
     gpuFinish = 'satin';
     gpuShroud = 'rounded';
+    gpuCustomShape = cloneCustomShape(null);
     gpuPrimary = '#222733';
     gpuAccent = '#a855f7';
     gpuBackplateStyle = 'off';
@@ -523,28 +568,133 @@
     if (group === 'GPU' || group === 'CHIP') setResearchGroup(group);
   }
 
+  function drawCustomShapeCanvas(canvas, selectedPtIdx) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    const padX = 24, padY = 18;
+    const iw = W - padX * 2, ih = H - padY * 2;
+    const toScreen = ([nx, nz]) => [padX + ((nx + 1) * 0.5) * iw, padY + ((nz + 1) * 0.5) * ih];
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0e0a19';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(168,85,247,0.12)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const gx = padX + (i / 4) * iw;
+      const gy = padY + (i / 4) * ih;
+      ctx.beginPath(); ctx.moveTo(gx, padY); ctx.lineTo(gx, H - padY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(padX, gy); ctx.lineTo(W - padX, gy); ctx.stroke();
+    }
+
+    // Visual fan cutout guides
+    const fans = gpuElements.filter(e => e.kind === 'fan').slice(0, 6);
+    ctx.strokeStyle = 'rgba(148,163,184,0.22)';
+    ctx.setLineDash([4, 3]);
+    fans.forEach((f, idx) => {
+      const pos = Math.max(0.06, Math.min(0.94, Number(f.position ?? ((idx + 0.5) / Math.max(1, fans.length)))));
+      const fx = padX + pos * iw;
+      const r = Math.min(ih * 0.36, 22) * Math.max(0.65, Math.min(1.25, Number(f.size ?? 1.0)));
+      ctx.beginPath();
+      ctx.arc(fx, H / 2, r, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // Custom polygon
+    const pts = gpuCustomShape.points || [];
+    if (pts.length >= 3) {
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const [sx, sy] = toScreen(p);
+        if (idx === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(168,85,247,0.22)';
+      ctx.fill();
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      pts.forEach((p, idx) => {
+        const [sx, sy] = toScreen(p);
+        ctx.beginPath();
+        ctx.arc(sx, sy, idx === selectedPtIdx ? 6.5 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = idx === selectedPtIdx ? '#facc15' : '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#6b21a8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
+  }
+
   function renderBodyTab() {
     const wrap = $('#eaGpuMenu_body');
     if (!wrap) return;
     if ((gpuBody === 'metallic' && !researched('gpu_metallic_body')) || (gpuBody === 'carbon' && !researched('gpu_carbon_body'))) {
       gpuBody = 'plastic';
     }
+    if ((gpuCustomShape.material === 'metallic' && !researched('gpu_metallic_body')) || (gpuCustomShape.material === 'carbon' && !researched('gpu_carbon_body'))) {
+      gpuCustomShape.material = 'plastic';
+    }
 
     const bodyDefs = [
       { id: 'plastic', key: 'plastic', name: 'Plastic Body', desc: 'Free · Standard molded shell' },
       { id: 'metallic', key: 'gpu_metallic_body', name: 'Metallic Body', desc: '18 Score · $1,200/unit' },
-      { id: 'carbon', key: 'gpu_carbon_body', name: 'Carbon Body', desc: '29 Score · $4,000/unit' }
+      { id: 'carbon', key: 'gpu_carbon_body', name: 'Carbon Body', desc: '29 Score · $4,000/unit' },
+      { id: 'custom', key: 'custom', name: 'Custom Body', desc: 'Free · Extrude custom 3D GPU shape' }
     ];
 
     const bodyCards = bodyDefs.map(b => {
       const ok = researched(b.key);
       const selected = gpuBody === b.id;
       return '<div class="cpu-component-option ' + (ok ? '' : 'locked') + ' ' + (selected ? 'selected' : '') + '">' +
-        '<span class="cpu-component-icon">◈</span>' +
+        '<span class="cpu-component-icon">' + (b.id === 'custom' ? '⬡' : '◈') + '</span>' +
         '<span><strong>' + b.name + '</strong><small>' + (ok ? b.desc : 'Research required') + '</small></span>' +
         '<button type="button" class="zoom-btn" ' + (ok ? 'data-gpu-body="' + b.id + '"' : 'data-gpu-go-research="1"') + '>' + (ok ? (selected ? 'Selected' : 'Use') : 'Research') + '</button>' +
         '</div>';
     }).join('');
+
+    const customStudioHtml = gpuBody === 'custom' ? (
+      '<div id="eaGpuCustomShapeBox" class="ea-custom-shape-studio">' +
+        '<div class="ea-gpu-thick-head"><strong>Custom 3D Extrude Shape</strong><small class="muted">' + gpuCustomShape.points.length + ' pts</small></div>' +
+        '<div class="ea-gpu-pill-row ea-gpu-pill-wrap">' +
+          '<button type="button" class="zoom-btn" data-custom-preset="reference">Reference</button>' +
+          '<button type="button" class="zoom-btn" data-custom-preset="stealth_wing">Stealth Wing</button>' +
+          '<button type="button" class="zoom-btn" data-custom-preset="twin_notch">Twin-Notch</button>' +
+          '<button type="button" class="zoom-btn" data-custom-preset="octa_edge">Octa Edge</button>' +
+          '<button type="button" class="zoom-btn" data-custom-preset="aero_blade">Aero Blade</button>' +
+        '</div>' +
+        '<canvas id="eaGpuCustomCanvas" class="ea-custom-shape-canvas" width="280" height="146"></canvas>' +
+        '<div class="ea-gpu-pill-row">' +
+          '<button type="button" class="zoom-btn" id="eaCustomAddPt">+ Add Pt</button>' +
+          '<button type="button" class="zoom-btn" id="eaCustomDelPt"' + (gpuCustomShape.points.length <= 3 ? ' disabled' : '') + '>− Remove Pt</button>' +
+          '<button type="button" class="zoom-btn" id="eaCustomReset">Reset</button>' +
+        '</div>' +
+        '<div class="ea-elem-row">' +
+          '<label>Extrude Depth <b>' + Math.round(gpuCustomShape.extrudeDepth * 100) + '%</b>' +
+            '<input id="eaCustomExtrudeDepth" type="range" min="0.6" max="1.6" step="0.05" value="' + gpuCustomShape.extrudeDepth + '">' +
+          '</label>' +
+          '<label>Bevel <b>' + Math.round(gpuCustomShape.bevel * 1000) + '</b>' +
+            '<input id="eaCustomBevel" type="range" min="0.004" max="0.036" step="0.002" value="' + gpuCustomShape.bevel + '">' +
+          '</label>' +
+        '</div>' +
+        '<div class="ea-elem-subrow">' +
+          '<span>Base Material</span>' +
+          '<select id="eaCustomMaterial">' +
+            '<option value="plastic"' + (gpuCustomShape.material === 'plastic' ? ' selected' : '') + '>Plastic (Free)</option>' +
+            (researched('gpu_metallic_body') ? '<option value="metallic"' + (gpuCustomShape.material === 'metallic' ? ' selected' : '') + '>Metallic (+18 · $1,200)</option>' : '') +
+            (researched('gpu_carbon_body') ? '<option value="carbon"' + (gpuCustomShape.material === 'carbon' ? ' selected' : '') + '>Carbon (+29 · $4,000)</option>' : '') +
+          '</select>' +
+        '</div>' +
+      '</div>'
+    ) : '';
 
     const finishPills = [
       ['satin', 'Satin'],
@@ -574,12 +724,117 @@
     ).join('');
 
     wrap.innerHTML =
-      '<h4>Body Material</h4>' + bodyCards +
+      '<h4>Body Material</h4>' + bodyCards + customStudioHtml +
       '<h4 style="margin-top:12px">Shroud Style &amp; Finish</h4>' +
       '<div class="ea-gpu-inline-box"><span>Surface finish</span><div class="ea-gpu-pill-row">' + finishPills + '</div></div>' +
-      '<div class="ea-gpu-inline-box"><span>Shroud silhouette</span><div class="ea-gpu-pill-row ea-gpu-pill-wrap">' + shroudPills + '</div></div>' +
+      (gpuBody === 'custom' ? '' : '<div class="ea-gpu-inline-box"><span>Shroud silhouette</span><div class="ea-gpu-pill-row ea-gpu-pill-wrap">' + shroudPills + '</div></div>') +
       '<div class="ea-gpu-inline-box"><span>Primary color</span><div class="ea-gpu-swatches">' + primarySwatches + '<input id="eaGpuPrimary" type="color" value="' + esc(gpuPrimary) + '"></div></div>' +
       '<div class="ea-gpu-inline-box"><span>Secondary color (Accent)</span><div class="ea-gpu-swatches">' + swatches + '<input id="eaGpuAccent" type="color" value="' + esc(gpuAccent) + '"></div></div>';
+
+    if (gpuBody === 'custom') {
+      const canvas = wrap.querySelector('#eaGpuCustomCanvas');
+      let dragIdx = -1;
+      let selectedPtIdx = -1;
+      const toNorm = (clientX, clientY) => {
+        const rect = canvas.getBoundingClientRect();
+        const padX = 24, padY = 18;
+        const iw = canvas.width - padX * 2, ih = canvas.height - padY * 2;
+        const cx = ((clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
+        const cy = ((clientY - rect.top) / Math.max(1, rect.height)) * canvas.height;
+        const nx = Math.max(-1, Math.min(1, ((cx - padX) / iw) * 2 - 1));
+        const nz = Math.max(-1, Math.min(1, ((cy - padY) / ih) * 2 - 1));
+        return [Math.round(nx * 100) / 100, Math.round(nz * 100) / 100, cx, cy];
+      };
+      drawCustomShapeCanvas(canvas, selectedPtIdx);
+
+      canvas?.addEventListener('pointerdown', e => {
+        const [, , cx, cy] = toNorm(e.clientX, e.clientY);
+        const padX = 24, padY = 18;
+        const iw = canvas.width - padX * 2, ih = canvas.height - padY * 2;
+        let best = -1, bestDist = 16;
+        gpuCustomShape.points.forEach((p, idx) => {
+          const px = padX + ((p[0] + 1) * 0.5) * iw;
+          const py = padY + ((p[1] + 1) * 0.5) * ih;
+          const d = Math.hypot(cx - px, cy - py);
+          if (d < bestDist) { bestDist = d; best = idx; }
+        });
+        if (best >= 0) {
+          dragIdx = best;
+          selectedPtIdx = best;
+          canvas.setPointerCapture?.(e.pointerId);
+          drawCustomShapeCanvas(canvas, selectedPtIdx);
+        }
+      });
+      canvas?.addEventListener('pointermove', e => {
+        if (dragIdx < 0) return;
+        const [nx, nz] = toNorm(e.clientX, e.clientY);
+        gpuCustomShape.points[dragIdx] = [nx, nz];
+        drawCustomShapeCanvas(canvas, selectedPtIdx);
+        drawGpu(true);
+      });
+      const finishPtDrag = e => {
+        if (dragIdx < 0) return;
+        dragIdx = -1;
+        canvas?.releasePointerCapture?.(e.pointerId);
+        drawGpu(false);
+      };
+      canvas?.addEventListener('pointerup', finishPtDrag);
+      canvas?.addEventListener('pointercancel', finishPtDrag);
+
+      wrap.querySelectorAll('[data-custom-preset]').forEach(btn => btn.addEventListener('click', () => {
+        const key = btn.dataset.customPreset;
+        if (CUSTOM_SHAPE_PRESETS[key]) {
+          gpuCustomShape.points = CUSTOM_SHAPE_PRESETS[key].map(p => [...p]);
+          selectedPtIdx = -1;
+          renderBodyTab();
+          drawGpu();
+        }
+      }));
+      wrap.querySelector('#eaCustomAddPt')?.addEventListener('click', () => {
+        const pts = gpuCustomShape.points;
+        if (pts.length >= 16) { toast('Maximum 16 custom vertices.'); return; }
+        let bestI = 0, bestLen = -1;
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length];
+          const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (len > bestLen) { bestLen = len; bestI = i; }
+        }
+        const a = pts[bestI], b = pts[(bestI + 1) % pts.length];
+        pts.splice(bestI + 1, 0, [Math.round(((a[0] + b[0]) * 0.5) * 100) / 100, Math.round(((a[1] + b[1]) * 0.5) * 100) / 100]);
+        renderBodyTab();
+        drawGpu();
+      });
+      wrap.querySelector('#eaCustomDelPt')?.addEventListener('click', () => {
+        if (gpuCustomShape.points.length <= 3) return;
+        const idx = selectedPtIdx >= 0 && selectedPtIdx < gpuCustomShape.points.length ? selectedPtIdx : gpuCustomShape.points.length - 1;
+        gpuCustomShape.points.splice(idx, 1);
+        renderBodyTab();
+        drawGpu();
+      });
+      wrap.querySelector('#eaCustomReset')?.addEventListener('click', () => {
+        gpuCustomShape = cloneCustomShape(null);
+        renderBodyTab();
+        drawGpu();
+      });
+      wrap.querySelector('#eaCustomExtrudeDepth')?.addEventListener('input', e => {
+        gpuCustomShape.extrudeDepth = Number(e.target.value || 1.0);
+        const b = e.target.closest('label')?.querySelector('b');
+        if (b) b.textContent = Math.round(gpuCustomShape.extrudeDepth * 100) + '%';
+        drawGpu(true);
+      });
+      wrap.querySelector('#eaCustomExtrudeDepth')?.addEventListener('change', () => drawGpu(false));
+      wrap.querySelector('#eaCustomBevel')?.addEventListener('input', e => {
+        gpuCustomShape.bevel = Number(e.target.value || 0.018);
+        const b = e.target.closest('label')?.querySelector('b');
+        if (b) b.textContent = String(Math.round(gpuCustomShape.bevel * 1000));
+        drawGpu(true);
+      });
+      wrap.querySelector('#eaCustomBevel')?.addEventListener('change', () => drawGpu(false));
+      wrap.querySelector('#eaCustomMaterial')?.addEventListener('change', e => {
+        gpuCustomShape.material = e.target.value || 'plastic';
+        drawGpu();
+      });
+    }
 
     wrap.querySelectorAll('[data-gpu-body]').forEach(btn => btn.addEventListener('click', () => {
       gpuBody = btn.dataset.gpuBody;
@@ -1929,8 +2184,9 @@
 
   // ---------- Live Update, Cost & Save ----------
   function computeGpuValues() {
-    const bodyValue = gpuBody === 'carbon' ? 4000 : gpuBody === 'metallic' ? 1200 : 0;
-    const bodyScore = gpuBody === 'carbon' ? 29 : gpuBody === 'metallic' ? 18 : 0;
+    const effMat = gpuBody === 'custom' ? (gpuCustomShape?.material || 'plastic') : gpuBody;
+    const bodyValue = effMat === 'carbon' ? 4000 : effMat === 'metallic' ? 1200 : 0;
+    const bodyScore = effMat === 'carbon' ? 29 : effMat === 'metallic' ? 18 : 0;
     const fans = gpuElements.filter(e => e.kind === 'fan');
     const fanValue = fans.reduce((sum, f) => sum + (f.fanType === 'gpu_smart_fans' ? 1400 : f.fanType === 'gpu_medium_fans' ? 200 : f.fanType === 'gpu_small_fans' ? 80 : 0), 0);
     const fanScore = fans.reduce((sum, f) => sum + (f.fanType === 'gpu_smart_fans' ? 22 : f.fanType === 'gpu_medium_fans' ? 14 : f.fanType === 'gpu_small_fans' ? 8 : 0), 0);
@@ -1954,7 +2210,7 @@
     if ($('#eaGpuSizeReadout')) $('#eaGpuSizeReadout').textContent = gpuLength + ' × ' + gpuWidth + ' × ' + gpuThickness + ' mm';
     if ($('#eaGpuCost')) {
       $('#eaGpuCost').textContent =
-        (gpuBody === 'carbon' ? 'Carbon' : gpuBody === 'metallic' ? 'Metallic' : 'Plastic') +
+        (gpuBody === 'custom' ? 'Custom' : gpuBody === 'carbon' ? 'Carbon' : gpuBody === 'metallic' ? 'Metallic' : 'Plastic') +
         ' (' + gpuFinish + ')' +
         ' · ' + fanCount + ' Fan' + (fanCount === 1 ? '' : 's') +
         ' · ' + score + ' · ' + tier +
@@ -1972,6 +2228,7 @@
       body: gpuBody,
       finish: gpuFinish,
       shroud: gpuShroud,
+      customShape: gpuBody === 'custom' ? cloneCustomShape(gpuCustomShape) : null,
       primaryColor: gpuPrimary,
       accentColor: gpuAccent,
       backplate: gpuBackplateStyle !== 'off',
@@ -2060,6 +2317,7 @@
       '<label>Listing price ($)<input id="eaGpuDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       gpuProduceBlock +
       '<div class="company-product-details-actions">' +
+      '<button type="button" class="zoom-btn" id="eaGpuDetailPreview">👁 Preview</button>' +
       (canEdit ? '<button type="button" class="primary-btn" id="eaGpuDetailEdit">Edit</button>' : '') +
       '<button type="button" class="zoom-btn" id="eaGpuDetailSavePrice">Save price</button>' +
       (draft ? '<button type="button" class="primary-btn" id="eaGpuDetailPublish">Publish product</button><button type="button" class="danger-btn" id="eaGpuDetailDeleteDraft">Delete draft</button>' : '') +
@@ -2084,6 +2342,7 @@
       });
       $('#eaGpuLiquidateBtn')?.addEventListener('click', () => window.liquidateProductStock?.(selected.id, msgEl));
     }
+    $('#eaGpuDetailPreview')?.addEventListener('click', () => window.openProductPreview?.(selected, currentCompany?.company_name));
     $('#eaGpuDetailEdit')?.addEventListener('click', () => loadGpuDraftIntoEditor(selected));
     $('#eaGpuDetailDeleteDraft')?.addEventListener('click', () => window.deleteDraftProduct?.(selected.id, msgEl));
     const saveOrPublish = async publish => {
@@ -2135,6 +2394,7 @@
     gpuBody = d.body || p.body_type || 'plastic';
     gpuFinish = d.finish || 'satin';
     gpuShroud = d.shroud || 'rounded';
+    gpuCustomShape = cloneCustomShape(d.custom_shape);
     gpuPrimary = d.primary_color || '#222733';
     gpuAccent = d.accent_color || '#a855f7';
     gpuBackplateStyle = d.backplate_style || (d.backplate === false ? 'off' : 'flow_through');
@@ -2204,6 +2464,7 @@
       body: gpuBody,
       finish: gpuFinish,
       shroud: gpuShroud,
+      customShape: gpuBody === 'custom' ? cloneCustomShape(gpuCustomShape) : null,
       primaryColor: gpuPrimary,
       accentColor: gpuAccent,
       backplate: gpuBackplateStyle !== 'off',
@@ -2233,6 +2494,7 @@
       body: gpuBody,
       finish: gpuFinish,
       shroud: gpuShroud,
+      custom_shape: gpuBody === 'custom' ? cloneCustomShape(gpuCustomShape) : null,
       primary_color: gpuPrimary,
       accent_color: gpuAccent,
       backplate: gpuBackplateStyle !== 'off',

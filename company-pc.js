@@ -1142,11 +1142,19 @@
         thumbHtml +
         '<div class="ea-pc-comp-meta"><strong>' + esc(p.product_name) + '</strong><small>by ' + esc(compName) + '</small><small>' + esc(specLine) + '</small></div>' +
         '<div class="ea-pc-comp-foot"><span>$' + price.toLocaleString() + '/unit · ' + (stock > 0 ? stock + ' stock' : 'On-Order') + '</span>' +
-        '<button type="button" class="primary-btn" data-pc-pick-part="' + esc(p.id) + '">Add to PC</button></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+        '<button type="button" class="zoom-btn" data-pc-preview-part="' + esc(p.id) + '" title="Preview 3D">👁 Preview</button>' +
+        '<button type="button" class="primary-btn" data-pc-pick-part="' + esc(p.id) + '">Add to PC</button></div></div>' +
       '</article>';
     }).join('');
 
     if (pickerKind === 'gpu') window.hydrateGpuThumbElements?.(grid, byId, 320, 240);
+
+    grid.querySelectorAll('[data-pc-preview-part]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const part = byId.get(btn.dataset.pcPreviewPart);
+      if (part) window.openProductPreview?.(part, part.product_companies?.company_name);
+    }));
 
     grid.querySelectorAll('[data-pc-pick-part]').forEach(btn => btn.addEventListener('click', () => {
       const part = byId.get(btn.dataset.pcPickPart);
@@ -1471,6 +1479,7 @@
       '<label>Listing price ($)<input id="eaPcDetailPrice" type="number" min="1" value="' + Number(selected.listed_price || 1) + '"></label>' +
       produceBlock +
       '<div class="company-product-details-actions">' +
+        '<button type="button" class="zoom-btn" id="eaPcDetailPreview">👁 Preview</button>' +
         (canEdit ? '<button type="button" class="primary-btn" id="eaPcDetailEdit">Edit</button>' : '') +
         '<button type="button" class="zoom-btn" id="eaPcDetailSavePrice">Save price</button>' +
         (draft ? '<button type="button" class="primary-btn" id="eaPcDetailPublish">Publish PC</button><button type="button" class="danger-btn" id="eaPcDetailDeleteDraft">Delete draft</button>' : '') +
@@ -1495,6 +1504,7 @@
       });
       $('#eaPcLiquidateBtn')?.addEventListener('click', () => window.liquidateProductStock?.(selected.id, msgEl));
     }
+    $('#eaPcDetailPreview')?.addEventListener('click', () => window.openProductPreview?.(selected, currentCompany?.company_name));
     $('#eaPcDetailEdit')?.addEventListener('click', () => loadPcDraftIntoEditor(selected));
     $('#eaPcDetailDeleteDraft')?.addEventListener('click', () => window.deleteDraftProduct?.(selected.id, msgEl));
     const saveOrPublish = async publish => {

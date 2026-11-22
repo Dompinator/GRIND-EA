@@ -2,7 +2,7 @@
  * GRIND-EA · Company Stock Market ("Companies" Feed + Dashboard Stocks)
  * - Sales/revenue drives share price up; investor trades use gentle curve (STOCK_K = 0.002)
  * - Customers can buy & sell shares anytime (just like Coins)
- * - At 00:00 UTC daily, company owner receives 100% of total owned stock value for free
+ * - At 00:00 UTC daily, company owner receives the stock's current worth (share price) for free
  * ============================================================ */
 (function () {
   'use strict';
@@ -220,7 +220,7 @@
           <p class="coin-desc">${esc(c.description || 'Manufacturing hardware on GRIND.')}</p>
           <div class="ea-stock-card-meta">
             <span>Sales: <b>${fmtMoney(c.total_revenue)}</b></span>
-            <span>00:00 Payout: <b>${fmtMoney(c.owned_stock_usd)}</b></span>
+            <span>00:00 Payout: <b>${fmtPrice(c.share_price)}</b></span>
           </div>
           ${c.owner_id ? `
             <button type="button" class="creator-chip" data-profile="${esc(c.owner_id)}">
@@ -262,7 +262,7 @@
       sb.from('company_stock_holdings').select('*').eq('user_id', currentUser.id).eq('company_id', selectedCompanyStockId).maybeSingle(),
       sb.from('company_stock_trades').select('*').eq('company_id', selectedCompanyStockId).order('created_at', { ascending: false }).limit(120),
       sb.from('company_stock_holdings').select('user_id,shares,total_spent_usd,total_returned_usd').eq('company_id', selectedCompanyStockId).gt('shares', 0),
-      sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,stock,purchase_count,cpu_score,cpu_tier,core_count,thread_count,body_type,cooling_type,graphics_type,design_data,status').eq('company_id', selectedCompanyStockId).eq('status', 'published').order('created_at', { ascending: false })
+      sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,stock,purchase_count,cpu_score,cpu_tier,core_count,thread_count,body_type,cooling_type,graphics_type,v_cache_type,carbon_fiber_body,silicon_body,product_value,production_cost,design_data,status').eq('company_id', selectedCompanyStockId).eq('status', 'published').order('created_at', { ascending: false })
     ]);
 
     if (!comp) {
@@ -339,6 +339,9 @@
               <strong>${fmtMoney(p.listed_price || 0)}</strong>
               <p>${Number(p.stock || 0) > 0 ? Number(p.stock) + ' in stock' : 'Out Of Stock'}</p>
               <p class="muted tiny">${Number(p.purchase_count || 0)} sold</p>
+              <div class="ea-product-card-actions">
+                <button type="button" class="zoom-btn ea-product-preview-btn" data-preview-stock-product="${esc(p.id)}">👁 Preview</button>
+              </div>
             </article>
           `).join('') : '<p class="muted">This company has not published any products yet.</p>'}
         </div>
@@ -348,10 +351,10 @@
       <div class="coin-change ${chg.cls}">${chg.text}</div>
 
       <div class="ea-stock-metrics-row">
-        <div class="ea-stock-metric"><span>Investor Stock Owned</span><strong>${fmtMoney(c.owned_stock_usd)}</strong><small>Paid to owner every 00:00 UTC</small></div>
-        <div class="ea-stock-metric"><span>Next 00:00 Payout</span><strong data-stock-countdown>${formatCountdown(msUntilNextUtcMidnight())}</strong><small>Est. ${fmtMoney(c.owned_stock_usd)} payout</small></div>
+        <div class="ea-stock-metric"><span>Investor Pool</span><strong>${fmtMoney(c.owned_stock_usd)}</strong><small>Total capital invested in shares</small></div>
+        <div class="ea-stock-metric"><span>Next 00:00 Payout</span><strong data-stock-countdown>${formatCountdown(msUntilNextUtcMidnight())}</strong><small>Est. ${fmtPrice(c.share_price)} stock worth</small></div>
         <div class="ea-stock-metric"><span>Company Total Sales</span><strong>${fmtMoney(c.total_revenue)}</strong><small>Sales lift stock price automatically</small></div>
-        <div class="ea-stock-metric"><span>Lifetime 00:00 Payouts</span><strong>${fmtMoney(c.total_stock_payouts)}</strong><small>Paid from stock ownership</small></div>
+        <div class="ea-stock-metric"><span>Lifetime 00:00 Payouts</span><strong>${fmtMoney(c.total_stock_payouts)}</strong><small>Earned from daily stock worth</small></div>
       </div>
 
       <div class="chart-wrap">
@@ -378,7 +381,7 @@
         ${isOwner ? `
           <div class="ea-stock-owner-note">
             <strong>Owner View</strong>
-            <p class="muted tiny">Company owners cannot buy their own stock. Grow product sales to drive the share price up — at <b>00:00 UTC</b> every day you receive <b>${fmtMoney(c.owned_stock_usd)}</b> (100% of total owned stock value) for free!</p>
+            <p class="muted tiny">Company owners cannot buy their own stock. Grow product sales and attract investors to raise the stock price — at <b>00:00 UTC</b> every day you receive <b>${fmtPrice(c.share_price)}</b> (your stock's current worth) for free!</p>
           </div>
         ` : `
           <div class="buy-row">
@@ -420,6 +423,14 @@
     `;
 
     startCountdownLoop();
+
+    const prodMap = new Map((products || []).map(p => [String(p.id), { ...p, product_companies: { company_name: c.company_name, logo_data_url: c.logo_data_url } }]));
+    wrap.querySelectorAll('[data-preview-stock-product]').forEach(btn => btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const prod = prodMap.get(String(btn.dataset.previewStockProduct));
+      if (prod) window.openProductPreview?.(prod, c.company_name);
+    }));
 
     wrap.querySelectorAll('[data-profile]').forEach(btn => btn.addEventListener('click', () => {
       if (typeof openProfileModal === 'function') openProfileModal(btn.dataset.profile);
@@ -689,9 +700,9 @@
     if (amt > 0) {
       if (typeof updateUIProfile === 'function') updateUIProfile();
       if (typeof playSound === 'function') playSound('buy');
-      toast(`00:00 Stock Payout: +${fmtMoney(amt)} credited from investor stock!`);
+      toast(`00:00 Stock Payout: +${fmtMoney(amt)} credited from stock worth!`);
     } else if (showNoPayoutToast) {
-      toast('00:00 check complete ($0 investor stock held yesterday).');
+      toast('00:00 check complete ($0.00 payout).');
     }
   }
 
@@ -723,8 +734,8 @@
     panel.innerHTML = `
       <div class="company-stat-grid">
         <article class="company-stat-card"><span>Share Price</span><strong>${fmtPrice(c.share_price)}</strong><small class="coin-change ${chg.cls}" style="display:inline-block;margin-top:4px;">${chg.text}</small></article>
-        <article class="company-stat-card"><span>Stock Owned by Investors</span><strong>${fmtMoney(c.owned_stock_usd)}</strong><small>Total value currently invested</small></article>
-        <article class="company-stat-card"><span>Daily 00:00 Free Payout</span><strong>${fmtMoney(c.owned_stock_usd)}</strong><small>Next payout in <b data-stock-countdown>${formatCountdown(msUntilNextUtcMidnight())}</b></small></article>
+        <article class="company-stat-card"><span>Investor Pool</span><strong>${fmtMoney(c.owned_stock_usd)}</strong><small>Total capital currently invested</small></article>
+        <article class="company-stat-card"><span>Daily 00:00 Free Payout</span><strong>${fmtPrice(c.share_price)}</strong><small>Stock worth · Next in <b data-stock-countdown>${formatCountdown(msUntilNextUtcMidnight())}</b></small></article>
         <article class="company-stat-card"><span>Total Stock Payouts</span><strong>${fmtMoney(c.total_stock_payouts)}</strong><small>Last payout: ${fmtMoney(c.last_payout_amount)}</small></article>
       </div>
 
@@ -740,8 +751,8 @@
           </div>
         </div>
         <p class="muted tiny" style="margin-bottom:12px;">
-          Product sales raise your stock's <b>Sales Multiplier (${c.sales_multiplier.toFixed(2)}×)</b> automatically, while investor buys/sells gently adjust demand.
-          Every day at <b>00:00 UTC</b>, you earn <b>100% of total investor-owned stock value</b> (currently <b>${fmtMoney(c.owned_stock_usd)}</b>) for free without reducing investor shares!
+          Product sales raise your stock's <b>Sales Multiplier (${c.sales_multiplier.toFixed(2)}×)</b> automatically, while investor buys/sells gently adjust share value.
+          Every day at <b>00:00 UTC</b>, you earn your stock's current worth (currently <b>${fmtPrice(c.share_price)}</b>) for free without reducing investor shares!
         </p>
 
         <div class="detail-panels" style="margin-top:12px;">
@@ -754,7 +765,7 @@
           <div class="detail-panel">
             <h4>00:00 Payout History</h4>
             ${(payouts || []).length
-              ? payouts.map(p => `<div class="lb-row"><span>${esc(p.payout_date)} (Owned: ${fmtMoney(p.owned_stock_usd)})</span><strong style="color:var(--green);">+${fmtMoney(p.payout_amount)}</strong></div>`).join('')
+              ? payouts.map(p => `<div class="lb-row"><span>${esc(p.payout_date)} (Pool: ${fmtMoney(p.owned_stock_usd)})</span><strong style="color:var(--green);">+${fmtMoney(p.payout_amount)}</strong></div>`).join('')
               : '<p class="muted tiny">Daily 00:00 UTC payouts will appear here once claimed.</p>'}
           </div>
         </div>

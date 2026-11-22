@@ -66,7 +66,7 @@ ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_body_type_check
   CHECK (body_type IN (
     'gray', 'silicon', 'carbon', 'titanium',
-    'plastic', 'metallic',
+    'plastic', 'metallic', 'custom',
     'small', 'medium', 'large'
   ));
 
@@ -256,11 +256,11 @@ BEGIN
     WHERE id = p_product_id
       AND company_id = p_company_id
       AND owner_id = v_uid
-      AND status = 'draft'
+      AND status IN ('draft', 'published')
     RETURNING * INTO v_row;
 
     IF v_row.id IS NULL THEN
-      RAISE EXCEPTION 'Draft PC not found or already published';
+      RAISE EXCEPTION 'PC product not found or unauthorized';
     END IF;
   ELSE
     INSERT INTO public.product_company_products (
@@ -752,7 +752,7 @@ BEGIN
 END;
 $$;
 
--- Daily 00:00 UTC Owner Payout RPC: pays company owner 100% of total investor-owned stock value every day!
+-- Daily 00:00 UTC Owner Payout RPC: pays company owner the stock's current worth (share price) every day
 CREATE OR REPLACE FUNCTION public.claim_company_stock_payout(
   p_company_id uuid
 )
@@ -768,6 +768,7 @@ DECLARE
   v_stock public.company_stocks;
   v_mult numeric;
   v_owned_usd numeric := 0;
+  v_stock_worth numeric := 0;
   v_cash numeric := 0;
 BEGIN
   IF v_uid IS NULL THEN
@@ -790,6 +791,7 @@ BEGIN
   SELECT * INTO v_stock FROM public.company_stocks WHERE company_id = p_company_id FOR UPDATE;
   v_mult := public.calc_company_sales_multiplier(v_comp.total_revenue);
   v_owned_usd := ROUND((GREATEST(0, (v_stock.curve_price - 1.0) / 0.002) * v_mult)::numeric, 2);
+  v_stock_worth := ROUND((GREATEST(0.01, v_stock.curve_price * v_mult))::numeric, 2);
 
   IF v_stock.last_payout_date >= v_today THEN
     SELECT cash INTO v_cash FROM public.profiles WHERE id = v_uid;
@@ -797,19 +799,20 @@ BEGIN
       'claimed', false,
       'already_claimed', true,
       'payout_amount', 0,
-      'next_payout_estimate', v_owned_usd,
+      'next_payout_estimate', v_stock_worth,
+      'owned_stock_usd', v_owned_usd,
       'cash_remaining', COALESCE(v_cash, 0)
     );
   END IF;
 
-  IF v_owned_usd > 0 THEN
+  IF v_stock_worth > 0 THEN
     UPDATE public.profiles
-    SET cash = ROUND((COALESCE(cash, 0) + v_owned_usd)::numeric, 2)
+    SET cash = ROUND((COALESCE(cash, 0) + v_stock_worth)::numeric, 2)
     WHERE id = v_uid
     RETURNING cash INTO v_cash;
 
     INSERT INTO public.company_stock_payouts (company_id, owner_id, payout_date, owned_stock_usd, payout_amount)
-    VALUES (p_company_id, v_uid, v_today, v_owned_usd, v_owned_usd)
+    VALUES (p_company_id, v_uid, v_today, v_owned_usd, v_stock_worth)
     ON CONFLICT (company_id, payout_date) DO NOTHING;
   ELSE
     SELECT cash INTO v_cash FROM public.profiles WHERE id = v_uid;
@@ -817,18 +820,19 @@ BEGIN
 
   UPDATE public.company_stocks
   SET last_payout_date = v_today,
-      last_payout_amount = v_owned_usd,
-      total_stock_payouts = COALESCE(total_stock_payouts, 0) + v_owned_usd,
+      last_payout_amount = v_stock_worth,
+      total_stock_payouts = COALESCE(total_stock_payouts, 0) + v_stock_worth,
       open_price_today = ROUND((v_stock.curve_price * v_mult)::numeric, 4),
       open_price_date = v_today,
       updated_at = now()
   WHERE company_id = p_company_id;
 
   RETURN jsonb_build_object(
-    'claimed', v_owned_usd > 0,
+    'claimed', v_stock_worth > 0,
     'already_claimed', false,
-    'payout_amount', v_owned_usd,
-    'next_payout_estimate', v_owned_usd,
+    'payout_amount', v_stock_worth,
+    'next_payout_estimate', v_stock_worth,
+    'owned_stock_usd', v_owned_usd,
     'cash_remaining', COALESCE(v_cash, 0)
   );
 END;
