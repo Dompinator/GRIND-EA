@@ -47,28 +47,28 @@ CREATE POLICY "pc_cases_delete_own"
   FOR DELETE
   USING (auth.uid() = owner_id);
 
--- 2) Allow 'pc' in product_companies & product_company_products check constraints
+-- 2) Allow 'pc' & 'custom' GPU body in product_companies & product_company_products check constraints
 ALTER TABLE public.product_companies
   DROP CONSTRAINT IF EXISTS product_companies_product_lines_check;
 ALTER TABLE public.product_companies
   ADD CONSTRAINT product_companies_product_lines_check
-  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc']::text[]);
+  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc']::text[]) NOT VALID;
 
 ALTER TABLE public.product_company_products
   DROP CONSTRAINT IF EXISTS product_company_products_product_line_check;
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_product_line_check
-  CHECK (product_line IN ('cpu', 'gpu', 'pc'));
+  CHECK (product_line IN ('cpu', 'gpu', 'pc')) NOT VALID;
 
 ALTER TABLE public.product_company_products
   DROP CONSTRAINT IF EXISTS product_company_products_body_type_check;
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_body_type_check
-  CHECK (body_type IN (
-    'gray', 'silicon', 'carbon', 'titanium',
+  CHECK (body_type IS NULL OR body_type IN (
+    'gray', 'silicon', 'carbon', 'carbon_fiber', 'titanium', 'standard', 'default', 'none',
     'plastic', 'metallic', 'custom',
     'small', 'medium', 'large'
-  ));
+  )) NOT VALID;
 
 -- 3) Update research_key check constraint to allow CPU + GPU + CHIP + PC keys
 ALTER TABLE public.product_company_research
@@ -99,7 +99,7 @@ ALTER TABLE public.product_company_research
     -- PC Company
     'pc_rgb_case','pc_medium_case','pc_large_case',
     'pc_small_fans','pc_medium_fans','pc_smart_fans'
-  ));
+  )) NOT VALID;
 
 -- 4) Unified unlock_company_research RPC (GPU + CHIP + PC)
 CREATE OR REPLACE FUNCTION public.unlock_company_research(
