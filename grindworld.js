@@ -173,6 +173,7 @@
       const validCompanyBuys = companyBuys.filter(t => t?.company_id && companyById.has(String(t.company_id)) && userExists(t.user_id) && isRecent(t.created_at));
       const validProductPurchases = productPurchases.filter(p => p?.product_id && productById.has(String(p.product_id)) && userExists(p.buyer_id) && isRecent(p.created_at));
       const productDemand24h = new Map();
+      const companyComponentDemand24h = new Map();
       validProductPurchases.forEach(purchase => {
         const key = String(purchase.product_id);
         const demand = productDemand24h.get(key) || { events: 0, value: 0, quantity: 0, latestAt: null };
@@ -183,6 +184,14 @@
         demand.quantity += unitPrice > 0 ? value / unitPrice : 1;
         if (!demand.latestAt || new Date(purchase.created_at).getTime() > new Date(demand.latestAt).getTime()) demand.latestAt = purchase.created_at;
         productDemand24h.set(key, demand);
+        if (purchase.buyer_company_id) {
+          const pairKey = String(purchase.buyer_company_id) + '|' + key;
+          const pair = companyComponentDemand24h.get(pairKey) || { value: 0, quantity: 0, latestAt: null };
+          pair.value += value;
+          pair.quantity += unitPrice > 0 ? value / unitPrice : 1;
+          if (!pair.latestAt || new Date(purchase.created_at).getTime() > new Date(pair.latestAt).getTime()) pair.latestAt = purchase.created_at;
+          companyComponentDemand24h.set(pairKey, pair);
+        }
       });
 
       const activeUserIds = new Set(profileById.keys());
@@ -438,8 +447,11 @@
         componentIds.forEach(componentId => {
           const componentKey = String(componentId || '');
           if (!productById.has(componentKey) || componentKey === String(pcProduct.id)) return;
+          const componentDemand = companyComponentDemand24h.get(String(pcProduct.company_id) + '|' + componentKey);
           addEdge('pc-component:' + pcProduct.id + ':' + componentKey,
-            'product:' + pcProduct.id, 'product:' + componentKey, 'component-use', pcProduct.created_at, 1, true);
+            'product:' + pcProduct.id, 'product:' + componentKey, 'component-use',
+            componentDemand?.latestAt || null, Math.max(1, Math.round(componentDemand?.quantity || 1)), true,
+            componentDemand?.value || 0);
         });
       });
 
