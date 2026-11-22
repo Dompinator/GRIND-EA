@@ -137,17 +137,6 @@
       ]);
 
       const profileById = new Map(profiles.filter(p => p?.id).map(p => [String(p.id), p]));
-      if (currentUser?.is_test_account) {
-        state.nodes = [];
-        state.edges = [];
-        state.nodeById.clear();
-        $('grindWorldStats').textContent = 'Test accounts are not shown in GrindWorld.';
-        $('grindWorldLoading')?.classList.add('hidden');
-        state.loaded = true;
-        state.lastLoadedAt = Date.now();
-        draw();
-        return;
-      }
       const userExists = id => Boolean(id && profileById.has(String(id)));
       const companyRows = companies.filter(c => c?.id && userExists(c.owner_id));
       const companyById = new Map(companyRows.map(c => [String(c.id), c]));
@@ -501,32 +490,49 @@
     const size = 31;
     const stepX = Math.sqrt(3) * size;
     const stepY = 1.5 * size;
-    const maxScore = Math.max(1, ...users.map(user => Number(user.score || 1)));
-    const minX = -stepX, maxX = state.world.width + stepX;
-    const minY = -stepY, maxY = state.world.height + stepY;
+    const bucketW = 510, bucketH = 420;
+    const buckets = new Map();
+    for (const user of users) {
+      const bx = Math.floor((user.x - 300) / bucketW);
+      const by = Math.floor((user.y - 265) / bucketH);
+      const key = bx + ':' + by;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(user);
+    }
+    const minX = state.camera.x - state.width / (2 * state.camera.zoom) - stepX;
+    const maxX = state.camera.x + state.width / (2 * state.camera.zoom) + stepX;
+    const minY = state.camera.y - state.height / (2 * state.camera.zoom) - stepY;
+    const maxY = state.camera.y + state.height / (2 * state.camera.zoom) + stepY;
     const rowStart = Math.floor(minY / stepY);
     const rowEnd = Math.ceil(maxY / stepY);
     const colStart = Math.floor(minX / stepX) - 1;
     const colEnd = Math.ceil(maxX / stepX) + 1;
+    const maxScore = Math.max(1, ...users.map(user => Number(user.score || 1)));
     for (let row = rowStart; row <= rowEnd; row++) {
       const offset = (row & 1) ? stepX / 2 : 0;
       for (let col = colStart; col <= colEnd; col++) {
         const x = col * stepX + offset;
         const y = row * stepY;
-        let owner = users[0];
+        const bx = Math.floor((x - 300) / bucketW);
+        const by = Math.floor((y - 265) / bucketH);
+        const candidates = [];
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          const nearby = buckets.get((bx + ox) + ':' + (by + oy));
+          if (nearby) candidates.push(...nearby);
+        }
+        if (!candidates.length) continue;
+        let owner = candidates[0];
         let best = Infinity;
-        for (const user of users) {
-          const dx = x - user.x;
-          const dy = y - user.y;
-          const activityWeight = Math.max(0.55, Math.sqrt(Number(user.score || 1) / maxScore));
-          const weightedDistance = (dx * dx + dy * dy) / activityWeight;
-          if (weightedDistance < best) { best = weightedDistance; owner = user; }
+        for (const user of candidates) {
+          const dx = x - user.x, dy = y - user.y;
+          const weight = Math.max(0.55, Math.sqrt(Number(user.score || 1) / maxScore));
+          const distance = (dx * dx + dy * dy) / weight;
+          if (distance < best) { best = distance; owner = user; }
         }
         ctx.beginPath();
         for (let corner = 0; corner < 6; corner++) {
           const angle = Math.PI / 3 * corner + Math.PI / 6;
-          const px = x + size * Math.cos(angle);
-          const py = y + size * Math.sin(angle);
+          const px = x + size * Math.cos(angle), py = y + size * Math.sin(angle);
           if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
         ctx.closePath();
