@@ -8,6 +8,8 @@
     edges: [],
     nodeById: new Map(),
     images: new Map(),
+    hexCells: [],
+    minZoom: 0.1,
     camera: { x: 0, y: 0, zoom: 1 },
     world: { width: 1200, height: 800 },
     canvas: null,
@@ -248,6 +250,10 @@
         String(profile.id), validHex(profile.user_color) ? profile.user_color.toLowerCase() : colorFor(profile.id)
       ]));
       const maxScore = Math.max(1, ...[...scoreByUser.values()]);
+      const marketProfiles = activeProfiles.filter(profile => !profile.is_test_account);
+      const totalMarketPower = Math.max(1, marketProfiles.reduce(
+        (sum, profile) => sum + (scoreByUser.get(String(profile.id)) || 1), 0
+      ));
       const totalPower = Math.max(1, [...scoreByUser.values()].reduce((sum, value) => sum + value, 0));
       const userPosition = new Map();
       const goldenAngle = Math.PI * (3 - Math.sqrt(5));
@@ -255,8 +261,9 @@
       const maxShare = Math.max(0.000001, maxScore / totalPower);
       activeProfiles.forEach((profile, index) => {
         const score = scoreByUser.get(String(profile.id)) || 1;
-        const share = score / totalPower;
-        const powerRatio = Math.max(0, Math.min(1, share / maxShare));
+        const isTestAccount = Boolean(profile.is_test_account);
+        const share = isTestAccount ? 0 : score / totalMarketPower;
+        const powerRatio = isTestAccount ? 0 : Math.max(0, Math.min(1, share / maxShare));
         const distance = 140 + Math.pow(1 - Math.sqrt(powerRatio), 0.72) * outerRadius;
         const angle = index * goldenAngle - Math.PI / 2;
         const x = outerRadius + 420 + Math.cos(angle) * distance;
@@ -267,7 +274,8 @@
         addNode({
           id: userId, kind: 'user', label: profile.username || 'Trader',
           meta: (share * 100).toFixed(2) + '% of tracked market · ' + Math.round(score).toLocaleString(),
-          image: profile.avatar_url || '', color: userColorById.get(String(profile.id)), score, marketShare: share,
+          image: profile.avatar_url || '', color: userColorById.get(String(profile.id)), score,
+          marketShare: share, backgroundShare: share, testAccount: isTestAccount,
           radius, x, y, profileId: String(profile.id)
         });
       });
@@ -402,6 +410,7 @@
       };
 
       state.nodes = nodes;
+      buildHexOwnershipGrid(nodes.filter(node => node.kind === 'user' && !node.testAccount));
       state.edges = edges;
       state.nodeById = nodeById;
       state.loaded = true;
@@ -428,19 +437,33 @@
     if (!state.width || !state.height) return;
     state.camera.x = state.world.width / 2;
     state.camera.y = state.world.height / 2;
-    const fit = Math.min(state.width / state.world.width, state.height / state.world.height) * 0.92;
-    state.camera.zoom = Math.max(0.08, Math.min(1.4, fit));
+    const fit = Math.min(state.width / state.world.width, state.height / state.world.height) * 0.94;
+    state.minZoom = Math.max(0.005, Math.min(1.4, fit));
+    state.camera.zoom = state.minZoom;
+    clampCamera();
     draw();
+  }
+
+  function clampCamera() {
+    const halfWidth = state.width / (2 * state.camera.zoom);
+    const halfHeight = state.height / (2 * state.camera.zoom);
+    state.camera.x = state.world.width <= halfWidth * 2
+      ? state.world.width / 2
+      : Math.max(halfWidth, Math.min(state.world.width - halfWidth, state.camera.x));
+    state.camera.y = state.world.height <= halfHeight * 2
+      ? state.world.height / 2
+      : Math.max(halfHeight, Math.min(state.world.height - halfHeight, state.camera.y));
   }
 
   function zoomAt(screenX, screenY, factor) {
     const old = state.camera.zoom;
-    const next = Math.max(0.07, Math.min(2.5, old * factor));
+    const next = Math.max(state.minZoom, Math.min(2.5, old * factor));
     const worldX = (screenX - state.width / 2) / old + state.camera.x;
     const worldY = (screenY - state.height / 2) / old + state.camera.y;
     state.camera.zoom = next;
     state.camera.x = worldX - (screenX - state.width / 2) / next;
     state.camera.y = worldY - (screenY - state.height / 2) / next;
+    clampCamera();
     draw();
   }
 
@@ -471,6 +494,7 @@
     if (state.pointer.moved) {
       state.camera.x -= dx / state.camera.zoom;
       state.camera.y -= dy / state.camera.zoom;
+      clampCamera();
       draw();
     }
   }
@@ -530,68 +554,49 @@
     }
   }
 
-  function drawHexBackground(ctx, users) {
-    const size = 28;
+  function buildHexOwnershipGrid(users) {
+    const size = 44;
     const stepX = Math.sqrt(3) * size;
     const stepY = 1.5 * size;
-    const minX = state.camera.x - state.width / (2 * state.camera.zoom) - stepX;
-    const maxX = state.camera.x + state.width / (2 * state.camera.zoom) + stepX;
-    const minY = state.camera.y - state.height / (2 * state.camera.zoom) - stepY;
-    const maxY = state.camera.y + state.height / (2 * state.camera.zoom) + stepY;
-    const rowStart = Math.floor(minY / stepY);
-    const rowEnd = Math.ceil(maxY / stepY);
-    const colStart = Math.floor(minX / stepX) - 1;
-    const colEnd = Math.ceil(maxX / stepX) + 1;
     const cells = [];
-    for (let row = rowStart; row <= rowEnd; row++) {
+    const eligibleUsers = users.filter(user => Number(user.backgroundShare) > 0);
+    if (!eligibleUsers.length) {
+      state.hexCells = [];
+      return;
+    }
+
+    for (let row = 0, y = size; y <= state.world.height - size; row++, y += stepY) {
       const offset = (row & 1) ? stepX / 2 : 0;
-      for (let col = colStart; col <= colEnd; col++) {
-        cells.push({ x: col * stepX + offset, y: row * stepY, owner: null });
+      for (let x = size + offset; x <= state.world.width - size; x += stepX) {
+        let owner = null;
+        let best = Infinity;
+        for (const user of eligibleUsers) {
+          const dx = x - user.x;
+          const dy = y - user.y;
+          const share = Math.max(0.000001, Number(user.backgroundShare) || 0);
+          const weightedDistance = (dx * dx + dy * dy) / Math.sqrt(share);
+          if (weightedDistance < best) {
+            best = weightedDistance;
+            owner = user;
+          }
+        }
+        cells.push({ x, y, owner });
       }
     }
+    state.hexCells = cells;
+  }
 
-    if (users.length) {
-      const totalShare = users.reduce((sum, user) => sum + Math.max(0, Number(user.marketShare) || 0), 0) || users.length;
-      const quotas = users.map((user, index) => {
-        const exact = cells.length * (totalShare > 0
-          ? Math.max(0, Number(user.marketShare) || 0) / totalShare
-          : 1 / users.length);
-        return { user, index, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
-      });
-      let unassigned = cells.length - quotas.reduce((sum, q) => sum + q.count, 0);
-      quotas.slice().sort((a, b) => b.remainder - a.remainder).forEach(q => {
-        if (unassigned > 0) { q.count++; unassigned--; }
-      });
+  function drawHexBackground(ctx) {
+    const size = 44;
+    const stepX = Math.sqrt(3) * size;
+    const stepY = 1.5 * size;
+    const minX = Math.max(0, state.camera.x - state.width / (2 * state.camera.zoom) - stepX);
+    const maxX = Math.min(state.world.width, state.camera.x + state.width / (2 * state.camera.zoom) + stepX);
+    const minY = Math.max(0, state.camera.y - state.height / (2 * state.camera.zoom) - stepY);
+    const maxY = Math.min(state.world.height, state.camera.y + state.height / (2 * state.camera.zoom) + stepY);
 
-      const candidates = [];
-      cells.forEach((cell, cellIndex) => {
-        users.forEach((user, userIndex) => {
-          const dx = cell.x - user.x, dy = cell.y - user.y;
-          const share = Math.max(0.000001, Number(user.marketShare) || (1 / users.length));
-          const distance = (dx * dx + dy * dy) / Math.pow(share, 0.38);
-          candidates.push({ cellIndex, userIndex, distance });
-        });
-      });
-      candidates.sort((a, b) => a.distance - b.distance);
-      const remaining = quotas.map(q => q.count);
-      const assigned = new Uint8Array(cells.length);
-      let placed = 0;
-      for (const candidate of candidates) {
-        if (placed >= cells.length) break;
-        if (assigned[candidate.cellIndex] || remaining[candidate.userIndex] <= 0) continue;
-        assigned[candidate.cellIndex] = 1;
-        remaining[candidate.userIndex]--;
-        cells[candidate.cellIndex].owner = users[candidate.userIndex];
-        placed++;
-      }
-      // The quotas sum to the full grid; this fallback only handles pathological floating-point edge cases.
-      if (placed < cells.length) {
-        const fallback = users[0];
-        cells.forEach(cell => { if (!cell.owner) cell.owner = fallback; });
-      }
-    }
-
-    cells.forEach(cell => {
+    for (const cell of state.hexCells) {
+      if (cell.x < minX || cell.x > maxX || cell.y < minY || cell.y > maxY) continue;
       const { x, y, owner } = cell;
       ctx.beginPath();
       for (let corner = 0; corner < 6; corner++) {
@@ -600,19 +605,18 @@
         if (corner === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.closePath();
-      ctx.fillStyle = owner ? rgba(owner.color, 0.82) : '#15171b';
+      ctx.fillStyle = owner ? rgba(owner.color, 0.78) : '#15171b';
       ctx.fill();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = owner ? rgba(owner.color, 0.96) : 'rgba(255,255,255,.08)';
+      ctx.strokeStyle = owner ? rgba(owner.color, 0.9) : 'rgba(255,255,255,.08)';
       ctx.stroke();
-    });
+    }
   }
-
   function separateNodeCollisions(nodes) {
     if (nodes.length < 2) return;
     const cellSize = 100;
     const gap = 12;
-    const iterations = 700;
+    const iterations = 65;
 
     for (let iteration = 0; iteration < iterations; iteration++) {
       const buckets = new Map();
@@ -671,8 +675,7 @@
       dpr * (state.height / 2 - state.camera.y * state.camera.zoom)
     );
 
-    const users = state.nodes.filter(n => n.kind === 'user');
-    drawHexBackground(ctx, users);
+    drawHexBackground(ctx);
 
     const now = Date.now();
     state.edges.forEach(edge => {
