@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0c0916">
   <title>GRIND — Grind your way through the market</title>
-  <link rel="stylesheet" href="styles.css?v=82">
+  <link rel="stylesheet" href="styles.css?v=83">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="importmap">
   {
@@ -72,6 +72,7 @@
           <button class="nav-btn" data-page="account"><span>◎</span> Account</button>
           <button class="nav-btn" data-page="report"><span>△</span> Report</button>
           <button class="nav-btn" id="navNotifications" data-page="notifications"><span>✦</span> Notifications <span id="navNotificationsBadge" class="nav-count-badge hidden">0</span></button>
+          <button class="nav-btn" data-page="grindworld"><span>◎</span> GrindWorld</button>
           <button class="nav-btn hidden" id="navAdmin" data-page="admin"><span>❖</span> Admin</button>
         </nav>
         <div class="side-label">COMPANY</div>
@@ -181,6 +182,17 @@
               <div class="empty-icon">▣</div>
               <h3>No companies on the market yet</h3>
               <p>Create a company or search with another keyword.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- LIVE ACTIVITY -->
+        <section id="page-live" class="page hidden">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow purple-text">LIVE MARKET ACTIVITY</div>
+              <h3>Live</h3>
+              <p class="muted">Trades, new coins, videos and activity from across GRIND.</p>
             </div>
           </div>
           <div class="feed-tabs" id="liveFilterTabs">
@@ -796,6 +808,45 @@
               <p>No pending requests.</p>
             </div>
           </div>
+        </section>
+
+        <!-- GRINDWORLD NETWORK -->
+        <section id="page-grindworld" class="page hidden">
+          <div class="grindworld-heading">
+            <div>
+              <div class="eyebrow purple-text">THE GRIND NETWORK</div>
+              <h3>GrindWorld</h3>
+              <p class="muted">A live map of the people, companies, products and coins connected through the market.</p>
+            </div>
+            <div class="grindworld-toolbar">
+              <button type="button" class="zoom-btn" id="grindWorldRefresh">↻ Refresh</button>
+              <button type="button" class="zoom-btn" id="grindWorldZoomOut" aria-label="Zoom out">−</button>
+              <button type="button" class="zoom-btn" id="grindWorldZoomIn" aria-label="Zoom in">＋</button>
+              <button type="button" class="zoom-btn" id="grindWorldFit">Fit network</button>
+            </div>
+          </div>
+          <div class="grindworld-meta">
+            <span id="grindWorldStats">Loading network…</span>
+            <span class="grindworld-legend">
+              <span><i class="gw-legend-user"></i> Users</span>
+              <span><i class="gw-legend-company"></i> Companies</span>
+              <span><i class="gw-legend-product"></i> Products</span>
+              <span><i class="gw-legend-coin"></i> Coins</span>
+              <span><i class="gw-legend-pulse"></i> Recent activity</span>
+            </span>
+          </div>
+          <div class="grindworld-stage">
+            <canvas id="grindWorldCanvas" aria-label="Interactive GrindWorld network visualization"></canvas>
+            <div class="grindworld-loading" id="grindWorldLoading">Building the network…</div>
+            <div class="grindworld-selection hidden" id="grindWorldSelection">
+              <button type="button" id="grindWorldSelectionClose" aria-label="Close details">×</button>
+              <small id="grindWorldSelectionType">NETWORK NODE</small>
+              <strong id="grindWorldSelectionName">Selected node</strong>
+              <span id="grindWorldSelectionMeta"></span>
+            </div>
+            <div class="grindworld-hint">Drag to move · Scroll to zoom · Select a circle for details</div>
+          </div>
+          <p class="grindworld-footnote">Colored regions represent each user’s share of GRIND market activity. Connections between users, companies, products and coins are based on saved platform data. Inactive purchase connections expire after 48 hours.</p>
         </section>
 
         <!-- ADMIN (only Dompinator) -->
@@ -2015,5 +2066,6 @@
   <script defer src="company-stocks.js?v=2"></script>
   <script defer src="company-pc.js?v=4"></script>
   <script defer src="company-gpu.js?v=26"></script>
+  <script defer src="grindworld.js?v=1"></script>
 </body>
 </html>
