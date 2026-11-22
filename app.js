@@ -2844,7 +2844,7 @@ async function loadCompanyProductDetails(id){
  const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
  const isGpu = !isPc && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
  const draft = isProductDraft(p);
- const canEdit = p.owner_id === currentUser?.id;
+ const canEdit = currentCompany?.owner_id === currentUser?.id && p.company_id === currentCompany?.id;
  const unitValue = Math.max(0, Number(p.product_value ?? p.production_cost ?? 0));
  const stockCount = Number(p.stock || 0);
  const produceBlock = draft
@@ -2877,7 +2877,7 @@ async function loadCompanyProductDetails(id){
      bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
      $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
    }
-   $('#companyProductEditDraft')?.addEventListener('click',()=>editCpuDraftProduct(id));
+   $('#companyProductEditDraft')?.addEventListener('click',()=>window.editGpuDraftProduct?.(id));
    $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
    $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
    $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
