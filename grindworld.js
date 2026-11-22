@@ -126,9 +126,9 @@
         profiles, companies, products, coins, coinBuys,
         companyBuys, productPurchases, holdings, companyHoldings, companyPriceRows
       ] = await Promise.all([
-        safeRows(sb.from('profiles').select('id,username,avatar_url,is_test_account').limit(1000)),
+        safeRows(sb.from('profiles').select('id,username,avatar_url,is_test_account,user_color').limit(1000)),
         safeRows(sb.from('product_companies').select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,created_at').order('created_at', { ascending: false }).limit(1000)),
-        safeRows(sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,product_value,purchase_count,status,created_at').eq('status', 'published').order('created_at', { ascending: false }).limit(2000)),
+        safeRows(sb.from('product_company_products').select('id,company_id,owner_id,product_name,product_line,listed_price,product_value,purchase_count,stock,design_data,status,created_at').eq('status', 'published').order('created_at', { ascending: false }).limit(2000)),
         safeRows(sb.from('coins').select('id,name,ticker,image_url,creator_id,price,created_at').order('created_at', { ascending: false }).limit(1000)),
         safeRows(sb.from('trades').select('id,coin_id,user_id,type,amount_usd,created_at').eq('type', 'buy').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(2000)),
         safeRows(sb.from('company_stock_trades').select('id,company_id,user_id,type,amount_usd,created_at').eq('type', 'buy').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(1500)),
@@ -231,11 +231,12 @@
       const userPosition = new Map();
       const goldenAngle = Math.PI * (3 - Math.sqrt(5));
       const outerRadius = Math.max(260, Math.sqrt(activeProfiles.length) * 210);
+      const maxShare = Math.max(0.000001, maxScore / totalPower);
       activeProfiles.forEach((profile, index) => {
         const score = scoreByUser.get(String(profile.id)) || 1;
         const share = score / totalPower;
-        const rankProgress = activeProfiles.length <= 1 ? 0 : index / (activeProfiles.length - 1);
-        const distance = 105 + Math.pow(rankProgress, 0.72) * outerRadius;
+        const powerRatio = Math.max(0, Math.min(1, share / maxShare));
+        const distance = 140 + Math.pow(1 - Math.sqrt(powerRatio), 0.72) * outerRadius;
         const angle = index * goldenAngle - Math.PI / 2;
         const x = outerRadius + 420 + Math.cos(angle) * distance;
         const y = outerRadius + 420 + Math.sin(angle) * distance;
