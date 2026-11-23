@@ -1,0 +1,6 @@
+{
+  "name": "GRIND",
+  "description": "Grind your way through the market — Create, discover and trade community currencies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
