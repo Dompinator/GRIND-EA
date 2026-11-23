@@ -95,6 +95,8 @@
     if (!p || typeof p !== 'object') return 'cpu';
     if (typeof window.isPcProductRow === 'function' && window.isPcProductRow(p)) return 'pc';
     if (String(p.product_line || '').toLowerCase() === 'pc' || p.design_data?.pc_build) return 'pc';
+    if (typeof window.isMoboProductRow === 'function' && window.isMoboProductRow(p)) return 'mobo';
+    if (String(p.product_line || '').toLowerCase() === 'motherboard' || p.design_data?.mobo_build) return 'mobo';
     if (typeof window.isGpuProductRow === 'function' && window.isGpuProductRow(p)) return 'gpu';
     if (String(p.product_line || '').toLowerCase() === 'gpu') return 'gpu';
     return 'cpu';
@@ -699,6 +701,55 @@
     rootGroup.add(box);
   }
 
+  // ---------- Motherboard 3D Builder (Read-Only Preview with Layer Explode) ----------
+  function buildMoboPreview(p) {
+    const dData = p.design_data || {};
+    const cfg = typeof window.buildMoboConfigFromProduct === 'function'
+      ? window.buildMoboConfigFromProduct(p)
+      : {
+          boardSize: dData.board_size || p.body_type || 'small',
+          ramSlots: Number(dData.ram_slots ?? 0),
+          pcbColor: dData.pcb_color || '#121620',
+          armorColor: dData.armor_color || '#1f2533',
+          accentColor: dData.accent_color || '#a855f7',
+          vrmStyle: dData.vrm_style || 'finned',
+          ioShield: dData.io_shield !== false,
+          m2Shield: dData.m2_shield !== false,
+          rgbAccent: !!dData.rgb_accent,
+          name: p.product_name || 'Motherboard',
+          companyName: p.product_companies?.company_name || '',
+          logoUrl: p.product_companies?.logo_data_url || ''
+        };
+
+    if (typeof window.MoboDesigner3D?.buildAssembly === 'function') {
+      const asm = window.MoboDesigner3D.buildAssembly(THREE, cfg, {
+        isSoftwareGl,
+        onLogoReady: () => {
+          if (activeProduct === p && !modalEl?.classList.contains('hidden')) {
+            clearRoot();
+            buildMoboPreview(p);
+          }
+        }
+      });
+      if (asm && asm.root) {
+        rootGroup.add(asm.root);
+        explodeParts.push(
+          { obj: asm.pcbGroup, axis: 'y', base: asm.pcbGroup.position.y, delta: -0.18 },
+          { obj: asm.socketGroup, axis: 'y', base: asm.socketGroup.position.y, delta: 0.28 },
+          { obj: asm.ramGroup, axis: 'y', base: asm.ramGroup.position.y, delta: 0.42 },
+          { obj: asm.vrmGroup, axis: 'y', base: asm.vrmGroup.position.y, delta: 0.54 },
+          { obj: asm.ioGroup, axis: 'x', base: asm.ioGroup.position.x, delta: -0.40 },
+          { obj: asm.pcieGroup, axis: 'y', base: asm.pcieGroup.position.y, delta: 0.34 },
+          { obj: asm.heatsinksGroup, axis: 'y', base: asm.heatsinksGroup.position.y, delta: 0.64 }
+        );
+        return;
+      }
+    }
+
+    const fallback = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 2.4), new THREE.MeshStandardMaterial({ color: 0x121620 }));
+    rootGroup.add(fallback);
+  }
+
   function applyExplodeAndStates(dt) {
     currentExplode += (targetExplode - currentExplode) * Math.min(1, dt * 8);
     for (const part of explodeParts) {
@@ -736,6 +787,14 @@
       else if (preset === 'rear') Object.assign(camTargetPos, { x: -6.4 * s, y: 0.6 * s, z: 1.75 * s });
       else if (preset === 'top') Object.assign(camTargetPos, { x: 0.25 * s, y: 6.8 * s, z: 2.35 * s });
       else Object.assign(camTargetPos, { x: 4.95 * s, y: 2.95 * s, z: 5.55 * s });
+    } else if (activeKind === 'mobo') {
+      const szKey = activeProduct?.design_data?.board_size || activeProduct?.body_type || 'small';
+      const s = szKey === 'large' ? 1.42 : szKey === 'medium' ? 1.24 : 0.96;
+      if (preset === 'top') Object.assign(camTargetPos, { x: 0.01, y: 3.9 * s, z: 0.35 * s });
+      else if (preset === 'io') Object.assign(camTargetPos, { x: -3.25 * s, y: 1.3 * s, z: 0.95 * s });
+      else if (preset === 'ram') Object.assign(camTargetPos, { x: 2.95 * s, y: 1.65 * s, z: 1.65 * s });
+      else if (preset === 'back') Object.assign(camTargetPos, { x: 0.3 * s, y: -2.5 * s, z: 2.25 * s });
+      else Object.assign(camTargetPos, { x: 2.15 * s, y: 2.55 * s, z: 2.4 * s });
     } else {
       if (preset === 'top') Object.assign(camTargetPos, { x: 0, y: 3.7, z: 0.35 });
       else if (preset === 'side') Object.assign(camTargetPos, { x: 0.05, y: 0.45, z: 3.45 });
@@ -753,7 +812,9 @@
       ? [['hero', '3/4 Hero'], ['top', 'Top'], ['side', 'Side'], ['end', 'End'], ['back', 'Backplate']]
       : activeKind === 'pc'
         ? [['iso', '3/4 View'], ['interior', 'Interior'], ['front', 'Front'], ['rear', 'Rear'], ['top', 'Top']]
-        : [['hero', '3/4 View'], ['top', 'Top'], ['side', 'Side'], ['pins', 'Pins']];
+        : activeKind === 'mobo'
+          ? [['hero', '3/4 Hero'], ['top', 'Top'], ['io', 'Rear I/O'], ['ram', 'RAM / ATX'], ['back', 'Back PCB']]
+          : [['hero', '3/4 View'], ['top', 'Top'], ['side', 'Side'], ['pins', 'Pins']];
 
     camWrap.innerHTML = presets.map(([k, lbl], idx) =>
       '<button type="button" data-prev-cam="' + k + '"' + (idx === 0 ? ' class="active"' : '') + '>' + lbl + '</button>'
@@ -1013,6 +1074,7 @@
 
     if (activeKind === 'gpu') buildGpuPreview(p);
     else if (activeKind === 'pc') buildPcPreview(p);
+    else if (activeKind === 'mobo') buildMoboPreview(p);
     else buildCpuPreview(p);
 
     setCameraPreset('default');
@@ -1064,23 +1126,27 @@
     const compName = companyNameHint || p.product_companies?.company_name || 'GRIND Company';
     const specsLine = activeKind === 'pc'
       ? (window.formatPcHardwareBadges?.(p) || window.formatPcSpecLine?.(p) || 'Custom PC Build')
-      : activeKind === 'gpu'
-        ? (window.formatGpuHardwareBadges?.(p) || window.formatGpuSpecLine?.(p) || 'GPU')
-        : (typeof formatCpuHardwareBadges === 'function' && typeof resolveCpuProductSpec === 'function'
-            ? formatCpuHardwareBadges(resolveCpuProductSpec(p))
-            : `${p.core_count || 0} Cores · ${p.thread_count || 0} Threads`);
+      : activeKind === 'mobo'
+        ? (window.formatMoboHardwareBadges?.(p) || window.formatMoboSpecLine?.(p) || 'Motherboard')
+        : activeKind === 'gpu'
+          ? (window.formatGpuHardwareBadges?.(p) || window.formatGpuSpecLine?.(p) || 'GPU')
+          : (typeof formatCpuHardwareBadges === 'function' && typeof resolveCpuProductSpec === 'function'
+              ? formatCpuHardwareBadges(resolveCpuProductSpec(p))
+              : `${p.core_count || 0} Cores · ${p.thread_count || 0} Threads`);
 
     const eyebrow = modalEl.querySelector('#eaPreviewEyebrow');
     const title = modalEl.querySelector('#eaPreviewTitle');
     const sub = modalEl.querySelector('#eaPreviewSubtitle');
     const footer = modalEl.querySelector('#eaPreviewFooter');
-    if (eyebrow) eyebrow.textContent = `${activeKind.toUpperCase()} 3D PREVIEW · READ-ONLY`;
+    if (eyebrow) eyebrow.textContent = `${activeKind === 'mobo' ? 'MOTHERBOARD' : activeKind.toUpperCase()} 3D PREVIEW · READ-ONLY`;
     if (title) title.textContent = p.product_name || 'Product';
     if (sub) sub.textContent = `by ${compName} · ${specsLine}`;
     if (footer) {
       const st = activeKind === 'gpu' && window.getGpuProductScoreTier
         ? window.getGpuProductScoreTier(p)
-        : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
+        : activeKind === 'mobo' && window.getMoboProductScoreTier
+          ? window.getMoboProductScoreTier(p)
+          : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
       const stockTxt = Number(p.stock || 0) > 0 ? `${Number(p.stock)} in stock` : 'Out Of Stock';
       footer.innerHTML =
         `<span><b>Price:</b> ${esc(fmtMoney(p.listed_price || 0))}</span>` +

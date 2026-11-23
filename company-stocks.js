@@ -70,6 +70,7 @@
   function lineLabel(comp) {
     const lines = Array.isArray(comp?.product_lines) ? comp.product_lines : [];
     if (lines.includes('pc')) return 'PC CO.';
+    if (lines.includes('motherboard')) return 'MOBO CO.';
     if (lines.includes('gpu')) return 'GPU CO.';
     return 'CPU CO.';
   }

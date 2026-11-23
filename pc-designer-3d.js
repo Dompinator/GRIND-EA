@@ -23,6 +23,7 @@
     showAirflow: false,
     gpuMount: 'horizontal', // 'horizontal' | 'vertical'
     fans: [],            // [{ id, fanType, mount, position, bladeColor, rgbRing }]
+    motherboard: null,   // full Motherboard cfg built by buildMoboConfigFromProduct
     cpu: null,           // full CPU spec resolved by resolveCpuProductSpec
     gpu: null            // full GPU cfg built by buildGpuConfigFromProduct
   };
@@ -551,83 +552,189 @@
       }
     });
 
-    // 7. Realistic ATX / Mini-ITX / E-ATX Motherboard
+    // 7. Real 1:1 Selected Motherboard OR Stock Case Tray Motherboard
     const moboZ = trayZ + 0.065; // standoffs clearance
-    const moboMat = new T.MeshStandardMaterial({
-      color: 0x161b26,
-      map: textures.moboTex,
-      metalness: 0.28,
-      roughness: 0.54
-    });
-    addBox(motherboardGroup, moboW, moboH, 0.032, moboMat, moboX, moboY, moboZ);
-    // Motherboard rear I/O shroud & top VRM heatsink
-    addBox(motherboardGroup, 0.26, moboH * 0.42, 0.14, frameMat, moboX - moboW * 0.41, moboY + moboH * 0.25, moboZ + 0.085);
-    addBox(motherboardGroup, 0.28, moboH * 0.42, 0.022, accentMat, moboX - moboW * 0.41, moboY + moboH * 0.25, moboZ + 0.158);
-    addBox(motherboardGroup, moboW * 0.42, 0.18, 0.12, brushedSilverMat, moboX - moboW * 0.05, moboY + moboH * 0.42, moboZ + 0.075);
-    // Chipset heatsink block & CMOS battery
-    addBox(motherboardGroup, moboW * 0.24, moboH * 0.18, 0.07, frameMat, moboX + moboW * 0.30, moboY - moboH * 0.28, moboZ + 0.045);
-    const cmos = new T.Mesh(new T.CylinderGeometry(0.08, 0.08, 0.025, 18), brushedSilverMat);
-    cmos.rotation.x = Math.PI / 2;
-    cmos.position.set(moboX - moboW * 0.18, moboY - moboH * 0.32, moboZ + 0.024);
-    motherboardGroup.add(cmos);
-    // M.2 NVMe Shield right above PCIe x16
-    const pcieY = moboY - moboH * 0.16;
-    addBox(motherboardGroup, moboW * 0.36, 0.11, 0.042, darkMetalMat, moboX - moboW * 0.04, pcieY + 0.15, moboZ + 0.032);
-    // Steel-reinforced PCIe x16 slot
-    addBox(motherboardGroup, moboW * 0.46, 0.068, 0.09, brushedSilverMat, moboX - moboW * 0.12, pcieY, moboZ + 0.055);
-    addBox(motherboardGroup, moboW * 0.42, 0.032, 0.095, darkMetalMat, moboX - moboW * 0.12, pcieY, moboZ + 0.058);
-    // 4x DDR5 DIMM slots (2 for Mini-ITX)
-    const ramSlots = cfg.caseSize === 'small' ? 2 : 4;
-    const sockX = moboX - moboW * 0.05;
-    const sockY = moboY + moboH * 0.17;
-    for (let r = 0; r < ramSlots; r++) {
-      const rx = moboX + moboW * 0.22 + r * 0.085;
-      addBox(motherboardGroup, 0.038, Math.min(1.25, moboH * 0.40), 0.075, darkMetalMat, rx, sockY, moboZ + 0.048);
-    }
-    // 24-pin ATX header on right edge of mobo
-    const atxHeaderPos = { x: moboX + moboW * 0.44, y: moboY + moboH * 0.08, z: moboZ + 0.05 };
-    addBox(motherboardGroup, 0.065, 0.38, 0.08, darkMetalMat, atxHeaderPos.x, atxHeaderPos.y, atxHeaderPos.z);
-
-    // Hinged LGA CPU Socket + Articulated Metal ILM Retention Bracket & Lever
     const asmOpts = opts.assembly && typeof opts.assembly === 'object' ? opts.assembly : {};
-    const sockPad = cfg.caseSize === 'small' ? 0.56 : 0.60;
-    const moboSurfaceZ = moboZ + 0.016;
+    const moboLeft = -w / 2 + wall + 0.06;
+    const moboTop = h / 2 - wall - topClear;
+
+    let sockX = moboX - moboW * 0.05;
+    let sockY = moboY + moboH * 0.17;
+    let pcieY = moboY - moboH * 0.16;
+    let moboSurfaceZ = moboZ + 0.016;
+    let atxHeaderPos = { x: moboX + moboW * 0.44, y: moboY + moboH * 0.08, z: moboZ + 0.05 };
+    let ilmHoodPivot = null;
+    let ilmLeverPivot = null;
+    let mountedMoboAsm = null;
+    const moboScrews = [];
+
+    const makeScrewUnit = (parentGroup, px, py, pz, rx, ry, rz, isUnscrewed) => {
+      const sWrap = new T.Group();
+      sWrap.position.set(px, py, pz);
+      sWrap.rotation.set(rx, ry, rz);
+
+      // Threaded bracket boss collar
+      const boss = new T.Mesh(new T.CylinderGeometry(0.052, 0.056, 0.03, 16), frameMat);
+      boss.rotation.x = Math.PI / 2;
+      boss.position.z = -0.012;
+      sWrap.add(boss);
+
+      // Subtle glowing guide ring (highlighted during screwing step)
+      const ringMat = new T.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.0, side: T.DoubleSide });
+      const guideRing = new T.Mesh(new T.RingGeometry(0.062, 0.085, 24), ringMat);
+      guideRing.position.z = 0.008;
+      sWrap.add(guideRing);
+
+      // Screw mesh (rotates around local Z & translates in local Z as driven flush!)
+      const screwPivot = new T.Group();
+      const shaft = new T.Mesh(new T.CylinderGeometry(0.022, 0.020, 0.12, 12), brushedSilverMat);
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.z = -0.045;
+      screwPivot.add(shaft);
+
+      const head = new T.Mesh(new T.CylinderGeometry(0.052, 0.048, 0.036, 18), brushedSilverMat);
+      head.rotation.x = Math.PI / 2;
+      head.position.z = 0.022;
+      screwPivot.add(head);
+
+      // Machined Phillips / hex slot on top of screw head so rotation is super visible!
+      const slotMat = new T.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.5 });
+      const slotA = new T.Mesh(new T.BoxGeometry(0.064, 0.014, 0.01), slotMat);
+      slotA.position.z = 0.04;
+      const slotB = new T.Mesh(new T.BoxGeometry(0.014, 0.064, 0.01), slotMat);
+      slotB.position.z = 0.04;
+      screwPivot.add(slotA, slotB);
+
+      sWrap.add(screwPivot);
+      parentGroup.add(sWrap);
+
+      return { wrap: sWrap, pivot: screwPivot, head, guideRing, ringMat, seated: !isUnscrewed };
+    };
+
+    const addBrassStandoffs = (mx, my, mw, mh) => {
+      const brassMat = new T.MeshStandardMaterial({ color: 0xd4a439, metalness: 0.9, roughness: 0.25 });
+      const pts = [
+        [mx - mw * 0.44, my - mh * 0.44], [mx, my - mh * 0.44], [mx + mw * 0.44, my - mh * 0.44],
+        [mx - mw * 0.44, my + mh * 0.44], [mx, my + mh * 0.44], [mx + mw * 0.44, my + mh * 0.44]
+      ];
+      const stGeo = new T.CylinderGeometry(0.028, 0.028, 0.052, 8);
+      pts.forEach(([sx, sy]) => {
+        const st = new T.Mesh(stGeo, brassMat);
+        st.rotation.x = Math.PI / 2;
+        st.position.set(sx, sy, (trayZ + moboZ) * 0.5);
+        chassisGroup.add(st);
+      });
+    };
+
+    if (cfg.motherboard && typeof window.MoboDesigner3D?.buildAssembly === 'function') {
+      const moboAsm = window.MoboDesigner3D.buildAssembly(T, cfg.motherboard, {
+        isSoftwareGl: isSoft,
+        assembly: asmOpts,
+        onAssetReady: opts.onAssetReady
+      });
+      if (moboAsm && moboAsm.root) {
+        const actW = moboAsm.dims.w;
+        const actH = moboAsm.dims.d;
+        const actX = moboLeft + actW / 2;
+        const actY = moboTop - actH / 2;
+
+        addBrassStandoffs(actX, actY, actW, actH);
+
+        moboAsm.root.rotation.x = Math.PI / 2;
+        moboAsm.root.position.set(actX, actY, moboZ);
+        motherboardGroup.add(moboAsm.root);
+
+        sockX = actX + moboAsm.layout.sockWorldOffsetX;
+        sockY = actY + moboAsm.layout.sockWorldOffsetY;
+        pcieY = actY + moboAsm.layout.pcieWorldOffsetY;
+        moboSurfaceZ = moboZ + moboAsm.layout.surfaceWorldZ;
+        atxHeaderPos = {
+          x: actX + moboAsm.layout.atxWorldOffsetX,
+          y: actY + moboAsm.layout.atxWorldOffsetY,
+          z: moboSurfaceZ + 0.05
+        };
+        ilmHoodPivot = moboAsm.ilmHoodPivot;
+        ilmLeverPivot = moboAsm.ilmLeverPivot;
+        mountedMoboAsm = moboAsm;
+
+        // 4 corner standoff mounting screws on Motherboard PCB
+        [
+          [actX - actW * 0.44, actY + actH * 0.44],
+          [actX + actW * 0.44, actY + actH * 0.44],
+          [actX - actW * 0.44, actY - actH * 0.44],
+          [actX + actW * 0.44, actY - actH * 0.44]
+        ].forEach(([sx, sy]) => {
+          moboScrews.push(makeScrewUnit(motherboardGroup, sx, sy, moboSurfaceZ + 0.002, 0, 0, 0, !!asmOpts.unscrewedMobo));
+        });
+      }
+    }
+
+    if (!mountedMoboAsm) {
+      addBrassStandoffs(moboX, moboY, moboW, moboH);
+      const moboMat = new T.MeshStandardMaterial({
+        color: 0x161b26,
+        map: textures.moboTex,
+        metalness: 0.28,
+        roughness: 0.54
+      });
+      addBox(motherboardGroup, moboW, moboH, 0.032, moboMat, moboX, moboY, moboZ);
+      // Motherboard rear I/O shroud & top VRM heatsink
+      addBox(motherboardGroup, 0.26, moboH * 0.42, 0.14, frameMat, moboX - moboW * 0.41, moboY + moboH * 0.25, moboZ + 0.085);
+      addBox(motherboardGroup, 0.28, moboH * 0.42, 0.022, accentMat, moboX - moboW * 0.41, moboY + moboH * 0.25, moboZ + 0.158);
+      addBox(motherboardGroup, moboW * 0.42, 0.18, 0.12, brushedSilverMat, moboX - moboW * 0.05, moboY + moboH * 0.42, moboZ + 0.075);
+      // Chipset heatsink block & CMOS battery
+      addBox(motherboardGroup, moboW * 0.24, moboH * 0.18, 0.07, frameMat, moboX + moboW * 0.30, moboY - moboH * 0.28, moboZ + 0.045);
+      const cmos = new T.Mesh(new T.CylinderGeometry(0.08, 0.08, 0.025, 18), brushedSilverMat);
+      cmos.rotation.x = Math.PI / 2;
+      cmos.position.set(moboX - moboW * 0.18, moboY - moboH * 0.32, moboZ + 0.024);
+      motherboardGroup.add(cmos);
+      // M.2 NVMe Shield right above PCIe x16
+      addBox(motherboardGroup, moboW * 0.36, 0.11, 0.042, darkMetalMat, moboX - moboW * 0.04, pcieY + 0.15, moboZ + 0.032);
+      // Steel-reinforced PCIe x16 slot
+      addBox(motherboardGroup, moboW * 0.46, 0.068, 0.09, brushedSilverMat, moboX - moboW * 0.12, pcieY, moboZ + 0.055);
+      addBox(motherboardGroup, moboW * 0.42, 0.032, 0.095, darkMetalMat, moboX - moboW * 0.12, pcieY, moboZ + 0.058);
+      // 4x DDR5 DIMM slots (2 for Mini-ITX)
+      const ramSlots = cfg.caseSize === 'small' ? 2 : 4;
+      for (let r = 0; r < ramSlots; r++) {
+        const rx = moboX + moboW * 0.22 + r * 0.085;
+        addBox(motherboardGroup, 0.038, Math.min(1.25, moboH * 0.40), 0.075, darkMetalMat, rx, sockY, moboZ + 0.048);
+      }
+      // 24-pin ATX header on right edge of mobo
+      addBox(motherboardGroup, 0.065, 0.38, 0.08, darkMetalMat, atxHeaderPos.x, atxHeaderPos.y, atxHeaderPos.z);
+
+      // Hinged LGA CPU Socket + Articulated Metal ILM Retention Bracket & Lever
+      const sockPad = cfg.caseSize === 'small' ? 0.56 : 0.60;
+      addBox(motherboardGroup, sockPad + 0.14, sockPad + 0.14, 0.038, darkMetalMat, sockX, sockY, moboZ + 0.028);
+      addBox(motherboardGroup, sockPad * 0.96, sockPad * 0.96, 0.044, new T.MeshStandardMaterial({ color: 0x1a202c, metalness: 0.72, roughness: 0.34 }), sockX, sockY, moboZ + 0.032);
+
+      ilmHoodPivot = new T.Group();
+      const hoodH = sockPad + 0.14;
+      const hoodW = sockPad + 0.12;
+      const hoodBar = 0.09;
+      const hoodRestZ = moboSurfaceZ + 0.068;
+      ilmHoodPivot.position.set(sockX, sockY + hoodH / 2, hoodRestZ);
+      addBox(ilmHoodPivot, hoodW, hoodBar, 0.024, brushedSilverMat, 0, -hoodBar / 2, 0);
+      addBox(ilmHoodPivot, hoodW * 0.78, hoodBar * 0.95, 0.024, brushedSilverMat, 0, -hoodH + hoodBar / 2, 0);
+      addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, -hoodW / 2 + hoodBar / 2, -hoodH / 2, 0);
+      addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, hoodW / 2 - hoodBar / 2, -hoodH / 2, 0);
+      addBox(ilmHoodPivot, 0.16, 0.055, 0.026, brushedSilverMat, 0, -hoodH - 0.015, -0.004);
+      ilmHoodPivot.rotation.x = asmOpts.latchOpen ? -1.18 : 0;
+      motherboardGroup.add(ilmHoodPivot);
+
+      ilmLeverPivot = new T.Group();
+      const leverX = sockX + hoodW / 2 + 0.055;
+      const leverBottomY = sockY - hoodH / 2 - 0.02;
+      ilmLeverPivot.position.set(leverX, leverBottomY, moboSurfaceZ + 0.038);
+      const leverStem = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, hoodH * 1.06, 12), brushedSilverMat);
+      leverStem.position.set(0, hoodH * 0.53, 0.018);
+      ilmLeverPivot.add(leverStem);
+      addBox(ilmLeverPivot, 0.14, 0.032, 0.032, brushedSilverMat, -0.055, hoodH * 1.05, 0.018);
+      addBox(ilmLeverPivot, 0.06, 0.075, 0.042, accentMat, 0.015, hoodH * 1.02, 0.02);
+      ilmLeverPivot.rotation.x = asmOpts.latchOpen ? 1.28 : 0;
+      motherboardGroup.add(ilmLeverPivot);
+    }
+
     const cpuScale = cfg.caseSize === 'small' ? 0.24 : 0.255;
-
-    // Socket base frame & pin bed
-    addBox(motherboardGroup, sockPad + 0.14, sockPad + 0.14, 0.038, darkMetalMat, sockX, sockY, moboZ + 0.028);
-    addBox(motherboardGroup, sockPad * 0.96, sockPad * 0.96, 0.044, new T.MeshStandardMaterial({ color: 0x1a202c, metalness: 0.72, roughness: 0.34 }), sockX, sockY, moboZ + 0.032);
-
-    // Hinged ILM metal clamp window (open center lets you see & paste the CPU IHS!)
-    const ilmHoodPivot = new T.Group();
-    const hoodH = sockPad + 0.14;
-    const hoodW = sockPad + 0.12;
-    const hoodBar = 0.09;
-    const hoodRestZ = moboSurfaceZ + 0.068;
-    ilmHoodPivot.position.set(sockX, sockY + hoodH / 2, hoodRestZ);
-    // Top bar, bottom latch lip, left rail, right rail around center aperture
-    addBox(ilmHoodPivot, hoodW, hoodBar, 0.024, brushedSilverMat, 0, -hoodBar / 2, 0);
-    addBox(ilmHoodPivot, hoodW * 0.78, hoodBar * 0.95, 0.024, brushedSilverMat, 0, -hoodH + hoodBar / 2, 0);
-    addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, -hoodW / 2 + hoodBar / 2, -hoodH / 2, 0);
-    addBox(ilmHoodPivot, hoodBar, hoodH - hoodBar * 1.4, 0.024, brushedSilverMat, hoodW / 2 - hoodBar / 2, -hoodH / 2, 0);
-    // Catch tab at bottom lip
-    addBox(ilmHoodPivot, 0.16, 0.055, 0.026, brushedSilverMat, 0, -hoodH - 0.015, -0.004);
-    ilmHoodPivot.rotation.x = asmOpts.latchOpen ? -1.18 : 0;
-    motherboardGroup.add(ilmHoodPivot);
-
-    // Side steel retention lever arm
-    const ilmLeverPivot = new T.Group();
-    const leverX = sockX + hoodW / 2 + 0.055;
-    const leverBottomY = sockY - hoodH / 2 - 0.02;
-    ilmLeverPivot.position.set(leverX, leverBottomY, moboSurfaceZ + 0.038);
-    const leverStem = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, hoodH * 1.06, 12), brushedSilverMat);
-    leverStem.position.set(0, hoodH * 0.53, 0.018);
-    ilmLeverPivot.add(leverStem);
-    // Top bent cam hook & grip tip
-    addBox(ilmLeverPivot, 0.14, 0.032, 0.032, brushedSilverMat, -0.055, hoodH * 1.05, 0.018);
-    addBox(ilmLeverPivot, 0.06, 0.075, 0.042, accentMat, 0.015, hoodH * 1.02, 0.02);
-    ilmLeverPivot.rotation.x = asmOpts.latchOpen ? 1.28 : 0;
-    motherboardGroup.add(ilmLeverPivot);
 
     // 8. ACTUAL 3D CPU Assembly Mounted in Socket!
     const cpuHolder = new T.Group();
@@ -688,49 +795,6 @@
     let gpuDockedPos = { x: 0, y: pcieY, z: moboSurfaceZ + 0.4 };
     const gpuScrews = [];
 
-    const makeScrewUnit = (px, py, pz, rx, ry, rz) => {
-      const sWrap = new T.Group();
-      sWrap.position.set(px, py, pz);
-      sWrap.rotation.set(rx, ry, rz);
-
-      // Threaded bracket boss collar on chassis
-      const boss = new T.Mesh(new T.CylinderGeometry(0.052, 0.056, 0.03, 16), frameMat);
-      boss.rotation.x = Math.PI / 2;
-      boss.position.z = -0.012;
-      sWrap.add(boss);
-
-      // Subtle glowing guide ring (highlighted during screwing step)
-      const ringMat = new T.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.0, side: T.DoubleSide });
-      const guideRing = new T.Mesh(new T.RingGeometry(0.062, 0.085, 24), ringMat);
-      guideRing.position.z = 0.008;
-      sWrap.add(guideRing);
-
-      // Screw mesh (rotates around local Z & translates in local Z as driven flush!)
-      const screwPivot = new T.Group();
-      const shaft = new T.Mesh(new T.CylinderGeometry(0.022, 0.020, 0.12, 12), brushedSilverMat);
-      shaft.rotation.x = Math.PI / 2;
-      shaft.position.z = -0.045;
-      screwPivot.add(shaft);
-
-      const head = new T.Mesh(new T.CylinderGeometry(0.052, 0.048, 0.036, 18), brushedSilverMat);
-      head.rotation.x = Math.PI / 2;
-      head.position.z = 0.022;
-      screwPivot.add(head);
-
-      // Machined Phillips / hex slot on top of screw head so rotation is super visible!
-      const slotMat = new T.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.5 });
-      const slotA = new T.Mesh(new T.BoxGeometry(0.064, 0.014, 0.01), slotMat);
-      slotA.position.z = 0.04;
-      const slotB = new T.Mesh(new T.BoxGeometry(0.014, 0.064, 0.01), slotMat);
-      slotB.position.z = 0.04;
-      screwPivot.add(slotA, slotB);
-
-      sWrap.add(screwPivot);
-      gpuGroup.add(sWrap);
-
-      return { wrap: sWrap, pivot: screwPivot, head, guideRing, ringMat, seated: !asmOpts.unscrewedGpu };
-    };
-
     if (cfg.gpu) {
       let mountedRealGpu = false;
       if (typeof window.GpuDesigner3D?.buildAssembly === 'function') {
@@ -762,10 +826,10 @@
             // 4 mounting screws on vertical PCIe bracket + riser base
             const bracketX = -w / 2 + wall + 0.075;
             gpuScrews.push(
-              makeScrewUnit(bracketX, vertY + realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0),
-              makeScrewUnit(bracketX, vertY - realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0),
-              makeScrewUnit(ioCenterX - gDims.w * sx * 0.20, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0),
-              makeScrewUnit(ioCenterX - gDims.w * sx * 0.05, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0)
+              makeScrewUnit(gpuGroup, bracketX, vertY + realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, bracketX, vertY - realWid * 0.30, vertZ + 0.06, 0, Math.PI * 0.34, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, ioCenterX - gDims.w * sx * 0.20, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, ioCenterX - gDims.w * sx * 0.05, shroudTopY + 0.07, vertZ + 0.18, -0.35, 0, 0, !!asmOpts.unscrewedGpu)
             );
           } else {
             const gpuY = pcieY;
@@ -791,10 +855,10 @@
             addBox(gpuGroup, 0.06, 0.38, 0.10, frameMat, bracketX - 0.015, gpuY, frontZ);
             addBox(gpuGroup, 0.06, 0.38, 0.10, frameMat, bracketX - 0.015, gpuY, backZ);
             gpuScrews.push(
-              makeScrewUnit(bracketX + 0.025, gpuY + 0.125, frontZ, 0, Math.PI * 0.32, 0),
-              makeScrewUnit(bracketX + 0.025, gpuY - 0.125, frontZ, 0, Math.PI * 0.32, 0),
-              makeScrewUnit(bracketX + 0.025, gpuY + 0.125, backZ, 0, Math.PI * 0.32, 0),
-              makeScrewUnit(bracketX + 0.025, gpuY - 0.125, backZ, 0, Math.PI * 0.32, 0)
+              makeScrewUnit(gpuGroup, bracketX + 0.025, gpuY + 0.125, frontZ, 0, Math.PI * 0.32, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, bracketX + 0.025, gpuY - 0.125, frontZ, 0, Math.PI * 0.32, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, bracketX + 0.025, gpuY + 0.125, backZ, 0, Math.PI * 0.32, 0, !!asmOpts.unscrewedGpu),
+              makeScrewUnit(gpuGroup, bracketX + 0.025, gpuY - 0.125, backZ, 0, Math.PI * 0.32, 0, !!asmOpts.unscrewedGpu)
             );
           }
 
@@ -846,6 +910,8 @@
       fansGroup,
       rgbGroup,
       motherboardGroup,
+      moboAsm: mountedMoboAsm,
+      moboScrews,
       cpuGroup,
       cpuHolder,
       cpuAsm: mountedCpuAsm,
@@ -1154,6 +1220,7 @@
       showAirflow: merged.showAirflow,
       gpuMount: merged.gpuMount,
       fans: merged.fans,
+      motherboard: merged.motherboard || null,
       cpu: merged.cpu || null,
       gpu: merged.gpu || null
     });

@@ -55,6 +55,7 @@
   // Saved cases & PC build state
   let savedCases = [];
   let selectedCaseId = '';
+  let selectedMoboPart = null;
   let selectedCpuPart = null;
   let selectedGpuPart = null;
   let pcGpuMount = 'horizontal'; // 'horizontal' | 'vertical'
@@ -63,7 +64,7 @@
   let selectedPcPageProductId = null;
 
   // Public component browser modal cache
-  let pickerKind = 'cpu'; // 'cpu' | 'gpu'
+  let pickerKind = 'cpu'; // 'cpu' | 'gpu' | 'mobo'
   let publicComponentsCache = [];
 
   let pcThumbsCache = null;
@@ -104,6 +105,11 @@
     return { sizeMeta: sz, matMeta: mat, fansCost, rgbCost, buildCost, fanCount: fans.length, airflow };
   }
 
+  const moboFitsCase = (moboSize, cSize) => {
+    const rank = { small: 1, medium: 2, large: 3 };
+    return (rank[moboSize] || 1) <= (rank[cSize] || 1);
+  };
+
   function buildPcConfigFromCaseAndParts(cObj, cpuPart, gpuPart, extraOpts = {}) {
     const caseCfg = cObj || {
       caseSize,
@@ -116,6 +122,32 @@
       rgbColor: caseRgbColor,
       fans: caseFans
     };
+
+    const moboPart = extraOpts.moboPart !== undefined ? extraOpts.moboPart : selectedMoboPart;
+    let moboObj = null;
+    if (moboPart) {
+      if (typeof window.buildMoboConfigFromProduct === 'function') {
+        moboObj = window.buildMoboConfigFromProduct(moboPart);
+      } else {
+        const md = moboPart.design_data || {};
+        moboObj = {
+          boardSize: md.board_size || moboPart.body_type || 'small',
+          ramSlots: Number(md.ram_slots ?? 0),
+          pcbColor: md.pcb_color || '#121620',
+          armorColor: md.armor_color || '#1f2533',
+          accentColor: md.accent_color || '#a855f7',
+          vrmStyle: md.vrm_style || 'finned',
+          ioShield: md.io_shield !== false,
+          m2Shield: md.m2_shield !== false,
+          rgbAccent: !!md.rgb_accent,
+          name: moboPart.product_name || 'Motherboard',
+          companyName: moboPart.product_companies?.company_name || moboPart.company_name || '',
+          logoUrl: moboPart.product_companies?.logo_data_url || moboPart.company_logo || ''
+        };
+      }
+      moboObj.name = moboPart.product_name || 'Motherboard';
+      moboObj.companyName = moboPart.product_companies?.company_name || moboPart.company_name || '';
+    }
 
     let cpuObj = null;
     if (cpuPart) {
@@ -172,7 +204,7 @@
     }
 
     return {
-      mode: cpuObj || gpuObj ? 'pc' : 'case',
+      mode: moboObj || cpuObj || gpuObj ? 'pc' : 'case',
       caseSize: caseCfg.caseSize || 'small',
       material: caseCfg.material || 'steel',
       frontStyle: caseCfg.frontStyle || 'mesh',
@@ -184,6 +216,7 @@
       gpuMount: extraOpts.gpuMount || 'horizontal',
       openPanel: true,
       fans: Array.isArray(caseCfg.fans) ? caseCfg.fans : [],
+      motherboard: moboObj,
       cpu: cpuObj,
       gpu: gpuObj
     };
@@ -204,7 +237,8 @@
     };
     const comps = d.components || {};
     return buildPcConfigFromCaseAndParts(cObj, comps.cpu || null, comps.gpu || null, {
-      gpuMount: d.gpu_mount || 'horizontal'
+      gpuMount: d.gpu_mount || 'horizontal',
+      moboPart: comps.motherboard || null
     });
   }
   window.buildPcConfigFromProduct = buildPcConfigFromProduct;
@@ -214,9 +248,10 @@
     const sizeTxt = (d.case_size || d.case_config?.caseSize || 'small').toUpperCase() + ' Case';
     const fanCount = Number(d.fan_count ?? d.case_config?.fans?.length ?? 0);
     const comps = d.components || {};
+    const moboTxt = comps.motherboard?.product_name ? comps.motherboard.product_name : null;
     const cpuTxt = comps.cpu?.product_name ? comps.cpu.product_name : 'No CPU';
     const gpuTxt = comps.gpu?.product_name ? comps.gpu.product_name : 'No GPU';
-    return sizeTxt + ' · ' + fanCount + ' Fan' + (fanCount === 1 ? '' : 's') + ' · ' + cpuTxt + ' · ' + gpuTxt;
+    return sizeTxt + ' · ' + fanCount + ' Fan' + (fanCount === 1 ? '' : 's') + (moboTxt ? ' · ' + moboTxt : '') + ' · ' + cpuTxt + ' · ' + gpuTxt;
   }
 
   function formatPcHardwareBadges(p) {
@@ -225,13 +260,17 @@
     const sizeKey = d.case_size || d.case_config?.caseSize || 'small';
     const sizeLabel = CASE_SIZES[sizeKey]?.label || 'Small Case';
     const fanCount = Number(d.fan_count ?? d.case_config?.fans?.length ?? 0);
+    const moboDesc = comps.motherboard
+      ? ('Motherboard: ' + comps.motherboard.product_name + ' (' + ((comps.motherboard.design_data?.board_size || comps.motherboard.body_type || 'small').toUpperCase()) + ', ' + Number(comps.motherboard.design_data?.ram_slots || 0) + ' RAM)')
+      : 'Motherboard: Tray Included';
     const parts = [
       sizeLabel,
       fanCount + ' Case Fan' + (fanCount === 1 ? '' : 's'),
       d.rgb_enabled ? 'RGB' : null,
+      moboDesc,
       comps.cpu ? ('CPU: ' + comps.cpu.product_name + (comps.cpu.core_count ? ' (' + comps.cpu.core_count + 'C/' + (comps.cpu.thread_count || 0) + 'T)' : '')) : 'CPU: None',
       comps.gpu ? ('GPU: ' + comps.gpu.product_name) : 'GPU: None',
-      'Mobo/RAM/PSU: Soon'
+      'RAM/PSU: Soon'
     ].filter(Boolean);
     return parts.join(' · ');
   }
@@ -992,16 +1031,43 @@
   function computePcBuildValues() {
     const cObj = savedCases.find(c => c.id === selectedCaseId) || null;
     const cStats = cObj ? getCaseStats(cObj) : { buildCost: 0, fanCount: 0, airflow: 'No Case', sizeMeta: CASE_SIZES.small };
+    const moboPrice = selectedMoboPart ? Math.max(0, Number(selectedMoboPart.listed_price || 0)) : 0;
     const cpuPrice = selectedCpuPart ? Math.max(0, Number(selectedCpuPart.listed_price || 0)) : 0;
     const gpuPrice = selectedGpuPart ? Math.max(0, Number(selectedGpuPart.listed_price || 0)) : 0;
-    const totalUnitCost = cStats.buildCost + cpuPrice + gpuPrice;
-    return { cObj, cStats, cpuPrice, gpuPrice, totalUnitCost };
+    const totalUnitCost = cStats.buildCost + moboPrice + cpuPrice + gpuPrice;
+    return { cObj, cStats, moboPrice, cpuPrice, gpuPrice, totalUnitCost };
   }
 
   function updateBuildSpecsReadout() {
-    const { cObj, cStats, cpuPrice, gpuPrice, totalUnitCost } = computePcBuildValues();
+    const { cObj, cStats, moboPrice, cpuPrice, gpuPrice, totalUnitCost } = computePcBuildValues();
     if ($('#eaPcTotalCost')) $('#eaPcTotalCost').textContent = '$' + totalUnitCost.toLocaleString();
-    if ($('#eaPcPartsSummary')) $('#eaPcPartsSummary').textContent = (selectedCpuPart ? 'CPU ✓' : 'No CPU') + ' · ' + (selectedGpuPart ? 'GPU ✓' : 'No GPU');
+    if ($('#eaPcPartsSummary')) {
+      $('#eaPcPartsSummary').textContent =
+        (selectedMoboPart ? 'Mobo ✓' : 'No Mobo') + ' · ' +
+        (selectedCpuPart ? 'CPU ✓' : 'No CPU') + ' · ' +
+        (selectedGpuPart ? 'GPU ✓' : 'No GPU');
+    }
+
+    const moboSlot = $('#eaPcSelectedMoboCard');
+    if (moboSlot) {
+      if (selectedMoboPart) {
+        const compName = selectedMoboPart.product_companies?.company_name || selectedMoboPart.company_name || 'Mobo Company';
+        const md = selectedMoboPart.design_data || {};
+        const bSize = (md.board_size || selectedMoboPart.body_type || 'small').toUpperCase();
+        const ramCt = Number(md.ram_slots || 0);
+        moboSlot.innerHTML =
+          '<div class="ea-pc-picked-row"><div><strong>' + esc(selectedMoboPart.product_name) + '</strong>' +
+          '<small>' + esc(compName) + ' · ' + esc(bSize) + ' · ' + ramCt + ' RAM Slots · $' + moboPrice.toLocaleString() + '/unit</small></div>' +
+          '<button type="button" class="ea-elem-del" id="eaPcClearMobo">✕</button></div>';
+        moboSlot.querySelector('#eaPcClearMobo')?.addEventListener('click', () => {
+          selectedMoboPart = null;
+          updateBuildSpecsReadout();
+          drawBuildStage();
+        });
+      } else {
+        moboSlot.innerHTML = '<small class="muted">No Motherboard selected — click ＋ Motherboard above (or use base tray).</small>';
+      }
+    }
 
     const cpuSlot = $('#eaPcSelectedCpuCard');
     if (cpuSlot) {
@@ -1049,7 +1115,14 @@
       const gpuWid = Number(gpuCfg?.width || selectedGpuPart?.design_data?.width || 0);
       const gpuThick = Number(gpuCfg?.thickness || selectedGpuPart?.design_data?.thickness || 0);
       const tooLong = cObj && selectedGpuPart && gpuLen > cStats.sizeMeta.maxGpuMm;
+
+      const moboSizeKey = selectedMoboPart?.design_data?.board_size || selectedMoboPart?.body_type || 'small';
+      const moboTooBig = cObj && selectedMoboPart && !moboFitsCase(moboSizeKey, cObj.caseSize);
+
       const stockWarns = [];
+      if (selectedMoboPart && selectedMoboPart.stock !== undefined && Number(selectedMoboPart.stock) <= 0) {
+        stockWarns.push(selectedMoboPart.product_name + ' currently has 0 stock (maker must restock before you can produce PCs)');
+      }
       if (selectedCpuPart && selectedCpuPart.stock !== undefined && Number(selectedCpuPart.stock) <= 0) {
         stockWarns.push(selectedCpuPart.product_name + ' currently has 0 stock (maker must restock before you can produce PCs)');
       }
@@ -1059,9 +1132,11 @@
       specBox.innerHTML =
         '<div><b>Case:</b> ' + (cObj ? esc(cObj.case_name + ' (' + cStats.sizeMeta.label + ')') : 'Select a Case') + '</div>' +
         '<div><b>Cooling:</b> ' + (cObj ? esc(cStats.fanCount + ' Fans · ' + cStats.airflow) : '—') + '</div>' +
+        '<div><b>Motherboard:</b> ' + (selectedMoboPart ? esc(selectedMoboPart.product_name + ' (' + moboSizeKey.toUpperCase() + ' · ' + Number(selectedMoboPart.design_data?.ram_slots || 0) + ' RAM · Stock: ' + (selectedMoboPart.stock ?? '?') + ')') : 'Base Tray (No Custom Mobo)') + '</div>' +
         '<div><b>CPU:</b> ' + (selectedCpuPart ? esc(selectedCpuPart.product_name + ' (' + (selectedCpuPart.core_count || 0) + 'C/' + (selectedCpuPart.thread_count || 0) + 'T · Stock: ' + (selectedCpuPart.stock ?? '?') + ')') : 'None selected') + '</div>' +
         '<div><b>GPU:</b> ' + (selectedGpuPart ? esc(selectedGpuPart.product_name + ' (' + gpuLen + '×' + gpuWid + '×' + gpuThick + 'mm · ' + (pcGpuMount === 'vertical' ? 'Vertical' : 'Horizontal') + ' · Stock: ' + (selectedGpuPart.stock ?? '?') + ')') : 'None selected') + '</div>' +
-        '<div><b>Motherboard / RAM / PSU:</b> ATX Tray · DDR5 Slots · 850W PSU Included (Custom Brands Soon)</div>' +
+        '<div><b>RAM / PSU:</b> 850W PSU Included (Custom RAM &amp; PSU Soon)</div>' +
+        (moboTooBig ? '<div class="ea-pc-fit-warn">Motherboard (' + esc(moboSizeKey.toUpperCase()) + ') is too big for ' + esc(cStats.sizeMeta.label) + '! Pick a larger Case or smaller Motherboard.</div>' : '') +
         (tooLong ? '<div class="ea-pc-fit-warn">Does not fit! GPU is ' + gpuLen + 'mm long, max for ' + esc(cStats.sizeMeta.label) + ' is ' + cStats.sizeMeta.maxGpuMm + 'mm.</div>' : '') +
         (stockWarns.length ? '<div class="ea-pc-fit-warn">' + esc(stockWarns.join(' · ')) + '</div>' : '');
     }
@@ -1069,6 +1144,7 @@
     const cap = $('#eaPcBuildCaption');
     if (cap) {
       cap.textContent = (cObj ? cObj.case_name : 'No Case') +
+        (selectedMoboPart ? ' · ' + selectedMoboPart.product_name : '') +
         ' · ' + (selectedCpuPart ? selectedCpuPart.product_name : 'No CPU') +
         ' · ' + (selectedGpuPart ? selectedGpuPart.product_name : 'No GPU') +
         ' · Unit Cost $' + totalUnitCost.toLocaleString();
@@ -1078,7 +1154,7 @@
   function drawBuildStage() {
     const cObj = savedCases.find(c => c.id === selectedCaseId) || null;
     if (activePcView === 'build') {
-      window.PcDesigner3D?.update?.(buildPcConfigFromCaseAndParts(cObj, selectedCpuPart, selectedGpuPart, { gpuMount: pcGpuMount }));
+      window.PcDesigner3D?.update?.(buildPcConfigFromCaseAndParts(cObj, selectedCpuPart, selectedGpuPart, { gpuMount: pcGpuMount, moboPart: selectedMoboPart }));
     }
   }
 
@@ -1115,9 +1191,11 @@
     const modal = ensureComponentModal();
     const title = $('#eaPcCompModalTitle');
     const grid = $('#eaPcCompGrid');
-    if (title) title.textContent = kind === 'gpu' ? 'Search Public GPUs' : 'Search Public CPUs';
+    const kindTitle = kind === 'gpu' ? 'Search Public GPUs' : kind === 'mobo' ? 'Search Public Motherboards' : 'Search Public CPUs';
+    const kindPlural = kind === 'gpu' ? 'GPUs' : kind === 'mobo' ? 'Motherboards' : 'CPUs';
+    if (title) title.textContent = kindTitle;
     if ($('#eaPcCompSearch')) $('#eaPcCompSearch').value = '';
-    if (grid) grid.innerHTML = '<div class="muted">Loading public ' + kind.toUpperCase() + 's…</div>';
+    if (grid) grid.innerHTML = '<div class="muted">Loading public ' + kindPlural + '…</div>';
     modal.classList.remove('hidden');
 
     if (!sb) return;
@@ -1136,7 +1214,10 @@
     const rows = (data || []).filter(p => {
       if (isPcProductRow(p)) return false;
       const isGpuRow = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p.product_line === 'gpu');
-      return kind === 'gpu' ? isGpuRow : !isGpuRow;
+      const isMoboRow = typeof window.isMoboProductRow === 'function' ? window.isMoboProductRow(p) : (p.product_line === 'motherboard');
+      if (kind === 'gpu') return isGpuRow;
+      if (kind === 'mobo') return isMoboRow;
+      return !isGpuRow && !isMoboRow;
     });
     publicComponentsCache = rows;
     renderComponentModalGrid();
@@ -1157,7 +1238,9 @@
       const comp = p.product_companies?.company_name || '';
       const specTxt = pickerKind === 'gpu'
         ? (window.formatGpuHardwareBadges?.(p) || '')
-        : `${p.core_count || 0} cores ${p.thread_count || 0} threads ${p.cooling_type || ''} ${p.v_cache_type || ''}`;
+        : pickerKind === 'mobo'
+          ? (window.formatMoboHardwareBadges?.(p) || '')
+          : `${p.core_count || 0} cores ${p.thread_count || 0} threads ${p.cooling_type || ''} ${p.v_cache_type || ''}`;
       return (p.product_name || '').toLowerCase().includes(q) ||
         comp.toLowerCase().includes(q) ||
         specTxt.toLowerCase().includes(q);
@@ -1168,7 +1251,8 @@
     else if (sort === 'popular') rows.sort((a, b) => Number(b.purchase_count || 0) - Number(a.purchase_count || 0));
 
     if (!rows.length) {
-      grid.innerHTML = '<p class="muted">No matching published ' + pickerKind.toUpperCase() + 's found.</p>';
+      const lbl = pickerKind === 'mobo' ? 'Motherboards' : pickerKind === 'gpu' ? 'GPUs' : 'CPUs';
+      grid.innerHTML = '<p class="muted">No matching published ' + lbl + ' found.</p>';
       return;
     }
 
@@ -1184,12 +1268,18 @@
         : null;
       const gpuLen = Number(gpuCfg?.length || p.design_data?.length || 280);
       const tooLong = pickerKind === 'gpu' && gpuLen > maxGpuMm;
+      const moboSizeKey = p.design_data?.board_size || p.body_type || 'small';
+      const tooBigMobo = pickerKind === 'mobo' && cObj && !moboFitsCase(moboSizeKey, cObj.caseSize);
       const specLine = pickerKind === 'gpu'
         ? ((window.formatGpuSpecLine?.(p) || 'GPU') + ' · ' + gpuLen + 'mm' + (tooLong ? ' (Max ' + maxGpuMm + 'mm)' : ''))
-        : (Number(p.core_count || 0) + ' Cores · ' + Number(p.thread_count || 0) + ' Threads');
+        : pickerKind === 'mobo'
+          ? ((window.formatMoboSpecLine?.(p) || 'Motherboard') + (tooBigMobo ? ' (Needs larger case)' : ''))
+          : (Number(p.core_count || 0) + ' Cores · ' + Number(p.thread_count || 0) + ' Threads');
       let thumbHtml = '';
       if (pickerKind === 'gpu') {
         thumbHtml = '<div class="ea-gpu-product-thumb-wrap" data-gpu-thumb-id="' + esc(p.id) + '">' + (window.renderGpuThumbHtml?.(p) || '') + '</div>';
+      } else if (pickerKind === 'mobo') {
+        thumbHtml = '<div class="ea-gpu-product-thumb-wrap" data-mobo-thumb-id="' + esc(p.id) + '">' + (window.renderMoboThumbHtml?.(p) || '') + '</div>';
       } else if (typeof window.resolveCpuProductSpec === 'function' && typeof window.renderCpuThumbHtml === 'function') {
         const cpuSpec = window.resolveCpuProductSpec(p);
         cpuSpecsById.set(p.id, cpuSpec);
@@ -1198,17 +1288,19 @@
         thumbHtml = '<div class="ea-pc-cpu-thumb-box"><span class="ea-pc-cpu-pill">CPU · ' + esc(p.cpu_tier || 'F') + '</span><strong>' + esc(p.product_name) + '</strong></div>';
       }
 
+      const pickLbl = tooLong ? 'Too Long' : tooBigMobo ? 'Too Big' : 'Add to PC';
       return '<article class="ea-pc-comp-card">' +
         thumbHtml +
         '<div class="ea-pc-comp-meta"><strong>' + esc(p.product_name) + '</strong><small>by ' + esc(compName) + '</small><small>' + esc(specLine) + '</small></div>' +
         '<div class="ea-pc-comp-foot"><span>$' + price.toLocaleString() + '/unit · ' + (stock > 0 ? stock + ' in stock' : 'Out of stock (0)') + '</span>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
         '<button type="button" class="zoom-btn" data-pc-preview-part="' + esc(p.id) + '" title="Preview 3D">👁 Preview</button>' +
-        '<button type="button" class="primary-btn" data-pc-pick-part="' + esc(p.id) + '">' + (tooLong ? 'Too Long' : 'Add to PC') + '</button></div></div>' +
+        '<button type="button" class="primary-btn" data-pc-pick-part="' + esc(p.id) + '">' + pickLbl + '</button></div></div>' +
       '</article>';
     }).join('');
 
     if (pickerKind === 'gpu') window.hydrateGpuThumbElements?.(grid, byId, 320, 240);
+    else if (pickerKind === 'mobo') window.hydrateMoboThumbElements?.(grid, byId, 320, 240);
     else if (cpuSpecsById.size && typeof window.hydrateCpuThumbElements === 'function') window.hydrateCpuThumbElements(grid, cpuSpecsById, 280);
 
     grid.querySelectorAll('[data-pc-preview-part]').forEach(btn => btn.addEventListener('click', e => {
@@ -1221,6 +1313,7 @@
       const part = byId.get(btn.dataset.pcPickPart);
       if (!part) return;
       if (pickerKind === 'gpu') selectedGpuPart = part;
+      else if (pickerKind === 'mobo') selectedMoboPart = part;
       else selectedCpuPart = part;
       modal.classList.add('hidden');
       updateBuildSpecsReadout();
@@ -1240,6 +1333,7 @@
   function resetPcDraftState() {
     editingPcProductId = null;
     editingPcOldName = '';
+    selectedMoboPart = null;
     selectedCpuPart = null;
     selectedGpuPart = null;
     pcGpuMount = 'horizontal';
@@ -1259,12 +1353,21 @@
     if (name.length < 2) { if (msgEl) msgEl.textContent = 'Enter a PC name (at least 2 characters).'; return; }
     const cObj = savedCases.find(c => c.id === selectedCaseId);
     if (!cObj) { if (msgEl) msgEl.textContent = 'Select a saved Case first (design one in the CASE tab).'; return; }
-    if (!selectedCpuPart && !selectedGpuPart) {
-      if (msgEl) msgEl.textContent = 'Add at least a CPU or GPU to your PC before saving.';
+    if (!selectedMoboPart && !selectedCpuPart && !selectedGpuPart) {
+      if (msgEl) msgEl.textContent = 'Add at least a Motherboard, CPU, or GPU to your PC before saving.';
       return;
     }
 
     const { cStats, totalUnitCost } = computePcBuildValues();
+    if (selectedMoboPart) {
+      const mSize = selectedMoboPart.design_data?.board_size || selectedMoboPart.body_type || 'small';
+      if (!moboFitsCase(mSize, cObj.caseSize)) {
+        const err = 'Motherboard (' + mSize.toUpperCase() + ') does not fit inside ' + cStats.sizeMeta.label + '. Pick a larger Case or smaller Motherboard.';
+        if (msgEl) msgEl.textContent = err;
+        toast(err);
+        return;
+      }
+    }
     if (selectedGpuPart) {
       const gpuCfg = typeof window.buildGpuConfigFromProduct === 'function' ? window.buildGpuConfigFromProduct(selectedGpuPart) : null;
       const gLen = Number(gpuCfg?.length || selectedGpuPart.design_data?.length || 280);
@@ -1277,7 +1380,7 @@
     }
 
     const listedPrice = Math.max(1, Number($('#eaPcPrice')?.value) || 1);
-    const pcCfg = buildPcConfigFromCaseAndParts(cObj, selectedCpuPart, selectedGpuPart, { gpuMount: pcGpuMount });
+    const pcCfg = buildPcConfigFromCaseAndParts(cObj, selectedCpuPart, selectedGpuPart, { gpuMount: pcGpuMount, moboPart: selectedMoboPart });
 
     if (skipRitual !== true && typeof window.PcAssemblyRitual?.open === 'function') {
       window.PcAssemblyRitual.open(pcCfg, { name }, () => savePcProduct(true));
@@ -1291,6 +1394,33 @@
     if (!snapshot && typeof window.PcDesigner3D?.captureHeroSnapshot === 'function') {
       snapshot = await window.PcDesigner3D.captureHeroSnapshot(pcCfg, 360, 270);
     }
+
+    const moboBuilt = selectedMoboPart && typeof window.buildMoboConfigFromProduct === 'function'
+      ? window.buildMoboConfigFromProduct(selectedMoboPart)
+      : null;
+    const slimMobo = selectedMoboPart ? {
+      id: selectedMoboPart.id,
+      company_id: selectedMoboPart.company_id || selectedMoboPart.product_companies?.id,
+      company_name: selectedMoboPart.product_companies?.company_name || selectedMoboPart.company_name || '',
+      company_logo: moboBuilt?.logoUrl || selectedMoboPart.product_companies?.logo_data_url || selectedMoboPart.company_logo || '',
+      product_name: selectedMoboPart.product_name,
+      listed_price: Number(selectedMoboPart.listed_price || 0),
+      body_type: selectedMoboPart.body_type || moboBuilt?.boardSize || 'small',
+      cpu_score: Number(selectedMoboPart.cpu_score || 0),
+      cpu_tier: String(selectedMoboPart.cpu_tier || 'F'),
+      design_data: {
+        mobo_build: true,
+        board_size: moboBuilt?.boardSize || selectedMoboPart.design_data?.board_size || selectedMoboPart.body_type || 'small',
+        ram_slots: Number(moboBuilt?.ramSlots ?? selectedMoboPart.design_data?.ram_slots ?? 0),
+        pcb_color: moboBuilt?.pcbColor || selectedMoboPart.design_data?.pcb_color || '#121620',
+        armor_color: moboBuilt?.armorColor || selectedMoboPart.design_data?.armor_color || '#1f2533',
+        accent_color: moboBuilt?.accentColor || selectedMoboPart.design_data?.accent_color || '#a855f7',
+        vrm_style: moboBuilt?.vrmStyle || selectedMoboPart.design_data?.vrm_style || 'finned',
+        io_shield: moboBuilt ? !!moboBuilt.ioShield : (selectedMoboPart.design_data?.io_shield !== false),
+        m2_shield: moboBuilt ? !!moboBuilt.m2Shield : (selectedMoboPart.design_data?.m2_shield !== false),
+        rgb_accent: !!(moboBuilt?.rgbAccent ?? selectedMoboPart.design_data?.rgb_accent)
+      }
+    } : null;
 
     const resolvedCpu = selectedCpuPart && typeof window.resolveCpuProductSpec === 'function'
       ? window.resolveCpuProductSpec(selectedCpuPart)
@@ -1372,8 +1502,8 @@
       case_build_cost: cStats.buildCost,
       airflow: cStats.airflow,
       case_config: cObj,
-      component_ids: [slimCpu?.id, slimGpu?.id].filter(Boolean),
-      components: { cpu: slimCpu, gpu: slimGpu },
+      component_ids: [slimMobo?.id, slimCpu?.id, slimGpu?.id].filter(Boolean),
+      components: { motherboard: slimMobo, cpu: slimCpu, gpu: slimGpu },
       thumbnail: snapshot || ''
     };
 
@@ -1480,6 +1610,7 @@
       if (!savedCases.some(c => c.id === tempCase.id)) savedCases.unshift(tempCase);
       selectedCaseId = tempCase.id;
     }
+    selectedMoboPart = d.components?.motherboard ? { ...d.components.motherboard, product_companies: { company_name: d.components.motherboard.company_name, logo_data_url: d.components.motherboard.company_logo || '' } } : null;
     selectedCpuPart = d.components?.cpu ? { ...d.components.cpu, product_companies: { company_name: d.components.cpu.company_name, logo_data_url: d.components.cpu.company_logo || '' } } : null;
     selectedGpuPart = d.components?.gpu ? { ...d.components.gpu, product_companies: { company_name: d.components.gpu.company_name } } : null;
     pcGpuMount = d.gpu_mount === 'vertical' ? 'vertical' : 'horizontal';
@@ -1561,6 +1692,7 @@
     const d = selected.design_data || {};
     const comps = d.components || {};
     const payoutNote = [
+      comps.motherboard ? (comps.motherboard.product_name + ' ($' + Number(comps.motherboard.listed_price || 0).toLocaleString() + ' → ' + (comps.motherboard.company_name || 'Mobo Co.') + ')') : null,
       comps.cpu ? (comps.cpu.product_name + ' ($' + Number(comps.cpu.listed_price || 0).toLocaleString() + ' → ' + (comps.cpu.company_name || 'CPU Co.') + ')') : null,
       comps.gpu ? (comps.gpu.product_name + ' ($' + Number(comps.gpu.listed_price || 0).toLocaleString() + ' → ' + (comps.gpu.company_name || 'GPU Co.') + ')') : null
     ].filter(Boolean).join(' + ');
@@ -1655,6 +1787,7 @@
     if (!isPc()) return;
     $('#page-company-design #cpuDesigner')?.classList.add('hidden');
     $('#page-company-design #eaGpuPanel')?.classList.add('hidden');
+    $('#page-company-design #eaMoboPanel')?.classList.add('hidden');
     $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
 
     const page = $('#page-company-design');
@@ -1701,19 +1834,20 @@
             '<div class="cpu-preview-panel">' +
               '<div class="cpu-preview-toolbar"><span>3D PC SYSTEM ASSEMBLY</span><small>Real Specs · No Tiers</small></div>' +
               '<div id="eaPcBuild3DStage" class="ea-pc-3d-stage"><div class="gpu-3d-loading">Loading 3D PC Builder…</div></div>' +
-              '<div id="eaPcBuildCaption" class="cpu-preview-caption">Select a Case, CPU &amp; GPU</div>' +
+              '<div id="eaPcBuildCaption" class="cpu-preview-caption">Select a Case, Motherboard, CPU &amp; GPU</div>' +
             '</div>' +
             '<div class="cpu-options-panel ea-gpu-sidebar">' +
               '<h4>1. Choose Saved Case</h4>' +
               '<div id="eaPcBuildCaseList" class="ea-pc-case-pick-list"></div>' +
               '<h4 style="margin-top:12px">2. Add Public Components</h4>' +
               '<div class="ea-pc-part-buttons">' +
+                '<button type="button" class="primary-btn" id="eaPcPickMoboBtn">＋ Motherboard</button>' +
                 '<button type="button" class="primary-btn" id="eaPcPickCpuBtn">＋ CPU</button>' +
                 '<button type="button" class="primary-btn" id="eaPcPickGpuBtn">＋ GPU</button>' +
-                '<button type="button" class="zoom-btn" id="eaPcPickMoboBtn">Motherboard · Soon</button>' +
                 '<button type="button" class="zoom-btn" id="eaPcPickRamBtn">RAM · Soon</button>' +
                 '<button type="button" class="zoom-btn" id="eaPcPickPsuBtn">Power Supply · Soon</button>' +
               '</div>' +
+              '<div id="eaPcSelectedMoboCard" class="ea-pc-picked-slot"></div>' +
               '<div id="eaPcSelectedCpuCard" class="ea-pc-picked-slot"></div>' +
               '<div id="eaPcSelectedGpuCard" class="ea-pc-picked-slot"></div>' +
               '<div class="ea-gpu-inline-box" style="margin-top:8px;"><span>GPU Mount Orientation</span>' +
@@ -1749,9 +1883,9 @@
         drawBuildStage();
       }));
       panel.querySelector('#eaPcSaveCaseBtn')?.addEventListener('click', saveCaseDesign);
+      panel.querySelector('#eaPcPickMoboBtn')?.addEventListener('click', () => openComponentBrowser('mobo'));
       panel.querySelector('#eaPcPickCpuBtn')?.addEventListener('click', () => openComponentBrowser('cpu'));
       panel.querySelector('#eaPcPickGpuBtn')?.addEventListener('click', () => openComponentBrowser('gpu'));
-      panel.querySelector('#eaPcPickMoboBtn')?.addEventListener('click', () => toast('Motherboard companies are coming in a future update!'));
       panel.querySelector('#eaPcPickRamBtn')?.addEventListener('click', () => toast('RAM companies will be added in a future update!'));
       panel.querySelector('#eaPcPickPsuBtn')?.addEventListener('click', () => toast('Power Supply companies are coming soon!'));
       panel.querySelector('#eaPcSaveBuild')?.addEventListener('click', () => savePcProduct(false));

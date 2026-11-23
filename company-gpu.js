@@ -155,6 +155,7 @@
 
   const isGpu = () => !!(currentCompany?.product_lines || []).includes('gpu');
   const isPc = () => !!(currentCompany?.product_lines || []).includes('pc');
+  const isMobo = () => !!(currentCompany?.product_lines || []).includes('motherboard');
   const researched = k => k === 'basic' || k === 'plastic' || k === 'custom' || (companyResearchRows || []).some(x => x.research_key === k);
   const researchName = k => GPU_RESEARCH.find(r => r.key === k)?.name || (k === 'none' ? 'Base' : k === 'basic' ? 'Basic Fan' : k);
   const chipVramLabel = k => (!k || k === 'none') ? 'No V-RAM' : researchName(k);
@@ -374,6 +375,13 @@
     return root;
   }
 
+  const MANUFACTURING_LINES = [
+    ['cpu', 'CPU Manufacturing'],
+    ['gpu', 'GPU Manufacturing'],
+    ['motherboard', 'Motherboard Manufacturing'],
+    ['pc', 'PC Manufacturing']
+  ];
+
   function renderChooser() {
     const root = companyShell();
     if (!root) return;
@@ -387,32 +395,40 @@
     root.classList.remove('hidden');
     $('#companyOnboarding')?.classList.add('hidden');
     $('#companyDashboard')?.classList.add('hidden');
-    const companyTypes = [
-      { id: 'cpu', label: 'CPU Manufacturing' },
-      { id: 'gpu', label: 'GPU Manufacturing' },
-      { id: 'pc', label: 'PC Manufacturing' }
-    ];
-    const ownedTypes = new Set(companies.flatMap(c => c.product_lines || []));
-    const availableTypes = companyTypes.filter(type => !ownedTypes.has(type.id));
+
+    const ownedLines = new Set(
+      companies.flatMap(c => Array.isArray(c.product_lines) && c.product_lines.length ? c.product_lines : ['cpu'])
+    );
+    const availableLines = MANUFACTURING_LINES.filter(([val]) => !ownedLines.has(val));
+    const allOwned = availableLines.length === 0;
+    const firstAvailable = availableLines[0]?.[0] || '';
+
+    const lineOptionsHtml = MANUFACTURING_LINES.map(([val, label]) => {
+      const owned = ownedLines.has(val);
+      return '<option value="' + val + '"' +
+        (owned ? ' disabled' : (val === firstAvailable ? ' selected' : '')) + '>' +
+        label + (owned ? ' (Owned)' : '') +
+      '</option>';
+    }).join('');
+
     root.innerHTML =
-      '<div class="ea-company-heading"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><h3>Select a company</h3><p class="muted">Open any of your companies, or create one for a manufacturing type you do not own yet.</p></div>' +
+      '<div class="ea-company-heading"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><h3>Select a company</h3><p class="muted">Open a company dashboard, or create a new company for any manufacturing type you don\'t own yet (max 1 per type).</p></div>' +
       '<div class="ea-company-grid">' +
       companies.map(c =>
         '<button class="ea-company-card" data-company-open="' + esc(c.id) + '">' +
         '<span class="ea-company-logo">' + (c.logo_data_url ? '<img src="' + esc(c.logo_data_url) + '" alt="">' : '▣') + '</span>' +
-        '<span><b>' + esc(c.company_name) + '</b><small>' + ((c.product_lines || []).includes('pc') ? 'PC Manufacturing' : (c.product_lines || []).includes('gpu') ? 'GPU Manufacturing' : 'CPU Manufacturing') + '</small></span>' +
+        '<span><b>' + esc(c.company_name) + '</b><small>' + ((c.product_lines || []).includes('pc') ? 'PC Manufacturing' : (c.product_lines || []).includes('motherboard') ? 'Motherboard Manufacturing' : (c.product_lines || []).includes('gpu') ? 'GPU Manufacturing' : 'CPU Manufacturing') + '</small></span>' +
         '<strong>Open →</strong></button>'
       ).join('') +
       '</div>' +
-      '<button class="primary-btn" id="eaCreateCompany">＋ Create company</button>' +
+      '<button class="primary-btn" id="eaCreateCompany" ' + (allOwned ? 'disabled' : '') + '>' +
+      (allOwned ? 'All manufacturing types owned (' + companies.length + '/' + MANUFACTURING_LINES.length + ')' : '＋ Create company') +
+      '</button>' +
       '<div id="eaCompanyCreateWrap" class="ea-company-create hidden"><h4>Create a company</h4><form id="eaCompanyCreateForm">' +
       '<label>Company name<input id="eaCompanyName" maxlength="40" minlength="2" required placeholder="e.g. Nova PCs"></label>' +
       '<label>Description<textarea id="eaCompanyDescription" maxlength="500" rows="2" placeholder="What does your company make?"></textarea></label>' +
-      '<label>Product line<select id="eaCompanyLine"><option value="" disabled selected>Select a manufacturing type</option>' +
-      companyTypes.map(type => '<option value="' + type.id + '"' + (ownedTypes.has(type.id) ? ' disabled' : '') + '>' + type.label + (ownedTypes.has(type.id) ? ' · Already owned' : '') + '</option>').join('') +
-      '</select></label>' +
-      (availableTypes.length ? '' : '<p class="form-message">You already own a company for every available manufacturing type.</p>') +
-      '<button class="primary-btn" type="submit"' + (availableTypes.length ? '' : ' disabled') + '>Create company</button><p id="eaCompanyCreateMessage" class="form-message"></p></form></div>';
+      '<label>Product line<select id="eaCompanyLine">' + lineOptionsHtml + '</select></label>' +
+      '<button class="primary-btn" type="submit" ' + (allOwned ? 'disabled' : '') + '>Create company</button><p id="eaCompanyCreateMessage" class="form-message"></p></form></div>';
     root.querySelectorAll('[data-company-open]').forEach(b => b.addEventListener('click', () => selectCompany(b.dataset.companyOpen)));
     $('#eaCreateCompany')?.addEventListener('click', () => $('#eaCompanyCreateWrap')?.classList.toggle('hidden'));
     $('#eaCompanyCreateForm')?.addEventListener('submit', createCompany);
@@ -507,23 +523,34 @@
     loadedResearchCompanyId = id;
     resetDraftGpuState();
     window.PcWorkspace?.resetPcDraftState?.();
+    window.MoboWorkspace?.resetMoboDraftState?.();
     window.cancelCpuDraftEdit?.();
     if (typeof renderCompanyDashboard === 'function') renderCompanyDashboard();
     renderChooser();
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       mountGpuWorkspace();
       mountGpuResearch();
       mountGpuProductsPage();
       renderGpuProducts();
     } else if (isPc()) {
       hideGpuWorkspace();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       window.PcWorkspace?.mountPcWorkspace?.();
       window.PcWorkspace?.mountPcResearch?.();
       window.PcWorkspace?.mountPcProductsPage?.();
       window.PcWorkspace?.renderPcProducts?.();
+    } else if (isMobo()) {
+      hideGpuWorkspace();
+      window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.mountMoboWorkspace?.();
+      window.MoboWorkspace?.mountMoboResearch?.();
+      window.MoboWorkspace?.mountMoboProductsPage?.();
+      window.MoboWorkspace?.renderMoboProducts?.();
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       hideGpuWorkspace();
     }
     syncCompanyDesignMode();
@@ -536,7 +563,10 @@
     const line = $('#eaCompanyLine').value;
     const desc = $('#eaCompanyDescription').value.trim();
     if (name.length < 2) { msg.textContent = 'Company name must be at least 2 characters.'; return; }
-    if (!line) { msg.textContent = 'Choose a manufacturing type.'; return; }
+    if (!line || !MANUFACTURING_LINES.some(([val]) => val === line)) {
+      msg.textContent = 'Choose a manufacturing type.';
+      return;
+    }
     const { data: authData, error: authError } = await sb.auth.getUser();
     const authUser = authData?.user;
     if (authError || !authUser?.id) {
@@ -554,8 +584,8 @@
       console.error('Company owner profile lookup failed:', { ownerId, profileError });
       return;
     }
-    if (companies.some(c => (c.product_lines || []).includes(line))) {
-      msg.textContent = 'You already own a company for this manufacturing type.';
+    if (companies.some(c => (Array.isArray(c.product_lines) && c.product_lines.length ? c.product_lines : ['cpu']).includes(line))) {
+      msg.textContent = 'You already own a company for this manufacturing type (max 1 per type).';
       return;
     }
     const { data, error } = await sb
@@ -565,7 +595,7 @@
       .single();
     if (error) {
       msg.textContent = error.code === '23505'
-        ? 'You already own a company for this manufacturing type.'
+        ? 'You already own a company for this manufacturing type (max 1 per type).'
         : error.message;
       console.error('Company creation failed:', { ownerId, error });
       return;
@@ -588,6 +618,7 @@
       loadedResearchCompanyId = null;
       localStorage.removeItem('grind_active_company_id');
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       hideGpuWorkspace();
       renderChooser();
     });
@@ -1664,10 +1695,11 @@
   function hideGpuWorkspace() {
     $('#eaGpuPanel')?.classList.add('hidden');
     $('#eaCompanyResearch')?.classList.add('hidden');
-    const showCpu = !!(currentCompany && !isGpu() && !isPc());
+    const showCpu = !!(currentCompany && !isGpu() && !isPc() && !isMobo());
     $('#cpuResearchTree')?.classList.toggle('hidden', !showCpu);
-    if (!isPc()) {
+    if (!isPc() && !isMobo()) {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       const section = $('#companyPanelResearch .research-section');
       if (section) {
         const eyebrow = section.querySelector('.company-section-heading .eyebrow');
@@ -1759,12 +1791,14 @@
     if (!currentCompany) {
       $('#eaGpuPanel')?.classList.add('hidden');
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.remove('hidden');
       return;
     }
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       if (visible) {
@@ -1775,6 +1809,7 @@
       }
     } else if (isPc()) {
       $('#eaGpuPanel')?.classList.add('hidden');
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       if (visible) {
@@ -1782,8 +1817,19 @@
       } else {
         $('#eaPcPanel')?.classList.add('hidden');
       }
+    } else if (isMobo()) {
+      $('#eaGpuPanel')?.classList.add('hidden');
+      window.PcWorkspace?.hidePcWorkspace?.();
+      $('#page-company-design #cpuDesigner')?.classList.add('hidden');
+      $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
+      if (visible) {
+        window.MoboWorkspace?.mountMoboWorkspace?.();
+      } else {
+        $('#eaMoboPanel')?.classList.add('hidden');
+      }
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       $('#eaGpuPanel')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
@@ -2722,16 +2768,25 @@
       if (typeof renderCompanyDashboard === 'function') renderCompanyDashboard();
       if (isGpu()) {
         window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
         mountGpuWorkspace();
         mountGpuResearch();
         mountGpuProductsPage();
         renderGpuProducts();
       } else if (isPc()) {
         hideGpuWorkspace();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
         window.PcWorkspace?.mountPcWorkspace?.();
         window.PcWorkspace?.mountPcResearch?.();
         window.PcWorkspace?.mountPcProductsPage?.();
         window.PcWorkspace?.renderPcProducts?.();
+      } else if (isMobo()) {
+        hideGpuWorkspace();
+        window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.mountMoboWorkspace?.();
+        window.MoboWorkspace?.mountMoboResearch?.();
+        window.MoboWorkspace?.mountMoboProductsPage?.();
+        window.MoboWorkspace?.renderMoboProducts?.();
       }
     }
   };
@@ -2742,10 +2797,11 @@
     renderChooser();
     if (!currentCompany) return;
     const badge = $('.company-cpu-chip');
-    if (badge) badge.textContent = isPc() ? 'PC MANUFACTURER' : isGpu() ? 'GPU MANUFACTURER' : 'CPU MANUFACTURER';
+    if (badge) badge.textContent = isPc() ? 'PC MANUFACTURER' : isMobo() ? 'MOBO MANUFACTURER' : isGpu() ? 'GPU MANUFACTURER' : 'CPU MANUFACTURER';
     addBackButton();
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       mountGpuWorkspace();
       mountGpuResearch();
       mountGpuProductsPage();
@@ -2754,12 +2810,21 @@
       $('#cpuResearchTree')?.classList.add('hidden');
     } else if (isPc()) {
       hideGpuWorkspace();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       window.PcWorkspace?.mountPcWorkspace?.();
       window.PcWorkspace?.mountPcResearch?.();
       window.PcWorkspace?.mountPcProductsPage?.();
       window.PcWorkspace?.renderPcProducts?.();
+    } else if (isMobo()) {
+      hideGpuWorkspace();
+      window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.mountMoboWorkspace?.();
+      window.MoboWorkspace?.mountMoboResearch?.();
+      window.MoboWorkspace?.mountMoboProductsPage?.();
+      window.MoboWorkspace?.renderMoboProducts?.();
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
       hideGpuWorkspace();
     }
     syncCompanyDesignMode();
@@ -2786,13 +2851,20 @@
     if (page === 'company-design') {
       if (isGpu()) {
         window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
         mountGpuWorkspace();
         showGpuMain();
       } else if (isPc()) {
         hideGpuWorkspace();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
         window.PcWorkspace?.mountPcWorkspace?.();
+      } else if (isMobo()) {
+        hideGpuWorkspace();
+        window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.mountMoboWorkspace?.();
       } else {
         window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
         hideGpuWorkspace();
         $('#page-company-design #companyDesignNoCompany')?.classList.toggle('hidden', !!currentCompany);
         $('#page-company-design #cpuDesigner')?.classList.toggle('hidden', !currentCompany);
@@ -2805,6 +2877,9 @@
       } else if (isPc()) {
         window.PcWorkspace?.mountPcProductsPage?.();
         window.PcWorkspace?.renderPcProducts?.();
+      } else if (isMobo()) {
+        window.MoboWorkspace?.mountMoboProductsPage?.();
+        window.MoboWorkspace?.renderMoboProducts?.();
       }
     }
   };
@@ -2822,6 +2897,7 @@
             else if (currentCompany && currentPage === 'company-products') {
               if (isGpu()) { mountGpuProductsPage(); renderGpuProducts(); }
               else if (isPc()) { window.PcWorkspace?.mountPcProductsPage?.(); window.PcWorkspace?.renderPcProducts?.(); }
+              else if (isMobo()) { window.MoboWorkspace?.mountMoboProductsPage?.(); window.MoboWorkspace?.renderMoboProducts?.(); }
             }
           });
         }

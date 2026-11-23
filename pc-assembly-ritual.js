@@ -1,12 +1,11 @@
 /* ============================================================
  * GRIND-EA · Interactive 3D PC Assembly Ritual
  * Triggered when finishing a PC Build:
- *   1. Seat 1:1 3D CPU into LGA motherboard socket
- *   2. Swing metal ILM retention bracket & steel lever shut
- *   3. Apply 3D thermal paste onto the CPU IHS with syringe
- *   4. Slide 1:1 3D GPU into PCIe x16 slot / vertical riser
- *   5. Drive 4 mounting screws into the GPU bracket with screwdriver
- *   6. Swing tempered glass door shut -> auto-save PC draft!
+ *   1. Seat 1:1 3D Motherboard onto brass chassis standoffs
+ *   2. Drive 4 mounting screws into the Motherboard with screwdriver
+ *   3. Seat 1:1 3D CPU, clamp metal retention arm & apply thermal paste
+ *   4. Slide 1:1 3D GPU into PCIe slot & drive 4 GPU bracket screws
+ *   5. Swing tempered glass door shut -> auto-save PC draft!
  * ============================================================ */
 (function () {
   'use strict';
@@ -300,18 +299,23 @@
     if (soundBtn) soundBtn.textContent = muted ? '🔇 Muted' : '🔊 Sound On';
     modal.classList.remove('hidden');
 
+    const hasMobo = !!pcCfg?.motherboard;
     const hasCpu = !!pcCfg?.cpu;
     const hasGpu = !!pcCfg?.gpu;
 
     const steps = [];
+    if (hasMobo) {
+      steps.push({ id: 'seat_mobo', short: 'Motherboard', title: (steps.length + 1) + ' · Seat Motherboard onto Standoffs', desc: 'Drag inward on the 1:1 3D Motherboard (or hold button) to align & seat it onto the brass standoffs.', btn: 'Hold to Seat Motherboard' });
+      steps.push({ id: 'screw_mobo', short: '4 Mobo Screws', title: (steps.length + 1) + ' · Screw Motherboard into Standoffs', desc: 'Click & hold each of the 4 corner screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
+    }
     if (hasCpu) {
-      steps.push({ id: 'seat_cpu', short: 'Seat CPU', title: '1 · Seat CPU into Socket', desc: 'Drag straight inward on the CPU (or hold button) to align & seat gold pins into the motherboard socket.', btn: 'Hold to Seat CPU' });
-      steps.push({ id: 'close_latch', short: 'Metal Latch', title: '2 · Shut Metal Retention Arm', desc: 'Drag downward on the brushed steel bracket & lever arm until it snaps locked over the CPU.', btn: 'Hold to Clamp Shut' });
-      steps.push({ id: 'thermal_paste', short: 'Thermal Paste', title: '3 · Apply Thermal Paste', desc: 'Drag back & forth across the exposed CPU IHS with the 3D syringe to coat thermal compound.', btn: 'Hold to Squeeze Paste' });
+      steps.push({ id: 'seat_cpu', short: 'Seat CPU', title: (steps.length + 1) + ' · Seat CPU into Socket', desc: 'Drag straight inward on the CPU (or hold button) to align & seat gold pins into the motherboard socket.', btn: 'Hold to Seat CPU' });
+      steps.push({ id: 'close_latch', short: 'Metal Latch', title: (steps.length + 1) + ' · Shut Metal Retention Arm', desc: 'Drag downward on the brushed steel bracket & lever arm until it snaps locked over the CPU.', btn: 'Hold to Clamp Shut' });
+      steps.push({ id: 'thermal_paste', short: 'Thermal Paste', title: (steps.length + 1) + ' · Apply Thermal Paste', desc: 'Drag back & forth across the exposed CPU IHS with the 3D syringe to coat thermal compound.', btn: 'Hold to Squeeze Paste' });
     }
     if (hasGpu) {
-      steps.push({ id: 'seat_gpu', short: 'Install GPU', title: (hasCpu ? '4' : '1') + ' · Seat GPU in PCIe Slot', desc: 'Slide your 1:1 3D GPU cleanly into the reinforced PCIe x16 slot until it locks.', btn: 'Hold to Seat GPU' });
-      steps.push({ id: 'screw_gpu', short: '4 GPU Screws', title: (hasCpu ? '5' : '2') + ' · Tighten 4 Bracket Screws', desc: 'Click & hold each of the 4 chrome screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
+      steps.push({ id: 'seat_gpu', short: 'Install GPU', title: (steps.length + 1) + ' · Seat GPU in PCIe Slot', desc: 'Slide your 1:1 3D GPU cleanly into the reinforced PCIe x16 slot until it locks.', btn: 'Hold to Seat GPU' });
+      steps.push({ id: 'screw_gpu', short: '4 GPU Screws', title: (steps.length + 1) + ' · Tighten 4 Bracket Screws', desc: 'Click & hold each of the 4 chrome screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
     }
     steps.push({ id: 'close_panel', short: 'Shut Glass', title: (steps.length + 1) + ' · Shut Tempered Glass Panel', desc: 'Swing the hinged tempered glass door shut to seal the build & save your draft!', btn: 'Hold to Close Door' });
 
@@ -361,6 +365,7 @@
     const asmState = {
       latchOpen: hasCpu,
       hideCpuCooler: hasCpu && Number(pcCfg?.cpu?.cooling || 0) > 0,
+      unscrewedMobo: hasMobo,
       unscrewedGpu: hasGpu
     };
 
@@ -396,6 +401,8 @@
     pcAsm.motherboardGroup.add(socketGlowRing);
 
     const abortCtrl = new AbortController();
+    const moboScrewsList = pcAsm.moboScrews || [];
+    const gpuScrewsList = pcAsm.gpuScrews || [];
     const session = {
       modal,
       renderer,
@@ -406,13 +413,17 @@
       resizeObserver: null,
       onComplete,
       stepIdx: 0,
+      moboProgress: hasMobo ? 0 : 1,
+      moboScrewProgress: moboScrewsList.map(() => 0),
+      activeMoboScrewIdx: 0,
+      hoveredMoboScrewIdx: -1,
       cpuProgress: 0,      // 0..1
       latchProgress: 0,    // 0..1
       pasteProgress: 0,    // 0..1
       coolerDropT: hasCpu && asmState.hideCpuCooler ? 0 : 1,
       coolerDropping: false,
       gpuProgress: 0,      // 0..1
-      screwProgress: [0, 0, 0, 0], // each 0..1
+      screwProgress: gpuScrewsList.length ? gpuScrewsList.map(() => 0) : [0, 0, 0, 0], // each 0..1
       activeScrewIdx: 0,
       doorProgress: 0,     // 0..1
       finished: false,
@@ -423,12 +434,22 @@
     };
     activeSession = session;
 
-    // Initial pre-assembled mechanical offsets
+    // Initial pre-assembled mechanical offsets (strictly staged: Mobo -> Screws -> CPU -> GPU -> Door)
+    const MOBO_HOVER_Z = 0.88;
     const CPU_HOVER_Z = 0.65;
     const GPU_HOVER_DIST = 0.92;
 
+    if (hasMobo && pcAsm.motherboardGroup) {
+      pcAsm.motherboardGroup.position.z = MOBO_HOVER_Z;
+      if (pcAsm.cablesGroup) pcAsm.cablesGroup.visible = false;
+      moboScrewsList.forEach(sc => {
+        sc.wrap.visible = false;
+        sc.pivot.position.z = 0.135;
+      });
+    }
     if (hasCpu && pcAsm.cpuHolder) {
       pcAsm.cpuHolder.position.z = pcAsm.cpuDockedPos.z + CPU_HOVER_Z;
+      if (hasMobo) pcAsm.cpuHolder.visible = false;
     }
     if (hasGpu && pcAsm.gpuHolder) {
       if (pcAsm.isVerticalGpu) {
@@ -437,6 +458,10 @@
       } else {
         pcAsm.gpuHolder.position.z = pcAsm.gpuDockedPos.z + GPU_HOVER_DIST;
       }
+      if (hasMobo || hasCpu) {
+        if (pcAsm.gpuGroup) pcAsm.gpuGroup.visible = false;
+        if (pcAsm.cablesGroup) pcAsm.cablesGroup.visible = false;
+      }
       // Dim RGB & freeze GPU fans until seated & screwed!
       (pcAsm.gpuAsm?.fanRotors || []).forEach(fr => { fr._paused = true; });
     }
@@ -444,9 +469,10 @@
       pcAsm.glassDoorGroup.rotation.y = -1.02;
     }
 
-    // Screw initial protrusion (+0.115 outward along local Z)
-    (pcAsm.gpuScrews || []).forEach(sc => {
+    // GPU Screw initial protrusion (+0.115 outward along local Z)
+    gpuScrewsList.forEach(sc => {
       sc.pivot.position.z = 0.115;
+      sc.wrap.visible = false;
     });
 
     // Camera transition state
@@ -456,7 +482,21 @@
 
     function focusCameraForStep(stepId) {
       const s = pcAsm.dims.camScale || 1.0;
-      if (stepId === 'seat_cpu' || stepId === 'close_latch') {
+      if (stepId === 'seat_mobo') {
+        camGoalPos.set(1.25 * s, 1.35 * s, 4.45 * s);
+        camGoalLook.set(-0.25 * s, 0.1 * s, 0.1);
+      } else if (stepId === 'screw_mobo') {
+        if (moboScrewsList.length) {
+          const avg = new THREE.Vector3();
+          moboScrewsList.forEach(sc => avg.add(sc.wrap.position));
+          avg.divideScalar(moboScrewsList.length);
+          camGoalPos.set(avg.x + 0.95 * s, avg.y + 0.45 * s, avg.z + 2.85 * s);
+          camGoalLook.copy(avg);
+        } else {
+          camGoalPos.set(0.95 * s, 0.55 * s, 3.25 * s);
+          camGoalLook.set(-0.2 * s, 0.1 * s, 0);
+        }
+      } else if (stepId === 'seat_cpu' || stepId === 'close_latch') {
         const sp = pcAsm.sockPos;
         camGoalPos.set(sp.x + 1.05 * s, sp.y + 0.62 * s, sp.z + 2.35 * s);
         camGoalLook.set(sp.x + 0.08, sp.y, sp.z + 0.08);
@@ -469,11 +509,10 @@
         camGoalPos.set(gp.x + 1.4 * s, gp.y + 0.85 * s, gp.z + 2.85 * s);
         camGoalLook.set(gp.x - 0.2, gp.y, gp.z - 0.1);
       } else if (stepId === 'screw_gpu') {
-        const screws = pcAsm.gpuScrews || [];
-        if (screws.length) {
+        if (gpuScrewsList.length) {
           const avg = new THREE.Vector3();
-          screws.forEach(sc => avg.add(sc.wrap.position));
-          avg.divideScalar(screws.length);
+          gpuScrewsList.forEach(sc => avg.add(sc.wrap.position));
+          avg.divideScalar(gpuScrewsList.length);
           camGoalPos.set(avg.x + 1.35, avg.y + 0.42, avg.z + 1.45);
           camGoalLook.copy(avg);
         }
@@ -508,8 +547,34 @@
         holdBtn.textContent = cur.btn;
         holdBtn.disabled = false;
       }
+
+      if (cur.id === 'screw_mobo') {
+        moboScrewsList.forEach(sc => { sc.wrap.visible = true; });
+      }
+      if (cur.id === 'seat_gpu') {
+        if (pcAsm.gpuGroup) pcAsm.gpuGroup.visible = true;
+        if (pcAsm.gpuHolder) pcAsm.gpuHolder.visible = true;
+      }
+      if (cur.id === 'screw_gpu') {
+        gpuScrewsList.forEach(sc => { sc.wrap.visible = true; });
+      }
+
       syringeTool.visible = (cur.id === 'thermal_paste');
-      screwdriverTool.visible = (cur.id === 'screw_gpu');
+      screwdriverTool.visible = (cur.id === 'screw_mobo' || cur.id === 'screw_gpu');
+      if (cur.id === 'screw_mobo' && moboScrewsList[0]) {
+        const sc = moboScrewsList[session.activeMoboScrewIdx] || moboScrewsList[0];
+        const hoverTip = new THREE.Vector3(0, 0, 0.09 + 0.135);
+        sc.wrap.localToWorld(hoverTip);
+        screwdriverTool.position.copy(hoverTip);
+        screwdriverTool.quaternion.copy(sc.wrap.getWorldQuaternion(new THREE.Quaternion()));
+      } else if (cur.id === 'screw_gpu' && gpuScrewsList[0]) {
+        const sc = gpuScrewsList[session.activeScrewIdx] || gpuScrewsList[0];
+        const hoverTip = new THREE.Vector3(0, 0, 0.09 + 0.115);
+        sc.wrap.localToWorld(hoverTip);
+        screwdriverTool.position.copy(hoverTip);
+        screwdriverTool.quaternion.copy(sc.wrap.getWorldQuaternion(new THREE.Quaternion()));
+      }
+
       focusCameraForStep(cur.id);
     }
 
@@ -543,8 +608,18 @@
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
 
-    // Invisible generous hit spheres for the 4 GPU screws
-    const screwHitMeshes = (pcAsm.gpuScrews || []).map((sc, idx) => {
+    // Invisible generous hit spheres for the 4 Motherboard screws + 4 GPU screws
+    const moboScrewHitMeshes = moboScrewsList.map((sc, idx) => {
+      const hm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 10, 10),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      hm.userData.moboScrewIdx = idx;
+      sc.wrap.add(hm);
+      return hm;
+    });
+
+    const screwHitMeshes = gpuScrewsList.map((sc, idx) => {
       const hm = new THREE.Mesh(
         new THREE.SphereGeometry(0.15, 10, 10),
         new THREE.MeshBasicMaterial({ visible: false })
@@ -607,7 +682,61 @@
 
     function applyStepDelta(stepId, delta) {
       if (delta <= 0 || session.finished) return;
-      if (stepId === 'seat_cpu') {
+      if (stepId === 'seat_mobo') {
+        session.moboProgress = clamp(session.moboProgress + delta, 0, 1);
+        const eased = 1 - Math.pow(1 - session.moboProgress, 2.1);
+        pcAsm.motherboardGroup.position.z = MOBO_HOVER_Z * (1 - eased);
+        if (session.moboProgress >= 1) {
+          pcAsm.motherboardGroup.position.z = 0;
+          playSocketDrop();
+          flashBanner('Motherboard Seated on Standoffs!');
+          advanceStep();
+        }
+      } else if (stepId === 'screw_mobo') {
+        const screws = moboScrewsList;
+        if (!screws.length) { advanceStep(); return; }
+        let sIdx = session.activeMoboScrewIdx;
+        if (sIdx < 0 || sIdx >= screws.length || session.moboScrewProgress[sIdx] >= 1) {
+          sIdx = session.moboScrewProgress.findIndex(v => v < 1);
+          session.activeMoboScrewIdx = sIdx;
+        }
+        if (sIdx === -1) return;
+
+        const prev = session.moboScrewProgress[sIdx];
+        const next = clamp(prev + delta * 1.45, 0, 1);
+        session.moboScrewProgress[sIdx] = next;
+        const sc = screws[sIdx];
+        sc.pivot.position.z = 0.135 * (1 - next);
+        sc.pivot.rotation.z = -next * Math.PI * 7.5;
+        playScrewTick(next);
+
+        const tipWorld = new THREE.Vector3(0, 0, 0.045 + 0.135 * (1 - next));
+        sc.wrap.localToWorld(tipWorld);
+        screwdriverTool.visible = true;
+        screwdriverTool.position.copy(tipWorld);
+        screwdriverTool.quaternion.copy(sc.wrap.getWorldQuaternion(new THREE.Quaternion()));
+        screwdriverTool.rotateZ(-next * Math.PI * 7.5);
+
+        if (next >= 1 && prev < 1) {
+          sc.seated = true;
+          playScrewLock(sIdx);
+          const doneCount = session.moboScrewProgress.filter(v => v >= 1).length;
+          if (stepDescEl) {
+            stepDescEl.textContent = 'Click & hold each of the 4 corner screws with the 3D screwdriver until driven flush (' + doneCount + '/4).';
+          }
+          if (doneCount >= screws.length) {
+            if (pcAsm.cpuHolder) pcAsm.cpuHolder.visible = true;
+            if (!hasGpu && pcAsm.cablesGroup) pcAsm.cablesGroup.visible = true;
+            flashBanner('Motherboard Secured to Standoffs!');
+            setTimeout(() => {
+              if (!session.destroyed && steps[session.stepIdx]?.id === 'screw_mobo') advanceStep();
+            }, 320);
+          } else {
+            const nxt = session.moboScrewProgress.findIndex(v => v < 1);
+            if (nxt !== -1) session.activeMoboScrewIdx = nxt;
+          }
+        }
+      } else if (stepId === 'seat_cpu') {
         session.cpuProgress = clamp(session.cpuProgress + delta, 0, 1);
         const eased = 1 - Math.pow(1 - session.cpuProgress, 2.2);
         pcAsm.cpuHolder.position.z = pcAsm.cpuDockedPos.z + CPU_HOVER_Z * (1 - eased);
@@ -651,12 +780,14 @@
         }
         if (session.gpuProgress >= 1) {
           pcAsm.gpuHolder.position.set(pcAsm.gpuDockedPos.x, pcAsm.gpuDockedPos.y, pcAsm.gpuDockedPos.z);
+          if (pcAsm.cablesGroup) pcAsm.cablesGroup.visible = true;
           playGpuClick();
           flashBanner('GPU Click-Locked in PCIe Slot!');
           advanceStep();
         }
       } else if (stepId === 'screw_gpu') {
-        const screws = pcAsm.gpuScrews || [];
+        const screws = gpuScrewsList;
+        if (!screws.length) { advanceStep(); return; }
         let sIdx = session.activeScrewIdx;
         if (sIdx < 0 || sIdx >= screws.length || session.screwProgress[sIdx] >= 1) {
           sIdx = session.screwProgress.findIndex(v => v < 1);
@@ -724,7 +855,16 @@
       const cur = steps[session.stepIdx];
       if (!cur) return;
 
-      if (cur.id === 'screw_gpu') {
+      if (cur.id === 'screw_mobo') {
+        raycaster.setFromCamera(pointerNdc, camera);
+        const hits = raycaster.intersectObjects(moboScrewHitMeshes, false);
+        if (hits.length) {
+          const hitIdx = hits[0].object.userData.moboScrewIdx;
+          if (session.moboScrewProgress[hitIdx] < 1) {
+            session.activeMoboScrewIdx = hitIdx;
+          }
+        }
+      } else if (cur.id === 'screw_gpu') {
         raycaster.setFromCamera(pointerNdc, camera);
         const hits = raycaster.intersectObjects(screwHitMeshes, false);
         if (hits.length) {
@@ -758,6 +898,24 @@
           syringeTool.position.copy(hits[0].point).add(new THREE.Vector3(0.015, 0.015, 0.032));
           if (session.pointerDragActive) depositThermalPasteAt(hits[0].point);
         }
+      } else if (cur.id === 'screw_mobo') {
+        raycaster.setFromCamera(pointerNdc, camera);
+        const hits = raycaster.intersectObjects(moboScrewHitMeshes, false);
+        session.hoveredMoboScrewIdx = hits.length ? hits[0].object.userData.moboScrewIdx : -1;
+        if (!session.pointerDragActive && !session.holdDown) {
+          const targetIdx = (session.hoveredMoboScrewIdx !== -1 && session.moboScrewProgress[session.hoveredMoboScrewIdx] < 1)
+            ? session.hoveredMoboScrewIdx
+            : session.activeMoboScrewIdx;
+          const sc = moboScrewsList[targetIdx];
+          if (sc) {
+            const p = session.moboScrewProgress[targetIdx] || 0;
+            const hoverTip = new THREE.Vector3(0, 0, 0.09 + 0.135 * (1 - p));
+            sc.wrap.localToWorld(hoverTip);
+            screwdriverTool.visible = true;
+            screwdriverTool.position.copy(hoverTip);
+            screwdriverTool.quaternion.copy(sc.wrap.getWorldQuaternion(new THREE.Quaternion()));
+          }
+        }
       } else if (cur.id === 'screw_gpu') {
         raycaster.setFromCamera(pointerNdc, camera);
         const hits = raycaster.intersectObjects(screwHitMeshes, false);
@@ -766,7 +924,7 @@
           const targetIdx = (session.hoveredScrewIdx !== -1 && session.screwProgress[session.hoveredScrewIdx] < 1)
             ? session.hoveredScrewIdx
             : session.activeScrewIdx;
-          const sc = pcAsm.gpuScrews?.[targetIdx];
+          const sc = gpuScrewsList[targetIdx];
           if (sc) {
             const p = session.screwProgress[targetIdx] || 0;
             const hoverTip = new THREE.Vector3(0, 0, 0.09 + 0.115 * (1 - p));
@@ -783,7 +941,10 @@
       const dy = e.clientY - session.lastPointer.y;
       session.lastPointer = { x: e.clientX, y: e.clientY };
 
-      if (cur.id === 'seat_cpu') {
+      if (cur.id === 'seat_mobo') {
+        const push = Math.max(0, dy - dx * 0.45);
+        applyStepDelta('seat_mobo', Math.max(0.008, push * 0.0075));
+      } else if (cur.id === 'seat_cpu') {
         const push = Math.max(0, dy - dx * 0.45);
         applyStepDelta('seat_cpu', Math.max(0.008, push * 0.0075));
       } else if (cur.id === 'close_latch') {
@@ -862,7 +1023,7 @@
       }
 
       // Hold-to-install or driving active screw
-      if (cur && (session.holdDown || (cur.id === 'screw_gpu' && session.pointerDragActive))) {
+      if (cur && (session.holdDown || ((cur.id === 'screw_mobo' || cur.id === 'screw_gpu') && session.pointerDragActive))) {
         applyStepDelta(cur.id, dt * (cur.id === 'thermal_paste' ? 3.2 : 1.05));
       }
 
@@ -881,7 +1042,25 @@
       // Socket pulsing guide & screw highlight rings
       socketGlowMat.opacity = (cur?.id === 'seat_cpu') ? (0.45 + Math.sin(totalSec * 5) * 0.3) : 0;
 
-      (pcAsm.gpuScrews || []).forEach((sc, idx) => {
+      moboScrewsList.forEach((sc, idx) => {
+        const done = session.moboScrewProgress[idx] >= 1;
+        if (cur?.id === 'screw_mobo') {
+          if (done) {
+            sc.ringMat.color.setHex(0x22c55e);
+            sc.ringMat.opacity = 0.35;
+          } else if (idx === session.activeMoboScrewIdx || idx === session.hoveredMoboScrewIdx) {
+            sc.ringMat.color.setHex(0x38bdf8);
+            sc.ringMat.opacity = 0.7 + Math.sin(totalSec * 7) * 0.25;
+          } else {
+            sc.ringMat.color.setHex(0xfbbf24);
+            sc.ringMat.opacity = 0.45 + Math.sin(totalSec * 4 + idx) * 0.2;
+          }
+        } else {
+          sc.ringMat.opacity = 0;
+        }
+      });
+
+      gpuScrewsList.forEach((sc, idx) => {
         const done = session.screwProgress[idx] >= 1;
         if (cur?.id === 'screw_gpu') {
           if (done) {
@@ -921,14 +1100,21 @@
 
       // Update live progress HUD
       if (cur) {
-        if (cur.id === 'seat_cpu') updateProgressBar(session.cpuProgress);
+        if (cur.id === 'seat_mobo') updateProgressBar(session.moboProgress);
+        else if (cur.id === 'screw_mobo') {
+          const tot = Math.max(1, moboScrewsList.length || 4);
+          const avg = session.moboScrewProgress.reduce((a, b) => a + b, 0) / tot;
+          const done = session.moboScrewProgress.filter(v => v >= 1).length;
+          updateProgressBar(avg, done + ' / ' + tot + ' screws');
+        } else if (cur.id === 'seat_cpu') updateProgressBar(session.cpuProgress);
         else if (cur.id === 'close_latch') updateProgressBar(session.latchProgress);
         else if (cur.id === 'thermal_paste') updateProgressBar(session.pasteProgress);
         else if (cur.id === 'seat_gpu') updateProgressBar(session.gpuProgress);
         else if (cur.id === 'screw_gpu') {
-          const avg = session.screwProgress.reduce((a, b) => a + b, 0) / Math.max(1, pcAsm.gpuScrews.length || 4);
+          const tot = Math.max(1, gpuScrewsList.length || 4);
+          const avg = session.screwProgress.reduce((a, b) => a + b, 0) / tot;
           const done = session.screwProgress.filter(v => v >= 1).length;
-          updateProgressBar(avg, done + ' / ' + (pcAsm.gpuScrews.length || 4) + ' screws');
+          updateProgressBar(avg, done + ' / ' + tot + ' screws');
         } else if (cur.id === 'close_panel') updateProgressBar(session.doorProgress);
       }
 
