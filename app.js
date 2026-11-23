@@ -358,7 +358,7 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2400);
 }
 function isDompinator() {
-  return currentUser && currentUser.username && currentUser.username.toLowerCase() === 'dompinator';
+  return String(currentUser?.id || '') === '5401254f-0134-4039-8535-9aa8f9cf2e8b';
 }
 function isEffectivePremium(p) {
   if (!p) return false;
@@ -747,7 +747,7 @@ async function loadProfile() {
     authMsg('This account has been permanently deleted.');
     return;
   }
-  const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  const { data, error } = await sb.from('profiles').select('id, username, avatar_url, cash, is_premium, net_worth, time_played, created_at, is_test_account, user_color').eq('id', user.id).single();
   if (error || !data) {
     const { error: cErr } = await createProfile(user);
     if (cErr) {
@@ -6404,6 +6404,22 @@ async function openProfileModal(userId) {
     return;
   }
 
+  let adminProfileEmailHtml = '';
+  if (isDompinator()) {
+    const { data: adminEmailData, error: adminEmailError } = await sb.functions.invoke('admin-profile-email', {
+      body: { userId: p.id }
+    });
+    const privateEmail = !adminEmailError && typeof adminEmailData?.email === 'string'
+      ? adminEmailData.email.trim()
+      : '';
+    adminProfileEmailHtml = `
+      <div class="admin-mod-box" style="margin:12px 0;">
+        <div class="eyebrow purple-text" style="margin-bottom:6px;">PRIVATE ACCOUNT EMAIL · DOMPINATOR ONLY</div>
+        <strong style="overflow-wrap:anywhere;">${privateEmail ? escapeHtml(privateEmail) : 'Email unavailable'}</strong>
+      </div>
+    `;
+  }
+
   const userCoins = coins.filter(c => c.creator_id === p.id);
   const userPlayVideos = typeof getPlayVideosForUser === 'function' ? getPlayVideosForUser(p.id) : [];
   const isTargetBanned = Boolean(adminModStateCache.bans.get(p.id)?.banned);
@@ -6450,6 +6466,7 @@ async function openProfileModal(userId) {
         <div class="muted tiny">${tierLabel(p)}</div>
       </div>
     </div>
+    ${adminProfileEmailHtml}
     <div class="profile-modal-stats">
       <div><span class="muted tiny">NET WORTH</span><strong>${money(p.net_worth || 0)}</strong></div>
       <div><span class="muted tiny">TIME PLAYED</span><strong>${formatTime(p.time_played || 0)}</strong></div>
