@@ -225,7 +225,7 @@ AS $function$
   LEFT JOIN public.product_companies AS buyer_company
     ON buyer_company.id = purchase.buyer_company_id AND buyer_company.owner_id = purchase.buyer_id
   WHERE auth.uid() IS NOT NULL
-    AND purchase.created_at >= now() - interval '24 hours'
+    AND purchase.created_at >= now() - interval '48 hours'
     AND (purchase.buyer_company_id IS NULL OR buyer_company.id IS NOT NULL)
   ORDER BY purchase.created_at DESC
   LIMIT 3000;

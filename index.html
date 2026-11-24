@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0c0916">
   <title>GRIND — Grind your way through the market</title>
-  <link rel="stylesheet" href="styles.css?v=85">
+  <link rel="stylesheet" href="styles.css?v=86">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="importmap">
   {
@@ -828,9 +828,13 @@
             <div>
               <div class="eyebrow purple-text">THE GRIND NETWORK</div>
               <h3>GrindWorld</h3>
-              <p class="muted">A live map of the people, companies, products and coins connected through the market.</p>
+              <p class="muted">A live map of every user, company, product, coin and real-time transaction across GRIND.</p>
             </div>
             <div class="grindworld-toolbar">
+              <div class="grindworld-search-wrap">
+                <input type="search" id="grindWorldSearch" placeholder="Find user, company, product, coin…" autocomplete="off" aria-label="Search GrindWorld nodes">
+                <div class="grindworld-search-results hidden" id="grindWorldSearchResults"></div>
+              </div>
               <button type="button" class="zoom-btn" id="grindWorldRefresh">↻ Refresh</button>
               <button type="button" class="zoom-btn" id="grindWorldZoomOut" aria-label="Zoom out">−</button>
               <button type="button" class="zoom-btn" id="grindWorldZoomIn" aria-label="Zoom in">＋</button>
@@ -839,12 +843,18 @@
           </div>
           <div class="grindworld-meta">
             <span id="grindWorldStats">Loading network…</span>
+            <div class="grindworld-filters" id="grindWorldFilters" role="tablist" aria-label="Network filter">
+              <button type="button" class="gw-filter-btn active" data-gw-filter="all">All</button>
+              <button type="button" class="gw-filter-btn" data-gw-filter="active">Live 48h</button>
+              <button type="button" class="gw-filter-btn" data-gw-filter="trades">Buys &amp; Invests</button>
+              <button type="button" class="gw-filter-btn" data-gw-filter="supply">PC Supply</button>
+            </div>
             <span class="grindworld-legend">
               <span><i class="gw-legend-user"></i> Users</span>
               <span><i class="gw-legend-company"></i> Companies</span>
               <span><i class="gw-legend-product"></i> Products</span>
               <span><i class="gw-legend-coin"></i> Coins</span>
-              <span><i class="gw-legend-pulse"></i> Recent activity</span>
+              <span><i class="gw-legend-pulse"></i> Live 48h flow</span>
             </span>
           </div>
           <div class="grindworld-stage">
@@ -855,10 +865,18 @@
               <small id="grindWorldSelectionType">NETWORK NODE</small>
               <strong id="grindWorldSelectionName">Selected node</strong>
               <span id="grindWorldSelectionMeta"></span>
+              <div class="grindworld-selection-links hidden" id="grindWorldSelectionLinks"></div>
             </div>
-            <div class="grindworld-hint">Drag to move · Scroll to zoom · Select a circle for details</div>
+            <div class="grindworld-feed" id="grindWorldFeed">
+              <button type="button" class="grindworld-feed-head" id="grindWorldFeedToggle">
+                <span><i class="gw-live-dot"></i> Live Pulse</span>
+                <em id="grindWorldFeedCount">0</em>
+              </button>
+              <div class="grindworld-feed-list" id="grindWorldFeedList"></div>
+            </div>
+            <div class="grindworld-hint">Drag to move · Scroll to zoom · Hover or click any bubble to trace cables</div>
           </div>
-          <p class="grindworld-footnote">Colored regions represent each user’s share of GRIND market activity. Connections between users, companies, products and coins are based on saved platform data. Inactive purchase connections expire after 48 hours.</p>
+          <p class="grindworld-footnote">Colored regions represent each user’s share of GRIND market activity. New cables and flowing circles appear whenever someone buys products, invests in companies, or trades coins—and automatically vanish after 48 hours (2 days) of inactivity.</p>
         </section>
 
         <!-- ADMIN (only Dompinator) -->
@@ -2181,7 +2199,7 @@
   <script defer src="company-mobo.js?v=3"></script>
   <script defer src="company-pc.js?v=7"></script>
   <script defer src="company-gpu.js?v=29"></script>
-  <script defer src="grindworld.js?v=8"></script>
+  <script defer src="grindworld.js?v=9"></script>
   <script defer src="grind-ads.js?v=7"></script>
 </body>
 </html>
