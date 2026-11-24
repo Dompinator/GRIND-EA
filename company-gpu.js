@@ -156,6 +156,7 @@
   const isGpu = () => !!(currentCompany?.product_lines || []).includes('gpu');
   const isPc = () => !!(currentCompany?.product_lines || []).includes('pc');
   const isMobo = () => !!(currentCompany?.product_lines || []).includes('motherboard');
+  const isRam = () => !!(currentCompany?.product_lines || []).includes('ram');
   const researched = k => k === 'basic' || k === 'plastic' || k === 'custom' || (companyResearchRows || []).some(x => x.research_key === k);
   const researchName = k => GPU_RESEARCH.find(r => r.key === k)?.name || (k === 'none' ? 'Base' : k === 'basic' ? 'Basic Fan' : k);
   const chipVramLabel = k => (!k || k === 'none') ? 'No V-RAM' : researchName(k);
@@ -379,6 +380,7 @@
     ['cpu', 'CPU Manufacturing'],
     ['gpu', 'GPU Manufacturing'],
     ['motherboard', 'Motherboard Manufacturing'],
+    ['ram', 'RAM Manufacturing'],
     ['pc', 'PC Manufacturing']
   ];
 
@@ -417,7 +419,7 @@
       companies.map(c =>
         '<button class="ea-company-card" data-company-open="' + esc(c.id) + '">' +
         '<span class="ea-company-logo">' + (c.logo_data_url ? '<img src="' + esc(c.logo_data_url) + '" alt="">' : '▣') + '</span>' +
-        '<span><b>' + esc(c.company_name) + '</b><small>' + ((c.product_lines || []).includes('pc') ? 'PC Manufacturing' : (c.product_lines || []).includes('motherboard') ? 'Motherboard Manufacturing' : (c.product_lines || []).includes('gpu') ? 'GPU Manufacturing' : 'CPU Manufacturing') + '</small></span>' +
+        '<span><b>' + esc(c.company_name) + '</b><small>' + ((c.product_lines || []).includes('pc') ? 'PC Manufacturing' : (c.product_lines || []).includes('motherboard') ? 'Motherboard Manufacturing' : (c.product_lines || []).includes('ram') ? 'RAM Manufacturing' : (c.product_lines || []).includes('gpu') ? 'GPU Manufacturing' : 'CPU Manufacturing') + '</small></span>' +
         '<strong>Open →</strong></button>'
       ).join('') +
       '</div>' +
@@ -524,12 +526,14 @@
     resetDraftGpuState();
     window.PcWorkspace?.resetPcDraftState?.();
     window.MoboWorkspace?.resetMoboDraftState?.();
+    window.RamWorkspace?.resetRamDraftState?.();
     window.cancelCpuDraftEdit?.();
     if (typeof renderCompanyDashboard === 'function') renderCompanyDashboard();
     renderChooser();
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       mountGpuWorkspace();
       mountGpuResearch();
       mountGpuProductsPage();
@@ -537,6 +541,7 @@
     } else if (isPc()) {
       hideGpuWorkspace();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       window.PcWorkspace?.mountPcWorkspace?.();
       window.PcWorkspace?.mountPcResearch?.();
       window.PcWorkspace?.mountPcProductsPage?.();
@@ -544,13 +549,23 @@
     } else if (isMobo()) {
       hideGpuWorkspace();
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       window.MoboWorkspace?.mountMoboWorkspace?.();
       window.MoboWorkspace?.mountMoboResearch?.();
       window.MoboWorkspace?.mountMoboProductsPage?.();
       window.MoboWorkspace?.renderMoboProducts?.();
+    } else if (isRam()) {
+      hideGpuWorkspace();
+      window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.mountRamWorkspace?.();
+      window.RamWorkspace?.mountRamResearch?.();
+      window.RamWorkspace?.mountRamProductsPage?.();
+      window.RamWorkspace?.renderRamProducts?.();
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       hideGpuWorkspace();
     }
     syncCompanyDesignMode();
@@ -594,9 +609,12 @@
       .select('id,owner_id,company_name,logo_data_url,description,product_lines,total_revenue,total_costs,change_pct,created_at')
       .single();
     if (error) {
+      const errMsg = String(error.message || '');
       msg.textContent = error.code === '23505'
         ? 'You already own a company for this manufacturing type (max 1 per type).'
-        : error.message;
+        : /product_lines|product_companies_product_lines_check/i.test(errMsg)
+          ? 'Database needs update: run supabase/pc_company_migration.sql in Supabase SQL Editor to enable RAM companies.'
+          : errMsg;
       console.error('Company creation failed:', { ownerId, error });
       return;
     }
@@ -619,6 +637,7 @@
       localStorage.removeItem('grind_active_company_id');
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       hideGpuWorkspace();
       renderChooser();
     });
@@ -1695,11 +1714,12 @@
   function hideGpuWorkspace() {
     $('#eaGpuPanel')?.classList.add('hidden');
     $('#eaCompanyResearch')?.classList.add('hidden');
-    const showCpu = !!(currentCompany && !isGpu() && !isPc() && !isMobo());
+    const showCpu = !!(currentCompany && !isGpu() && !isPc() && !isMobo() && !isRam());
     $('#cpuResearchTree')?.classList.toggle('hidden', !showCpu);
-    if (!isPc() && !isMobo()) {
+    if (!isPc() && !isMobo() && !isRam()) {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       const section = $('#companyPanelResearch .research-section');
       if (section) {
         const eyebrow = section.querySelector('.company-section-heading .eyebrow');
@@ -1792,6 +1812,7 @@
       $('#eaGpuPanel')?.classList.add('hidden');
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.remove('hidden');
       return;
@@ -1799,6 +1820,7 @@
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       if (visible) {
@@ -1810,6 +1832,7 @@
     } else if (isPc()) {
       $('#eaGpuPanel')?.classList.add('hidden');
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       if (visible) {
@@ -1820,6 +1843,7 @@
     } else if (isMobo()) {
       $('#eaGpuPanel')?.classList.add('hidden');
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       $('#page-company-design #cpuDesigner')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       if (visible) {
@@ -1827,9 +1851,21 @@
       } else {
         $('#eaMoboPanel')?.classList.add('hidden');
       }
+    } else if (isRam()) {
+      $('#eaGpuPanel')?.classList.add('hidden');
+      window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
+      $('#page-company-design #cpuDesigner')?.classList.add('hidden');
+      $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
+      if (visible) {
+        window.RamWorkspace?.mountRamWorkspace?.();
+      } else {
+        $('#eaRamPanel')?.classList.add('hidden');
+      }
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       $('#eaGpuPanel')?.classList.add('hidden');
       $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
       $('#page-company-design #cpuDesigner')?.classList.remove('hidden');
@@ -2769,6 +2805,7 @@
       if (isGpu()) {
         window.PcWorkspace?.hidePcWorkspace?.();
         window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         mountGpuWorkspace();
         mountGpuResearch();
         mountGpuProductsPage();
@@ -2776,6 +2813,7 @@
       } else if (isPc()) {
         hideGpuWorkspace();
         window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         window.PcWorkspace?.mountPcWorkspace?.();
         window.PcWorkspace?.mountPcResearch?.();
         window.PcWorkspace?.mountPcProductsPage?.();
@@ -2783,10 +2821,19 @@
       } else if (isMobo()) {
         hideGpuWorkspace();
         window.PcWorkspace?.hidePcWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         window.MoboWorkspace?.mountMoboWorkspace?.();
         window.MoboWorkspace?.mountMoboResearch?.();
         window.MoboWorkspace?.mountMoboProductsPage?.();
         window.MoboWorkspace?.renderMoboProducts?.();
+      } else if (isRam()) {
+        hideGpuWorkspace();
+        window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.mountRamWorkspace?.();
+        window.RamWorkspace?.mountRamResearch?.();
+        window.RamWorkspace?.mountRamProductsPage?.();
+        window.RamWorkspace?.renderRamProducts?.();
       }
     }
   };
@@ -2797,11 +2844,12 @@
     renderChooser();
     if (!currentCompany) return;
     const badge = $('.company-cpu-chip');
-    if (badge) badge.textContent = isPc() ? 'PC MANUFACTURER' : isMobo() ? 'MOBO MANUFACTURER' : isGpu() ? 'GPU MANUFACTURER' : 'CPU MANUFACTURER';
+    if (badge) badge.textContent = isPc() ? 'PC MANUFACTURER' : isMobo() ? 'MOBO MANUFACTURER' : isRam() ? 'RAM MANUFACTURER' : isGpu() ? 'GPU MANUFACTURER' : 'CPU MANUFACTURER';
     addBackButton();
     if (isGpu()) {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       mountGpuWorkspace();
       mountGpuResearch();
       mountGpuProductsPage();
@@ -2811,6 +2859,7 @@
     } else if (isPc()) {
       hideGpuWorkspace();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       window.PcWorkspace?.mountPcWorkspace?.();
       window.PcWorkspace?.mountPcResearch?.();
       window.PcWorkspace?.mountPcProductsPage?.();
@@ -2818,13 +2867,23 @@
     } else if (isMobo()) {
       hideGpuWorkspace();
       window.PcWorkspace?.hidePcWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       window.MoboWorkspace?.mountMoboWorkspace?.();
       window.MoboWorkspace?.mountMoboResearch?.();
       window.MoboWorkspace?.mountMoboProductsPage?.();
       window.MoboWorkspace?.renderMoboProducts?.();
+    } else if (isRam()) {
+      hideGpuWorkspace();
+      window.PcWorkspace?.hidePcWorkspace?.();
+      window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.mountRamWorkspace?.();
+      window.RamWorkspace?.mountRamResearch?.();
+      window.RamWorkspace?.mountRamProductsPage?.();
+      window.RamWorkspace?.renderRamProducts?.();
     } else {
       window.PcWorkspace?.hidePcWorkspace?.();
       window.MoboWorkspace?.hideMoboWorkspace?.();
+      window.RamWorkspace?.hideRamWorkspace?.();
       hideGpuWorkspace();
     }
     syncCompanyDesignMode();
@@ -2852,19 +2911,28 @@
       if (isGpu()) {
         window.PcWorkspace?.hidePcWorkspace?.();
         window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         mountGpuWorkspace();
         showGpuMain();
       } else if (isPc()) {
         hideGpuWorkspace();
         window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         window.PcWorkspace?.mountPcWorkspace?.();
       } else if (isMobo()) {
         hideGpuWorkspace();
         window.PcWorkspace?.hidePcWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         window.MoboWorkspace?.mountMoboWorkspace?.();
+      } else if (isRam()) {
+        hideGpuWorkspace();
+        window.PcWorkspace?.hidePcWorkspace?.();
+        window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.mountRamWorkspace?.();
       } else {
         window.PcWorkspace?.hidePcWorkspace?.();
         window.MoboWorkspace?.hideMoboWorkspace?.();
+        window.RamWorkspace?.hideRamWorkspace?.();
         hideGpuWorkspace();
         $('#page-company-design #companyDesignNoCompany')?.classList.toggle('hidden', !!currentCompany);
         $('#page-company-design #cpuDesigner')?.classList.toggle('hidden', !currentCompany);
@@ -2880,6 +2948,9 @@
       } else if (isMobo()) {
         window.MoboWorkspace?.mountMoboProductsPage?.();
         window.MoboWorkspace?.renderMoboProducts?.();
+      } else if (isRam()) {
+        window.RamWorkspace?.mountRamProductsPage?.();
+        window.RamWorkspace?.renderRamProducts?.();
       }
     }
   };
@@ -2898,6 +2969,7 @@
               if (isGpu()) { mountGpuProductsPage(); renderGpuProducts(); }
               else if (isPc()) { window.PcWorkspace?.mountPcProductsPage?.(); window.PcWorkspace?.renderPcProducts?.(); }
               else if (isMobo()) { window.MoboWorkspace?.mountMoboProductsPage?.(); window.MoboWorkspace?.renderMoboProducts?.(); }
+              else if (isRam()) { window.RamWorkspace?.mountRamProductsPage?.(); window.RamWorkspace?.renderRamProducts?.(); }
             }
           });
         }

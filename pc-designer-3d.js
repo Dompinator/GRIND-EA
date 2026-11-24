@@ -25,6 +25,7 @@
     fans: [],            // [{ id, fanType, mount, position, bladeColor, rgbRing }]
     motherboard: null,   // full Motherboard cfg built by buildMoboConfigFromProduct
     cpu: null,           // full CPU spec resolved by resolveCpuProductSpec
+    ram: [],             // array of RAM stick cfgs built by buildRamConfigFromProduct
     gpu: null            // full GPU cfg built by buildGpuConfigFromProduct
   };
 
@@ -626,6 +627,7 @@
       });
     };
 
+    let ramSlotsWorld = [];
     if (cfg.motherboard && typeof window.MoboDesigner3D?.buildAssembly === 'function') {
       const moboAsm = window.MoboDesigner3D.buildAssembly(T, cfg.motherboard, {
         isSoftwareGl: isSoft,
@@ -653,6 +655,12 @@
           y: actY + moboAsm.layout.atxWorldOffsetY,
           z: moboSurfaceZ + 0.05
         };
+        ramSlotsWorld = (moboAsm.layout.ramSlotsLocal || []).map(s => ({
+          x: actX + s.x,
+          y: actY - s.z,
+          z: moboZ + s.y,
+          len: s.len
+        }));
         ilmHoodPivot = moboAsm.ilmHoodPivot;
         ilmLeverPivot = moboAsm.ilmLeverPivot;
         mountedMoboAsm = moboAsm;
@@ -695,9 +703,11 @@
       addBox(motherboardGroup, moboW * 0.42, 0.032, 0.095, darkMetalMat, moboX - moboW * 0.12, pcieY, moboZ + 0.058);
       // 4x DDR5 DIMM slots (2 for Mini-ITX)
       const ramSlots = cfg.caseSize === 'small' ? 2 : 4;
+      const fallbackSlotLen = Math.min(1.25, moboH * 0.40);
       for (let r = 0; r < ramSlots; r++) {
         const rx = moboX + moboW * 0.22 + r * 0.085;
-        addBox(motherboardGroup, 0.038, Math.min(1.25, moboH * 0.40), 0.075, darkMetalMat, rx, sockY, moboZ + 0.048);
+        addBox(motherboardGroup, 0.038, fallbackSlotLen, 0.075, darkMetalMat, rx, sockY, moboZ + 0.048);
+        ramSlotsWorld.push({ x: rx, y: sockY, z: moboZ + 0.055, len: fallbackSlotLen });
       }
       // 24-pin ATX header on right edge of mobo
       addBox(motherboardGroup, 0.065, 0.38, 0.08, darkMetalMat, atxHeaderPos.x, atxHeaderPos.y, atxHeaderPos.z);
@@ -772,6 +782,54 @@
       if (!mountedRealCpu) {
         addBox(cpuHolder, 0.42, 0.42, 0.06, brushedSilverMat, 0, 0, 0.01);
       }
+    }
+
+    // 8B. ACTUAL 3D DDR5 RAM Sticks Mounted Into Motherboard DIMM Slots!
+    const ramGroup = new T.Group();
+    const ramStickHolders = [];
+    const ramList = Array.isArray(cfg.ram) ? cfg.ram : [];
+    for (let i = 0; i < ramList.length && i < ramSlotsWorld.length; i++) {
+      const slot = ramSlotsWorld[i];
+      const ramCfg = ramList[i];
+      if (!ramCfg) continue;
+      const stickHolder = new T.Group();
+      stickHolder.rotation.z = Math.PI / 2;
+      let dockedPos = { x: slot.x, y: slot.y, z: slot.z + 0.12 };
+      let mountedRamAsm = null;
+
+      if (typeof window.RamDesigner3D?.buildAssembly === 'function') {
+        const ramAsm = window.RamDesigner3D.buildAssembly(T, ramCfg, {
+          isSoftwareGl: isSoft,
+          onAssetReady: opts.onAssetReady
+        });
+        if (ramAsm && ramAsm.root) {
+          const s = (slot.len * 0.94) / (ramAsm.dims.w || 1.34);
+          ramAsm.root.rotation.x = Math.PI / 2;
+          ramAsm.root.scale.setScalar(s);
+          dockedPos = {
+            x: slot.x,
+            y: slot.y,
+            z: slot.z - (ramAsm.dims.bottomY || -0.15) * s
+          };
+          stickHolder.position.set(dockedPos.x, dockedPos.y, dockedPos.z);
+          stickHolder.add(ramAsm.root);
+          mountedRamAsm = ramAsm;
+          (ramAsm.rainbowRgbMats || []).forEach(rm => {
+            if (rm && rm.mat) {
+              rm.mat.userData = { rgbMode: 'rainbow', offset: rm.offset || (i * 0.14) };
+              rgbList.push(rm.mat);
+            }
+          });
+        }
+      }
+      if (!mountedRamAsm) {
+        const rMat = new T.MeshStandardMaterial({ color: ramCfg.primaryColor || '#1a1f2b', metalness: 0.45, roughness: 0.35 });
+        dockedPos = { x: slot.x, y: slot.y, z: slot.z + 0.14 };
+        stickHolder.position.set(dockedPos.x, dockedPos.y, dockedPos.z);
+        addBox(stickHolder, slot.len * 0.92, 0.28, 0.055, rMat, 0, 0, 0);
+      }
+      ramGroup.add(stickHolder);
+      ramStickHolders.push({ holder: stickHolder, dockedPos, slot, asm: mountedRamAsm });
     }
 
     // Braided 24-pin ATX power cable & GPU power cable
@@ -896,6 +954,7 @@
       rgbGroup,
       motherboardGroup,
       cpuGroup,
+      ramGroup,
       gpuGroup,
       cablesGroup,
       airflowGroup
@@ -918,6 +977,8 @@
       pasteAnchor,
       ilmHoodPivot,
       ilmLeverPivot,
+      ramGroup,
+      ramStickHolders,
       gpuGroup,
       gpuHolder,
       gpuAsm: mountedGpuAsm,
@@ -1204,7 +1265,8 @@
     const merged = {
       ...DEFAULT_CONFIG,
       ...nextCfg,
-      fans: Array.isArray(nextCfg.fans) ? nextCfg.fans.map(f => ({ ...f })) : []
+      fans: Array.isArray(nextCfg.fans) ? nextCfg.fans.map(f => ({ ...f })) : [],
+      ram: Array.isArray(nextCfg.ram) ? nextCfg.ram.map(r => ({ ...r })) : []
     };
     const sig = JSON.stringify({
       mode: merged.mode,
@@ -1222,6 +1284,7 @@
       fans: merged.fans,
       motherboard: merged.motherboard || null,
       cpu: merged.cpu || null,
+      ram: merged.ram,
       gpu: merged.gpu || null
     });
     state = merged;

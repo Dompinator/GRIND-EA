@@ -577,6 +577,7 @@
 
     // 5. Keyed DDR5 RAM DIMM Slots (0, 1, 2, 4, or 6 Slots!)
     const ramCount = clamp(Number(cfg.ramSlots || 0), 0, 6);
+    const ramSlotsLocal = [];
     if (ramCount > 0) {
       const slotLen = cfg.boardSize === 'small' ? 0.92 : 1.18;
       const ramStartX = sockX + hoodW / 2 + 0.13;
@@ -602,6 +603,7 @@
         addBox(slotG, 0.044, 0.042, 0.048, accentMat, 0, 0.032, -slotLen / 2 - 0.024);
         addBox(slotG, 0.044, 0.042, 0.048, accentMat, 0, 0.032, slotLen / 2 + 0.024);
         ramGroup.add(slotG);
+        ramSlotsLocal.push({ x: rx, y: surfaceY + 0.056, z: sockZ, len: slotLen });
       }
     }
 
@@ -681,6 +683,8 @@
       layout: {
         pcbThick,
         surfaceY,
+        ramCount,
+        ramSlotsLocal,
         // Local coordinates (before rotX(+90°))
         sockX,
         sockZ,

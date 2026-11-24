@@ -270,6 +270,29 @@ async function startServer() {
     }
   });
 
+  app.use((req, res, next) => {
+    const reqPath = String(req.path || '/');
+    if (
+      reqPath === '/' ||
+      reqPath.endsWith('.html') ||
+      reqPath.endsWith('.js') ||
+      reqPath.endsWith('.css')
+    ) {
+      const noStore = 'no-store, no-cache, must-revalidate, proxy-revalidate';
+      const origSetHeader = res.setHeader.bind(res);
+      res.setHeader = ((name: string, value: number | string | readonly string[]) => {
+        const lower = String(name).toLowerCase();
+        if (lower === 'cache-control') return origSetHeader('Cache-Control', noStore);
+        if (lower === 'etag' || lower === 'last-modified') return res;
+        return origSetHeader(name, value);
+      }) as typeof res.setHeader;
+      res.setHeader('Cache-Control', noStore);
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    next();
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

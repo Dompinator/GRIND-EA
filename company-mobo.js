@@ -931,6 +931,7 @@
     $('#page-company-design #cpuDesigner')?.classList.add('hidden');
     $('#page-company-design #eaGpuPanel')?.classList.add('hidden');
     $('#page-company-design #eaPcPanel')?.classList.add('hidden');
+    $('#page-company-design #eaRamPanel')?.classList.add('hidden');
     $('#page-company-design #companyDesignNoCompany')?.classList.add('hidden');
 
     const page = $('#page-company-design');

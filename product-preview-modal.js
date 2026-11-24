@@ -97,6 +97,8 @@
     if (String(p.product_line || '').toLowerCase() === 'pc' || p.design_data?.pc_build) return 'pc';
     if (typeof window.isMoboProductRow === 'function' && window.isMoboProductRow(p)) return 'mobo';
     if (String(p.product_line || '').toLowerCase() === 'motherboard' || p.design_data?.mobo_build) return 'mobo';
+    if (typeof window.isRamProductRow === 'function' && window.isRamProductRow(p)) return 'ram';
+    if (String(p.product_line || '').toLowerCase() === 'ram' || p.design_data?.ram_build) return 'ram';
     if (typeof window.isGpuProductRow === 'function' && window.isGpuProductRow(p)) return 'gpu';
     if (String(p.product_line || '').toLowerCase() === 'gpu') return 'gpu';
     return 'cpu';
@@ -750,6 +752,56 @@
     rootGroup.add(fallback);
   }
 
+  // ---------- RAM Stick 3D Builder (Read-Only Preview with Explode) ----------
+  function buildRamPreview(p) {
+    const dData = p.design_data || {};
+    const cfg = typeof window.buildRamConfigFromProduct === 'function'
+      ? window.buildRamConfigFromProduct(p)
+      : {
+          capacityKey: dData.capacity_key || p.body_type || '512mb',
+          capacityLabel: dData.capacity_label || '512MB',
+          capacityGb: Number(dData.capacity_gb ?? 0.5),
+          heatspreader: dData.heatspreader || 'angular',
+          finish: dData.finish || 'satin',
+          primaryColor: dData.primary_color || '#1a1f2b',
+          accentColor: dData.accent_color || '#64748b',
+          pcbColor: dData.pcb_color || '#121620',
+          elements: Array.isArray(dData.elements) ? dData.elements : [],
+          name: p.product_name || 'RAM Stick',
+          companyName: p.product_companies?.company_name || '',
+          logoUrl: p.product_companies?.logo_data_url || ''
+        };
+
+    if (typeof window.RamDesigner3D?.buildAssembly === 'function') {
+      const asm = window.RamDesigner3D.buildAssembly(THREE, cfg, {
+        isSoftwareGl,
+        onAssetReady: () => {
+          if (activeProduct === p && !modalEl?.classList.contains('hidden')) {
+            clearRoot();
+            buildRamPreview(p);
+          }
+        }
+      });
+      if (asm && asm.root) {
+        rootGroup.add(asm.root);
+        (asm.rainbowRgbMats || []).forEach(rm => {
+          if (rm?.mat) rainbowMats.push({ mat: rm.mat, offset: rm.offset || 0 });
+        });
+        explodeParts.push(
+          { obj: asm.frontPlateGroup, axis: 'z', base: asm.frontPlateGroup.position.z, delta: 0.22 },
+          { obj: asm.backPlateGroup, axis: 'z', base: asm.backPlateGroup.position.z, delta: -0.22 },
+          { obj: asm.topBarGroup, axis: 'y', base: asm.topBarGroup.position.y, delta: 0.24 },
+          { obj: asm.icGroup, axis: 'z', base: asm.icGroup.position.z, delta: 0.04 },
+          { obj: asm.elementsGroup, axis: 'y', base: asm.elementsGroup.position.y, delta: 0.06 }
+        );
+        return;
+      }
+    }
+
+    const fallback = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.34, 0.09), new THREE.MeshStandardMaterial({ color: 0x1a1f2b }));
+    rootGroup.add(fallback);
+  }
+
   function applyExplodeAndStates(dt) {
     currentExplode += (targetExplode - currentExplode) * Math.min(1, dt * 8);
     for (const part of explodeParts) {
@@ -795,6 +847,13 @@
       else if (preset === 'ram') Object.assign(camTargetPos, { x: 2.95 * s, y: 1.65 * s, z: 1.65 * s });
       else if (preset === 'back') Object.assign(camTargetPos, { x: 0.3 * s, y: -2.5 * s, z: 2.25 * s });
       else Object.assign(camTargetPos, { x: 2.15 * s, y: 2.55 * s, z: 2.4 * s });
+    } else if (activeKind === 'ram') {
+      camTargetLook.y = 0.02;
+      if (preset === 'front') Object.assign(camTargetPos, { x: 0.02, y: 0.08, z: 1.95 });
+      else if (preset === 'back') Object.assign(camTargetPos, { x: -0.02, y: 0.08, z: -1.95 });
+      else if (preset === 'top') Object.assign(camTargetPos, { x: 0.02, y: 1.78, z: 0.45 });
+      else if (preset === 'pins') Object.assign(camTargetPos, { x: 0.65, y: -1.15, z: 1.35 });
+      else Object.assign(camTargetPos, { x: 1.38, y: 0.92, z: 1.56 });
     } else {
       if (preset === 'top') Object.assign(camTargetPos, { x: 0, y: 3.7, z: 0.35 });
       else if (preset === 'side') Object.assign(camTargetPos, { x: 0.05, y: 0.45, z: 3.45 });
@@ -814,7 +873,9 @@
         ? [['iso', '3/4 View'], ['interior', 'Interior'], ['front', 'Front'], ['rear', 'Rear'], ['top', 'Top']]
         : activeKind === 'mobo'
           ? [['hero', '3/4 Hero'], ['top', 'Top'], ['io', 'Rear I/O'], ['ram', 'RAM / ATX'], ['back', 'Back PCB']]
-          : [['hero', '3/4 View'], ['top', 'Top'], ['side', 'Side'], ['pins', 'Pins']];
+          : activeKind === 'ram'
+            ? [['hero', '3/4 Hero'], ['front', 'Front'], ['back', 'Back'], ['top', 'Top RGB'], ['pins', 'Gold Pins']]
+            : [['hero', '3/4 View'], ['top', 'Top'], ['side', 'Side'], ['pins', 'Pins']];
 
     camWrap.innerHTML = presets.map(([k, lbl], idx) =>
       '<button type="button" data-prev-cam="' + k + '"' + (idx === 0 ? ' class="active"' : '') + '>' + lbl + '</button>'
@@ -1065,8 +1126,8 @@
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = activeKind === 'pc' ? 2.4 : 1.3;
-    controls.maxDistance = activeKind === 'pc' ? 18.0 : 8.5;
+    controls.minDistance = activeKind === 'pc' ? 2.4 : activeKind === 'ram' ? 0.9 : 1.3;
+    controls.maxDistance = activeKind === 'pc' ? 18.0 : activeKind === 'ram' ? 5.2 : 8.5;
     controls.addEventListener('start', () => { camAnimActive = false; });
 
     rootGroup = new THREE.Group();
@@ -1075,6 +1136,7 @@
     if (activeKind === 'gpu') buildGpuPreview(p);
     else if (activeKind === 'pc') buildPcPreview(p);
     else if (activeKind === 'mobo') buildMoboPreview(p);
+    else if (activeKind === 'ram') buildRamPreview(p);
     else buildCpuPreview(p);
 
     setCameraPreset('default');
@@ -1128,17 +1190,19 @@
       ? (window.formatPcHardwareBadges?.(p) || window.formatPcSpecLine?.(p) || 'Custom PC Build')
       : activeKind === 'mobo'
         ? (window.formatMoboHardwareBadges?.(p) || window.formatMoboSpecLine?.(p) || 'Motherboard')
-        : activeKind === 'gpu'
-          ? (window.formatGpuHardwareBadges?.(p) || window.formatGpuSpecLine?.(p) || 'GPU')
-          : (typeof formatCpuHardwareBadges === 'function' && typeof resolveCpuProductSpec === 'function'
-              ? formatCpuHardwareBadges(resolveCpuProductSpec(p))
-              : `${p.core_count || 0} Cores · ${p.thread_count || 0} Threads`);
+        : activeKind === 'ram'
+          ? (window.formatRamHardwareBadges?.(p) || window.formatRamSpecLine?.(p) || 'RAM Stick')
+          : activeKind === 'gpu'
+            ? (window.formatGpuHardwareBadges?.(p) || window.formatGpuSpecLine?.(p) || 'GPU')
+            : (typeof formatCpuHardwareBadges === 'function' && typeof resolveCpuProductSpec === 'function'
+                ? formatCpuHardwareBadges(resolveCpuProductSpec(p))
+                : `${p.core_count || 0} Cores · ${p.thread_count || 0} Threads`);
 
     const eyebrow = modalEl.querySelector('#eaPreviewEyebrow');
     const title = modalEl.querySelector('#eaPreviewTitle');
     const sub = modalEl.querySelector('#eaPreviewSubtitle');
     const footer = modalEl.querySelector('#eaPreviewFooter');
-    if (eyebrow) eyebrow.textContent = `${activeKind === 'mobo' ? 'MOTHERBOARD' : activeKind.toUpperCase()} 3D PREVIEW · READ-ONLY`;
+    if (eyebrow) eyebrow.textContent = `${activeKind === 'mobo' ? 'MOTHERBOARD' : activeKind === 'ram' ? 'RAM STICK' : activeKind.toUpperCase()} 3D PREVIEW · READ-ONLY`;
     if (title) title.textContent = p.product_name || 'Product';
     if (sub) sub.textContent = `by ${compName} · ${specsLine}`;
     if (footer) {
@@ -1146,7 +1210,9 @@
         ? window.getGpuProductScoreTier(p)
         : activeKind === 'mobo' && window.getMoboProductScoreTier
           ? window.getMoboProductScoreTier(p)
-          : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
+          : activeKind === 'ram' && window.getRamProductScoreTier
+            ? window.getRamProductScoreTier(p)
+            : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
       const stockTxt = Number(p.stock || 0) > 0 ? `${Number(p.stock)} in stock` : 'Out Of Stock';
       footer.innerHTML =
         `<span><b>Price:</b> ${esc(fmtMoney(p.listed_price || 0))}</span>` +

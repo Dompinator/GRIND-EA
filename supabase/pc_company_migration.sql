@@ -75,7 +75,7 @@ END $$;
 
 ALTER TABLE public.product_companies
   ADD CONSTRAINT product_companies_product_lines_check
-  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc', 'motherboard']::text[]) NOT VALID;
+  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc', 'motherboard', 'ram']::text[]) NOT VALID;
 
 -- Allow infinite companies per owner, max 1 company per manufacturing type
 DO $$
@@ -126,17 +126,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_product_companies_owner_line
 
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_product_line_check
-  CHECK (product_line IN ('cpu', 'gpu', 'pc', 'motherboard')) NOT VALID;
+  CHECK (product_line IN ('cpu', 'gpu', 'pc', 'motherboard', 'ram')) NOT VALID;
 
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_body_type_check
   CHECK (body_type IS NULL OR body_type IN (
     'gray', 'silicon', 'carbon', 'carbon_fiber', 'titanium', 'standard', 'default', 'none',
     'plastic', 'metallic', 'custom',
-    'small', 'medium', 'large'
+    'small', 'medium', 'large',
+    'stick', '512mb', '1gb', '2gb', '4gb', '6gb', '8gb', '12gb', '16gb', '24gb', '32gb', '64gb'
   )) NOT VALID;
 
--- 3) Update research_key check constraint to allow CPU + GPU + CHIP + PC keys
+-- 3) Update research_key check constraint to allow CPU + GPU + CHIP + PC + MOBO + RAM keys
 ALTER TABLE public.product_company_research
   ADD CONSTRAINT product_company_research_research_key_check
   CHECK (research_key IN (
@@ -164,7 +165,10 @@ ALTER TABLE public.product_company_research
     'pc_small_fans','pc_medium_fans','pc_smart_fans',
     -- Motherboard Company
     'mobo_medium_board','mobo_large_board',
-    'mobo_ram_1','mobo_ram_2','mobo_ram_4','mobo_ram_6'
+    'mobo_ram_1','mobo_ram_2','mobo_ram_4','mobo_ram_6',
+    -- RAM Company
+    'ram_1gb','ram_2gb','ram_4gb','ram_6gb','ram_8gb','ram_12gb','ram_16gb','ram_24gb','ram_32gb','ram_64gb',
+    'ram_rgb','ram_custom_colors'
   )) NOT VALID;
 
 -- 4) Unified unlock_company_research RPC (GPU + CHIP + PC)
@@ -253,6 +257,19 @@ BEGIN
     WHEN 'mobo_ram_2' THEN v_cost := 280; v_pre := 'mobo_ram_1';
     WHEN 'mobo_ram_4' THEN v_cost := 680; v_pre := 'mobo_ram_2';
     WHEN 'mobo_ram_6' THEN v_cost := 1200; v_pre := 'mobo_ram_4';
+    -- RAM Company
+    WHEN 'ram_1gb' THEN v_cost := 175;
+    WHEN 'ram_2gb' THEN v_cost := 250; v_pre := 'ram_1gb';
+    WHEN 'ram_4gb' THEN v_cost := 480; v_pre := 'ram_2gb';
+    WHEN 'ram_6gb' THEN v_cost := 600; v_pre := 'ram_4gb';
+    WHEN 'ram_8gb' THEN v_cost := 900; v_pre := 'ram_6gb';
+    WHEN 'ram_12gb' THEN v_cost := 1800; v_pre := 'ram_8gb';
+    WHEN 'ram_16gb' THEN v_cost := 3600; v_pre := 'ram_12gb';
+    WHEN 'ram_24gb' THEN v_cost := 6400; v_pre := 'ram_16gb';
+    WHEN 'ram_32gb' THEN v_cost := 8200; v_pre := 'ram_24gb';
+    WHEN 'ram_64gb' THEN v_cost := 10800; v_pre := 'ram_32gb';
+    WHEN 'ram_rgb' THEN v_cost := 800;
+    WHEN 'ram_custom_colors' THEN v_cost := 180;
     ELSE
       RAISE EXCEPTION 'Unknown research upgrade: %', p_research_key;
   END CASE;
@@ -357,6 +374,79 @@ BEGIN
       GREATEST(0, COALESCE(p_product_value, 0)),
       GREATEST(1, COALESCE(p_listed_price, 1)),
       0, 'F', 0, 'draft', COALESCE(p_design_data, '{}'::jsonb)
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
+  RETURN to_jsonb(v_row);
+END;
+$$;
+
+-- 5C) Save / Edit RAM Stick Draft RPC
+CREATE OR REPLACE FUNCTION public.save_ram_product_draft(
+  p_product_id uuid,
+  p_company_id uuid,
+  p_product_name text,
+  p_body_type text,
+  p_production_cost numeric,
+  p_product_value numeric,
+  p_listed_price numeric,
+  p_score integer,
+  p_tier text,
+  p_design_data jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_owner uuid;
+  v_row public.product_company_products;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  SELECT owner_id INTO v_owner
+  FROM public.product_companies
+  WHERE id = p_company_id;
+
+  IF v_owner IS NULL OR v_owner <> v_uid THEN
+    RAISE EXCEPTION 'Not authorized for this company';
+  END IF;
+
+  IF p_product_id IS NOT NULL THEN
+    UPDATE public.product_company_products
+    SET product_name = p_product_name,
+        body_type = COALESCE(p_body_type, '512mb'),
+        production_cost = GREATEST(0, COALESCE(p_production_cost, 0)),
+        product_value = GREATEST(0, COALESCE(p_product_value, 0)),
+        listed_price = GREATEST(1, COALESCE(p_listed_price, 1)),
+        cpu_score = GREATEST(0, COALESCE(p_score, 0)),
+        cpu_tier = COALESCE(p_tier, 'F'),
+        design_data = COALESCE(p_design_data, '{}'::jsonb)
+    WHERE id = p_product_id
+      AND company_id = p_company_id
+      AND owner_id = v_uid
+      AND status IN ('draft', 'published')
+    RETURNING * INTO v_row;
+
+    IF v_row.id IS NULL THEN
+      RAISE EXCEPTION 'RAM product not found or unauthorized';
+    END IF;
+  ELSE
+    INSERT INTO public.product_company_products (
+      company_id, owner_id, product_line, product_name, body_type,
+      production_cost, product_value, listed_price,
+      cpu_score, cpu_tier, stock, status, design_data
+    ) VALUES (
+      p_company_id, v_uid, 'ram', p_product_name, COALESCE(p_body_type, '512mb'),
+      GREATEST(0, COALESCE(p_production_cost, 0)),
+      GREATEST(0, COALESCE(p_product_value, 0)),
+      GREATEST(1, COALESCE(p_listed_price, 1)),
+      GREATEST(0, COALESCE(p_score, 0)), COALESCE(p_tier, 'F'), 0, 'draft', COALESCE(p_design_data, '{}'::jsonb)
     )
     RETURNING * INTO v_row;
   END IF;
@@ -506,6 +596,16 @@ BEGIN
       SELECT (v_pc.design_data->'components'->'gpu'->>'id')::uuid AS part_id
       WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
         AND COALESCE(v_pc.design_data->'components'->'gpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (r_elem->>'id')::uuid AS part_id
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(v_pc.design_data->'components'->'ram') = 'array'
+          THEN v_pc.design_data->'components'->'ram'
+          ELSE '[]'::jsonb
+        END
+      ) AS r_elem
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(r_elem->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
     )
     SELECT part_id, COUNT(*)::integer AS per_pc_qty
     FROM raw_ids
@@ -576,6 +676,16 @@ BEGIN
       SELECT (v_pc.design_data->'components'->'gpu'->>'id')::uuid AS part_id
       WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
         AND COALESCE(v_pc.design_data->'components'->'gpu'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (r_elem->>'id')::uuid AS part_id
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(v_pc.design_data->'components'->'ram') = 'array'
+          THEN v_pc.design_data->'components'->'ram'
+          ELSE '[]'::jsonb
+        END
+      ) AS r_elem
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(r_elem->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
     )
     SELECT part_id, COUNT(*)::integer AS per_pc_qty
     FROM raw_ids
@@ -1060,6 +1170,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.unlock_company_research(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.save_pc_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.save_mobo_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, integer, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.save_ram_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, integer, text, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.produce_pc_product(uuid, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.buy_company_stock(uuid, numeric) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.sell_company_stock(uuid, numeric) TO authenticated;

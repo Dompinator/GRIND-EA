@@ -1878,7 +1878,7 @@ function showPage(page) {
   if (page === 'company' || page === 'company-design' || page === 'company-products') {
     loadCompanyDashboard().then(() => {
       const lines = currentCompany?.product_lines || [];
-      if (page === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard')) {
+      if (page === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard') && !lines.includes('ram')) {
         renderSidebarCpuProductsPage();
       }
     });
@@ -2172,6 +2172,11 @@ function editCpuDraftProduct(id) {
   const isMobo = typeof window.isMoboProductRow === 'function' ? window.isMoboProductRow(p) : (p.product_line === 'motherboard');
   if (isMobo) {
     window.editMoboDraftProduct?.(id);
+    return;
+  }
+  const isRam = typeof window.isRamProductRow === 'function' ? window.isRamProductRow(p) : (p.product_line === 'ram');
+  if (isRam) {
+    window.editRamDraftProduct?.(id);
     return;
   }
   const isGpu = typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p.product_line === 'gpu');
@@ -2696,11 +2701,12 @@ function renderCompanyProducts(){
  const list=$('#companyProductList');if(!list)return;
  const countChip=document.querySelector('#companyPanelProducts .company-count-chip');
  if(countChip)countChip.textContent=companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S');
- const specsById=new Map(),gpuById=new Map(),pcById=new Map(),moboById=new Map();
+ const specsById=new Map(),gpuById=new Map(),pcById=new Map(),moboById=new Map(),ramById=new Map();
  const cardHtml=(p)=>{
    const isPc=typeof window.isPcProductRow==='function'?window.isPcProductRow(p):(p?.product_line==='pc');
    const isMobo=!isPc&&(typeof window.isMoboProductRow==='function'?window.isMoboProductRow(p):(p?.product_line==='motherboard'));
-   const isGpu=!isPc&&!isMobo&&(typeof window.isGpuProductRow==='function'?window.isGpuProductRow(p):(p?.product_line==='gpu'));
+   const isRam=!isPc&&!isMobo&&(typeof window.isRamProductRow==='function'?window.isRamProductRow(p):(p?.product_line==='ram'));
+   const isGpu=!isPc&&!isMobo&&!isRam&&(typeof window.isGpuProductRow==='function'?window.isGpuProductRow(p):(p?.product_line==='gpu'));
    const draft=isProductDraft(p);
    if(isPc){
      pcById.set(p.id,p);
@@ -2713,6 +2719,12 @@ function renderCompanyProducts(){
      const thumb=typeof window.renderMoboThumbHtml==='function'?window.renderMoboThumbHtml(p):'<div class="cpu-thumb-loading"></div>';
      const spec=typeof window.formatMoboSpecLine==='function'?window.formatMoboSpecLine(p):'Motherboard';
      return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-mobo-thumb-id="'+escapeHtml(p.id)+'">'+thumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(spec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
+   }
+   if(isRam){
+     ramById.set(p.id,p);
+     const thumb=typeof window.renderRamThumbHtml==='function'?window.renderRamThumbHtml(p):'<div class="cpu-thumb-loading"></div>';
+     const spec=typeof window.formatRamSpecLine==='function'?window.formatRamSpecLine(p):'RAM Stick';
+     return '<button type="button" class="company-product-card '+(p.id===selectedCompanyProductId?'active':'')+'" data-company-product="'+escapeHtml(p.id)+'"><span class="company-product-icon company-product-icon-gpu" data-ram-thumb-id="'+escapeHtml(p.id)+'">'+thumb+'</span><span class="company-product-meta"><strong>'+escapeHtml(p.product_name)+'</strong><small>'+(draft?'Draft · Editable':'Published')+' · '+escapeHtml(spec)+'</small></span><span class="company-product-card-values"><strong>'+money(Number(p.listed_price||0))+'</strong><small>Value: '+money(Number(p.product_value??p.production_cost??0))+'/unit</small></span></button>';
    }
    if(isGpu){
      gpuById.set(p.id,p);
@@ -2740,6 +2752,7 @@ function renderCompanyProducts(){
  window.hydrateGpuThumbElements?.(list,gpuById,360,270);
  window.hydratePcThumbElements?.(list,pcById,360,270);
  window.hydrateMoboThumbElements?.(list,moboById,360,270);
+ window.hydrateRamThumbElements?.(list,ramById,360,270);
  if(selectedCompanyProductId)loadCompanyProductDetails(selectedCompanyProductId);else $('#companyProductDetails')?.classList.add('hidden');
 }
 async function createCompanySeries(event){
@@ -2835,8 +2848,9 @@ async function produceMoreProduct(id, quantity, msgEl) {
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
   if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
   if (typeof window.renderEaMoboProducts === 'function') window.renderEaMoboProducts();
+  if (typeof window.renderEaRamProducts === 'function') window.renderEaRamProducts();
   const lines = currentCompany?.product_lines || [];
-  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard')) {
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard') && !lines.includes('ram')) {
     renderSidebarCpuProductsPage();
   }
   if (typeof loadProfile === 'function') await loadProfile();
@@ -2887,6 +2901,7 @@ async function deleteDraftProduct(id, msgEl) {
   window.clearGpuDraftArtifacts?.(id, p.product_name);
   window.clearPcDraftArtifacts?.(id, p.product_name);
   window.clearMoboDraftArtifacts?.(id, p.product_name);
+  window.clearRamDraftArtifacts?.(id, p.product_name);
   if (editingCpuProductId === id) {
     cancelCpuDraftEdit();
   }
@@ -2904,8 +2919,9 @@ async function deleteDraftProduct(id, msgEl) {
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
   if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
   if (typeof window.renderEaMoboProducts === 'function') window.renderEaMoboProducts();
+  if (typeof window.renderEaRamProducts === 'function') window.renderEaRamProducts();
   const lines = currentCompany?.product_lines || [];
-  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard')) {
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard') && !lines.includes('ram')) {
     renderSidebarCpuProductsPage();
   }
   toast('Draft deleted.');
@@ -2927,8 +2943,9 @@ async function liquidateProductStock(id, msgEl) {
   if (typeof window.renderEaGpuProducts === 'function') window.renderEaGpuProducts();
   if (typeof window.renderEaPcProducts === 'function') window.renderEaPcProducts();
   if (typeof window.renderEaMoboProducts === 'function') window.renderEaMoboProducts();
+  if (typeof window.renderEaRamProducts === 'function') window.renderEaRamProducts();
   const lines = currentCompany?.product_lines || [];
-  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard')) {
+  if (currentPage === 'company-products' && !lines.includes('gpu') && !lines.includes('pc') && !lines.includes('motherboard') && !lines.includes('ram')) {
     renderSidebarCpuProductsPage();
   }
   if (typeof loadProfile === 'function') await loadProfile();
@@ -2959,7 +2976,8 @@ async function loadCompanyProductDetails(id){
  d.dataset.productId=id;d.classList.remove('hidden');
  const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
  const isMobo = !isPc && (typeof window.isMoboProductRow === 'function' ? window.isMoboProductRow(p) : (p?.product_line === 'motherboard'));
- const isGpu = !isPc && !isMobo && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
+ const isRam = !isPc && !isMobo && (typeof window.isRamProductRow === 'function' ? window.isRamProductRow(p) : (p?.product_line === 'ram'));
+ const isGpu = !isPc && !isMobo && !isRam && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
  const draft = isProductDraft(p);
  const canEdit = currentCompany?.owner_id === currentUser?.id && p.company_id === currentCompany?.id;
  const unitValue = Math.max(0, Number(p.product_value ?? p.production_cost ?? 0));
@@ -2999,6 +3017,25 @@ async function loadCompanyProductDetails(id){
    }
    $('#companyProductPreview')?.addEventListener('click',()=>window.openProductPreview?.(p,currentCompany?.company_name));
    $('#companyProductEditDraft')?.addEventListener('click',()=>window.editMoboDraftProduct?.(id));
+   $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
+   $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
+   $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
+   return;
+ }
+ if (isRam) {
+   const ramThumb = typeof window.renderRamThumbHtml === 'function' ? window.renderRamThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+   const ramBadges = typeof window.formatRamHardwareBadges === 'function' ? window.formatRamHardwareBadges(p) : 'RAM Stick';
+   const st = typeof window.getRamProductScoreTier === 'function' ? window.getRamProductScoreTier(p) : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
+   d.innerHTML='<div class="company-product-detail-hero"><div class="company-product-detail-thumb company-product-detail-thumb-gpu" data-ram-thumb-id="'+escapeHtml(p.id)+'">'+ramThumb+'</div><div class="company-product-detail-title"><h4>'+escapeHtml(p.product_name)+'</h4><p class="muted tiny">'+escapeHtml(draft?'Draft (Not yet published)':'Published on Product Feed')+'</p><small class="company-product-detail-specs">'+escapeHtml(ramBadges)+'</small></div></div><div class="company-product-detail-grid"><div class="company-product-detail-stat"><span>Product value / unit</span><strong>'+money(unitValue)+'</strong></div><div class="company-product-detail-stat"><span>Score / Tier</span><strong>'+Number(st.score||0)+' · '+escapeHtml(st.tier||'F')+'</strong></div><div class="company-product-detail-stat"><span>Stock</span><strong>'+(stockCount>0?stockCount:'Out Of Stock')+'</strong></div><div class="company-product-detail-stat"><span>Units sold</span><strong>'+Number(p.purchase_count||0)+'</strong></div></div><label>Product price ($)<input id="companyProductPriceEdit" type="number" min="1" value="'+Number(p.listed_price||1)+'"></label>'+produceBlock+'<div class="company-product-details-actions"><button type="button" class="zoom-btn" id="companyProductPreview">👁 Preview</button>'+(canEdit?'<button type="button" class="primary-btn" id="companyProductEditDraft">Edit</button>':'')+'<button type="button" class="zoom-btn" id="companyProductSavePrice">Save price</button>'+(draft?'<button type="button" class="primary-btn" id="companyProductPublish">Publish</button><button type="button" class="danger-btn" id="companyProductDeleteDraft">Delete draft</button>':'')+'</div><p class="form-message" id="companyProductDetailMessage"></p>';
+   window.hydrateRamThumbElements?.(d, new Map([[p.id, p]]), 360, 270);
+   renderProductSeriesControls(p,d,canEdit);
+   const msgEl = $('#companyProductDetailMessage');
+   if (!draft) {
+     bindProduceMoreControls($('#companyProduceQuantity'), $('#companyProduceMore'), unitValue, id, msgEl);
+     $('#companyLiquidateStock')?.addEventListener('click', () => liquidateProductStock(id, msgEl));
+   }
+   $('#companyProductPreview')?.addEventListener('click',()=>window.openProductPreview?.(p,currentCompany?.company_name));
+   $('#companyProductEditDraft')?.addEventListener('click',()=>window.editRamDraftProduct?.(id));
    $('#companyProductSavePrice')?.addEventListener('click',()=>saveCompanyProductListing(id,false));
    $('#companyProductPublish')?.addEventListener('click',()=>saveCompanyProductListing(id,true));
    $('#companyProductDeleteDraft')?.addEventListener('click',()=>deleteDraftProduct(id, msgEl));
@@ -3044,7 +3081,7 @@ function renderSidebarCpuProductsPage(){
    page.innerHTML='<div class="company-empty-page"><div class="eyebrow purple-text">COMPANY WORKSPACE</div><div class="company-empty-icon">▦</div><h3>No Company</h3><p class="muted">Select or create a company to view products.</p><button type="button" class="primary-btn" data-goto="company">Go to Company</button></div>';
    return;
  }
- if((currentCompany.product_lines||[]).includes('gpu')||(currentCompany.product_lines||[]).includes('pc')||(currentCompany.product_lines||[]).includes('motherboard')) return;
+ if((currentCompany.product_lines||[]).includes('gpu')||(currentCompany.product_lines||[]).includes('pc')||(currentCompany.product_lines||[]).includes('motherboard')||(currentCompany.product_lines||[]).includes('ram')) return;
  if(!selectedCompanyProductId && companyProducts.length) selectedCompanyProductId = companyProducts[0].id;
  const specsById = new Map();
  page.innerHTML='<div class="section-head"><div><div class="eyebrow purple-text">CPU MANUFACTURING</div><h3>Products</h3><p class="muted">Select a CPU to inspect details, edit or delete drafts, publish, or produce stock.</p></div><span class="company-count-chip">'+companyProducts.length+' PRODUCT'+(companyProducts.length===1?'':'S')+'</span></div><div id="eaCpuProductList" class="company-product-list">'+(companyProducts.length?companyProducts.map(p=>{
@@ -3097,7 +3134,7 @@ window.renderSidebarCpuProductsPage = renderSidebarCpuProductsPage;
 
 async function saveCompanyProductListing(id,publish){
  const price=Number($('#companyProductPriceEdit')?.value||0),msg=$('#companyProductDetailMessage');if(!Number.isFinite(price)||price<=0){if(msg)msg.textContent='Enter a valid price.';return;}
- const {data,error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:publish});if(error){if(msg)msg.textContent=error.message;return;}const i=companyProducts.findIndex(x=>x.id===id);if(i>=0)companyProducts[i]=data;renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof window.renderEaGpuProducts==='function')window.renderEaGpuProducts();if(typeof window.renderEaPcProducts==='function')window.renderEaPcProducts();if(typeof window.renderEaMoboProducts==='function')window.renderEaMoboProducts();toast(publish?'Product published to Product Feed!':'Product price updated.');
+ const {data,error}=await sb.rpc('update_cpu_product_listing',{p_product_id:id,p_listed_price:price,p_publish:publish});if(error){if(msg)msg.textContent=error.message;return;}const i=companyProducts.findIndex(x=>x.id===id);if(i>=0)companyProducts[i]=data;renderCompanyProducts();await loadCompanyProductDetails(id);if(typeof window.renderEaGpuProducts==='function')window.renderEaGpuProducts();if(typeof window.renderEaPcProducts==='function')window.renderEaPcProducts();if(typeof window.renderEaMoboProducts==='function')window.renderEaMoboProducts();if(typeof window.renderEaRamProducts==='function')window.renderEaRamProducts();toast(publish?'Product published to Product Feed!':'Product price updated.');
 }
 async function loadPublishedProductFeed(){
  const grid=$('#publishedProductFeed');if(!grid||!sb)return;grid.innerHTML='<div class="muted">Loading products...</div>';
@@ -3112,12 +3149,14 @@ async function loadPublishedProductFeed(){
  const gpuById = new Map();
  const pcById = new Map();
  const moboById = new Map();
+ const ramById = new Map();
  const feedProductsById = new Map();
  grid.innerHTML=data.map(p=>{
   feedProductsById.set(p.id, p);
   const isPc = typeof window.isPcProductRow === 'function' ? window.isPcProductRow(p) : (p?.product_line === 'pc');
   const isMobo = !isPc && (typeof window.isMoboProductRow === 'function' ? window.isMoboProductRow(p) : (p?.product_line === 'motherboard'));
-  const isGpu = !isPc && !isMobo && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
+  const isRam = !isPc && !isMobo && (typeof window.isRamProductRow === 'function' ? window.isRamProductRow(p) : (p?.product_line === 'ram'));
+  const isGpu = !isPc && !isMobo && !isRam && (typeof window.isGpuProductRow === 'function' ? window.isGpuProductRow(p) : (p?.product_line === 'gpu'));
   if (isPc) {
     pcById.set(p.id, p);
     const pcThumb = typeof window.renderPcThumbHtml === 'function' ? window.renderPcThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
@@ -3130,6 +3169,13 @@ async function loadPublishedProductFeed(){
     const moboSpec = typeof window.formatMoboSpecLine === 'function' ? window.formatMoboSpecLine(p) : 'Motherboard';
     const st = typeof window.getMoboProductScoreTier === 'function' ? window.getMoboProductScoreTier(p) : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
     return '<article class="published-product-card"><div class="product-feed-gpu" data-mobo-thumb-id="'+escapeHtml(p.id)+'">'+moboThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+'<button type="button" class="creator-chip" data-public-company-id="'+escapeHtml(p.company_id||'')+'" style="margin:4px 0;">'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</button>'+'</p><p>'+escapeHtml(moboSpec)+'</p><p>'+Number(st.score||0)+' Score · '+escapeHtml(st.tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p><div class="ea-product-card-actions"><button type="button" class="zoom-btn ea-product-preview-btn" data-preview-feed-product="'+escapeHtml(p.id)+'">👁 Preview</button></div></article>';
+  }
+  if (isRam) {
+    ramById.set(p.id, p);
+    const ramThumb = typeof window.renderRamThumbHtml === 'function' ? window.renderRamThumbHtml(p) : '<div class="cpu-thumb-loading"></div>';
+    const ramSpec = typeof window.formatRamSpecLine === 'function' ? window.formatRamSpecLine(p) : 'RAM Stick';
+    const st = typeof window.getRamProductScoreTier === 'function' ? window.getRamProductScoreTier(p) : { score: Number(p.cpu_score || 0), tier: p.cpu_tier || 'F' };
+    return '<article class="published-product-card"><div class="product-feed-gpu" data-ram-thumb-id="'+escapeHtml(p.id)+'">'+ramThumb+'</div><h4>'+escapeHtml(p.product_name)+'</h4><p>'+'<button type="button" class="creator-chip" data-public-company-id="'+escapeHtml(p.company_id||'')+'" style="margin:4px 0;">'+escapeHtml(p.product_companies?.company_name||'GRIND Company')+'</button>'+'</p><p>'+escapeHtml(ramSpec)+'</p><p>'+Number(st.score||0)+' Score · '+escapeHtml(st.tier||'F')+' Tier</p><strong>'+money(Number(p.listed_price||0))+'</strong><p>'+(Number(p.stock||0)>0?Number(p.stock)+' in stock':'Out Of Stock')+'</p><div class="ea-product-card-actions"><button type="button" class="zoom-btn ea-product-preview-btn" data-preview-feed-product="'+escapeHtml(p.id)+'">👁 Preview</button></div></article>';
   }
   if (isGpu) {
     gpuById.set(p.id, p);
@@ -3146,6 +3192,7 @@ async function loadPublishedProductFeed(){
  window.hydrateGpuThumbElements?.(grid, gpuById, 360, 270);
  window.hydratePcThumbElements?.(grid, pcById, 360, 270);
  window.hydrateMoboThumbElements?.(grid, moboById, 360, 270);
+ window.hydrateRamThumbElements?.(grid, ramById, 360, 270);
  grid.querySelectorAll('[data-public-company-id]').forEach(btn => btn.addEventListener('click', event => {
    event.preventDefault();
    event.stopPropagation();

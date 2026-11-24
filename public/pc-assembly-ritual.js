@@ -110,6 +110,12 @@
     playTone(220, 440, 0.22, 'sine', 0.06, 0.08);
   }
 
+  function playRamClick() {
+    playTone(1320, 2150, 0.045, 'triangle', 0.14, 0);
+    playTone(1580, 2400, 0.05, 'sine', 0.12, 0.045);
+    playTone(190, 72, 0.08, 'triangle', 0.14, 0.02);
+  }
+
   let lastScrewTick = 0;
   function playScrewTick(progress) {
     const now = performance.now();
@@ -303,22 +309,6 @@
     const hasCpu = !!pcCfg?.cpu;
     const hasGpu = !!pcCfg?.gpu;
 
-    const steps = [];
-    if (hasMobo) {
-      steps.push({ id: 'seat_mobo', short: 'Motherboard', title: (steps.length + 1) + ' · Seat Motherboard onto Standoffs', desc: 'Drag inward on the 1:1 3D Motherboard (or hold button) to align & seat it onto the brass standoffs.', btn: 'Hold to Seat Motherboard' });
-      steps.push({ id: 'screw_mobo', short: '4 Mobo Screws', title: (steps.length + 1) + ' · Screw Motherboard into Standoffs', desc: 'Click & hold each of the 4 corner screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
-    }
-    if (hasCpu) {
-      steps.push({ id: 'seat_cpu', short: 'Seat CPU', title: (steps.length + 1) + ' · Seat CPU into Socket', desc: 'Drag straight inward on the CPU (or hold button) to align & seat gold pins into the motherboard socket.', btn: 'Hold to Seat CPU' });
-      steps.push({ id: 'close_latch', short: 'Metal Latch', title: (steps.length + 1) + ' · Shut Metal Retention Arm', desc: 'Drag downward on the brushed steel bracket & lever arm until it snaps locked over the CPU.', btn: 'Hold to Clamp Shut' });
-      steps.push({ id: 'thermal_paste', short: 'Thermal Paste', title: (steps.length + 1) + ' · Apply Thermal Paste', desc: 'Drag back & forth across the exposed CPU IHS with the 3D syringe to coat thermal compound.', btn: 'Hold to Squeeze Paste' });
-    }
-    if (hasGpu) {
-      steps.push({ id: 'seat_gpu', short: 'Install GPU', title: (steps.length + 1) + ' · Seat GPU in PCIe Slot', desc: 'Slide your 1:1 3D GPU cleanly into the reinforced PCIe x16 slot until it locks.', btn: 'Hold to Seat GPU' });
-      steps.push({ id: 'screw_gpu', short: '4 GPU Screws', title: (steps.length + 1) + ' · Tighten 4 Bracket Screws', desc: 'Click & hold each of the 4 chrome screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
-    }
-    steps.push({ id: 'close_panel', short: 'Shut Glass', title: (steps.length + 1) + ' · Shut Tempered Glass Panel', desc: 'Swing the hinged tempered glass door shut to seal the build & save your draft!', btn: 'Hold to Close Door' });
-
     // Setup Three.js Scene
     stage.innerHTML = '';
     const w0 = Math.max(460, stage.clientWidth || 760);
@@ -375,6 +365,27 @@
     });
     scene.add(pcAsm.root);
 
+    const ramStickList = pcAsm.ramStickHolders || [];
+    const hasRam = ramStickList.length > 0;
+    const steps = [];
+    if (hasMobo) {
+      steps.push({ id: 'seat_mobo', short: 'Motherboard', title: (steps.length + 1) + ' · Seat Motherboard onto Standoffs', desc: 'Drag inward on the 1:1 3D Motherboard (or hold button) to align & seat it onto the brass standoffs.', btn: 'Hold to Seat Motherboard' });
+      steps.push({ id: 'screw_mobo', short: '4 Mobo Screws', title: (steps.length + 1) + ' · Screw Motherboard into Standoffs', desc: 'Click & hold each of the 4 corner screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
+    }
+    if (hasCpu) {
+      steps.push({ id: 'seat_cpu', short: 'Seat CPU', title: (steps.length + 1) + ' · Seat CPU into Socket', desc: 'Drag straight inward on the CPU (or hold button) to align & seat gold pins into the motherboard socket.', btn: 'Hold to Seat CPU' });
+      steps.push({ id: 'close_latch', short: 'Metal Latch', title: (steps.length + 1) + ' · Shut Metal Retention Arm', desc: 'Drag downward on the brushed steel bracket & lever arm until it snaps locked over the CPU.', btn: 'Hold to Clamp Shut' });
+      steps.push({ id: 'thermal_paste', short: 'Thermal Paste', title: (steps.length + 1) + ' · Apply Thermal Paste', desc: 'Drag back & forth across the exposed CPU IHS with the 3D syringe to coat thermal compound.', btn: 'Hold to Squeeze Paste' });
+    }
+    if (hasRam) {
+      steps.push({ id: 'seat_ram', short: 'Install RAM', title: (steps.length + 1) + ' · Seat RAM Stick' + (ramStickList.length === 1 ? '' : 's') + ' into DIMM Slots', desc: 'Slide your DDR5 RAM stick' + (ramStickList.length === 1 ? '' : 's') + ' straight into the Motherboard DIMM slots until the latches click.', btn: 'Hold to Seat RAM' });
+    }
+    if (hasGpu) {
+      steps.push({ id: 'seat_gpu', short: 'Install GPU', title: (steps.length + 1) + ' · Seat GPU in PCIe Slot', desc: 'Slide your 1:1 3D GPU cleanly into the reinforced PCIe x16 slot until it locks.', btn: 'Hold to Seat GPU' });
+      steps.push({ id: 'screw_gpu', short: '4 GPU Screws', title: (steps.length + 1) + ' · Tighten 4 Bracket Screws', desc: 'Click & hold each of the 4 chrome screws with the 3D screwdriver until driven flush (0/4).', btn: 'Drive Next Screw' });
+    }
+    steps.push({ id: 'close_panel', short: 'Shut Glass', title: (steps.length + 1) + ' · Shut Tempered Glass Panel', desc: 'Swing the hinged tempered glass door shut to seal the build & save your draft!', btn: 'Hold to Close Door' });
+
     // 3D Tools (Syringe & Screwdriver)
     const syringeTool = buildSyringeMesh(THREE);
     syringeTool.visible = false;
@@ -420,6 +431,8 @@
       cpuProgress: 0,      // 0..1
       latchProgress: 0,    // 0..1
       pasteProgress: 0,    // 0..1
+      ramProgress: 0,      // 0..1
+      ramLockedCount: 0,
       coolerDropT: hasCpu && asmState.hideCpuCooler ? 0 : 1,
       coolerDropping: false,
       gpuProgress: 0,      // 0..1
@@ -434,9 +447,10 @@
     };
     activeSession = session;
 
-    // Initial pre-assembled mechanical offsets (strictly staged: Mobo -> Screws -> CPU -> GPU -> Door)
+    // Initial pre-assembled mechanical offsets (strictly staged: Mobo -> Screws -> CPU -> RAM -> GPU -> Door)
     const MOBO_HOVER_Z = 0.88;
     const CPU_HOVER_Z = 0.65;
+    const RAM_HOVER_Z = 0.58;
     const GPU_HOVER_DIST = 0.92;
 
     if (hasMobo && pcAsm.motherboardGroup) {
@@ -451,6 +465,12 @@
       pcAsm.cpuHolder.position.z = pcAsm.cpuDockedPos.z + CPU_HOVER_Z;
       if (hasMobo) pcAsm.cpuHolder.visible = false;
     }
+    if (hasRam && pcAsm.ramGroup) {
+      ramStickList.forEach(item => {
+        item.holder.position.z = item.dockedPos.z + RAM_HOVER_Z;
+      });
+      if (hasMobo || hasCpu) pcAsm.ramGroup.visible = false;
+    }
     if (hasGpu && pcAsm.gpuHolder) {
       if (pcAsm.isVerticalGpu) {
         pcAsm.gpuHolder.position.y = pcAsm.gpuDockedPos.y + GPU_HOVER_DIST * 0.72;
@@ -458,7 +478,7 @@
       } else {
         pcAsm.gpuHolder.position.z = pcAsm.gpuDockedPos.z + GPU_HOVER_DIST;
       }
-      if (hasMobo || hasCpu) {
+      if (hasMobo || hasCpu || hasRam) {
         if (pcAsm.gpuGroup) pcAsm.gpuGroup.visible = false;
         if (pcAsm.cablesGroup) pcAsm.cablesGroup.visible = false;
       }
@@ -504,6 +524,12 @@
         const sp = pcAsm.sockPos;
         camGoalPos.set(sp.x + 0.45 * s, sp.y + 0.25 * s, sp.z + 1.65 * s);
         camGoalLook.set(sp.x, sp.y, sp.z + 0.08);
+      } else if (stepId === 'seat_ram') {
+        const avg = new THREE.Vector3();
+        ramStickList.forEach(item => avg.add(new THREE.Vector3(item.dockedPos.x, item.dockedPos.y, item.dockedPos.z)));
+        if (ramStickList.length) avg.divideScalar(ramStickList.length);
+        camGoalPos.set(avg.x + 1.05 * s, avg.y + 0.45 * s, avg.z + 2.15 * s);
+        camGoalLook.copy(avg);
       } else if (stepId === 'seat_gpu') {
         const gp = pcAsm.gpuDockedPos;
         camGoalPos.set(gp.x + 1.4 * s, gp.y + 0.85 * s, gp.z + 2.85 * s);
@@ -550,6 +576,9 @@
 
       if (cur.id === 'screw_mobo') {
         moboScrewsList.forEach(sc => { sc.wrap.visible = true; });
+      }
+      if (cur.id === 'seat_ram') {
+        if (pcAsm.ramGroup) pcAsm.ramGroup.visible = true;
       }
       if (cur.id === 'seat_gpu') {
         if (pcAsm.gpuGroup) pcAsm.gpuGroup.visible = true;
@@ -726,6 +755,7 @@
           }
           if (doneCount >= screws.length) {
             if (pcAsm.cpuHolder) pcAsm.cpuHolder.visible = true;
+            if (!hasCpu && pcAsm.ramGroup) pcAsm.ramGroup.visible = true;
             if (!hasGpu && pcAsm.cablesGroup) pcAsm.cablesGroup.visible = true;
             flashBanner('Motherboard Secured to Standoffs!');
             setTimeout(() => {
@@ -769,6 +799,25 @@
         const worldPt = pcAsm.pasteAnchor.localToWorld(localPt);
         syringeTool.position.copy(worldPt).add(new THREE.Vector3(0.02, 0.02, 0.05));
         depositThermalPasteAt(worldPt);
+      } else if (stepId === 'seat_ram') {
+        session.ramProgress = clamp(session.ramProgress + delta * 1.15, 0, 1);
+        const n = Math.max(1, ramStickList.length);
+        const slotSlice = 1 / n;
+        ramStickList.forEach((item, idx) => {
+          const localP = clamp((session.ramProgress - idx * slotSlice * 0.72) / (1 - (n - 1) * slotSlice * 0.72), 0, 1);
+          const eased = 1 - Math.pow(1 - localP, 2.2);
+          item.holder.position.z = item.dockedPos.z + RAM_HOVER_Z * (1 - eased);
+          if (localP >= 1 && session.ramLockedCount <= idx) {
+            session.ramLockedCount = idx + 1;
+            playRamClick();
+          }
+        });
+        if (session.ramProgress >= 1) {
+          ramStickList.forEach(item => { item.holder.position.z = item.dockedPos.z; });
+          if (!hasGpu && pcAsm.cablesGroup) pcAsm.cablesGroup.visible = true;
+          flashBanner('RAM Click-Locked in DIMM Slots!');
+          advanceStep();
+        }
       } else if (stepId === 'seat_gpu') {
         session.gpuProgress = clamp(session.gpuProgress + delta, 0, 1);
         const eased = 1 - Math.pow(1 - session.gpuProgress, 2);
@@ -950,6 +999,9 @@
       } else if (cur.id === 'close_latch') {
         const pull = Math.max(0, dy * 0.8 + Math.abs(dx) * 0.25);
         applyStepDelta('close_latch', Math.max(0.008, pull * 0.0075));
+      } else if (cur.id === 'seat_ram') {
+        const push = Math.max(0, dy - dx * 0.45);
+        applyStepDelta('seat_ram', Math.max(0.008, push * 0.0075));
       } else if (cur.id === 'seat_gpu') {
         const push = Math.max(0, dy - dx * 0.5);
         applyStepDelta('seat_gpu', Math.max(0.008, push * 0.0075));
@@ -1109,6 +1161,7 @@
         } else if (cur.id === 'seat_cpu') updateProgressBar(session.cpuProgress);
         else if (cur.id === 'close_latch') updateProgressBar(session.latchProgress);
         else if (cur.id === 'thermal_paste') updateProgressBar(session.pasteProgress);
+        else if (cur.id === 'seat_ram') updateProgressBar(session.ramProgress);
         else if (cur.id === 'seat_gpu') updateProgressBar(session.gpuProgress);
         else if (cur.id === 'screw_gpu') {
           const tot = Math.max(1, gpuScrewsList.length || 4);
