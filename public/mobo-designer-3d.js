@@ -461,14 +461,14 @@
     const sockPad = cfg.boardSize === 'small' ? 0.54 : 0.58;
 
     // 2. LGA CPU Socket + Articulated Hinged Steel ILM Frame & Lever
-    const sockBaseY = surfaceY + 0.018;
-    addBox(socketGroup, sockPad + 0.13, 0.036, sockPad + 0.13, darkSteelMat, sockX, sockBaseY, sockZ);
-    // Gold LGA Pin Contact Bed inside socket cavity
-    const pinBed = new T.Mesh(new T.BoxGeometry(sockPad * 0.88, 0.016, sockPad * 0.88), goldMat);
-    pinBed.position.set(sockX, surfaceY + 0.028, sockZ);
+    const sockBaseY = surfaceY + 0.011;
+    addBox(socketGroup, sockPad + 0.13, 0.022, sockPad + 0.13, darkSteelMat, sockX, sockBaseY, sockZ);
+    // Gold LGA Pin Contact Bed inside socket cavity (clearly elevated above socket base to prevent z-fighting)
+    const pinBed = new T.Mesh(new T.BoxGeometry(sockPad * 0.88, 0.010, sockPad * 0.88), goldMat);
+    pinBed.position.set(sockX, surfaceY + 0.029, sockZ);
     socketGroup.add(pinBed);
     // Central SMD capacitors inside socket cutout
-    addBox(socketGroup, sockPad * 0.34, 0.022, sockPad * 0.34, darkPlasticMat, sockX, surfaceY + 0.030, sockZ);
+    addBox(socketGroup, sockPad * 0.34, 0.008, sockPad * 0.34, darkPlasticMat, sockX, surfaceY + 0.039, sockZ);
 
     const asmOpts = opts.assembly && typeof opts.assembly === 'object' ? opts.assembly : {};
     const hoodW = sockPad + 0.11;
