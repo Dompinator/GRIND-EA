@@ -378,7 +378,7 @@
     if (msgEl) msgEl.textContent = 'Researching ' + def.name + '…';
 
     let { data, error } = await sb.rpc('unlock_company_research', { p_company_id: currentCompany.id, p_research_key: key });
-    if (error && (/unknown\s+research/i.test(error.message || '') || error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''))) {
+    if (error && (/unknown\s+research|owner_id/i.test(error.message || '') || error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''))) {
       const curCash = Number(currentUser.cash ?? 0);
       if (curCash < def.cost) {
         const err = 'Not enough cash. ' + def.name + ' costs $' + def.cost.toLocaleString() + '.';

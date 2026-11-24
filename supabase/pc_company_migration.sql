@@ -269,8 +269,19 @@ BEGIN
     RAISE EXCEPTION 'Not enough cash ($% required)', v_cost;
   END IF;
 
-  INSERT INTO public.product_company_research (company_id, owner_id, research_key)
-  VALUES (p_company_id, v_uid, p_research_key);
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'product_company_research'
+      AND column_name = 'owner_id'
+  ) THEN
+    EXECUTE 'INSERT INTO public.product_company_research (company_id, owner_id, research_key) VALUES ($1, $2, $3)'
+      USING p_company_id, v_uid, p_research_key;
+  ELSE
+    INSERT INTO public.product_company_research (company_id, research_key)
+    VALUES (p_company_id, p_research_key);
+  END IF;
 
   UPDATE public.profiles
   SET cash = ROUND((COALESCE(cash, 0) - v_cost)::numeric, 2)

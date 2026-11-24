@@ -75,11 +75,58 @@ END $$;
 
 ALTER TABLE public.product_companies
   ADD CONSTRAINT product_companies_product_lines_check
-  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc']::text[]) NOT VALID;
+  CHECK (product_lines <@ ARRAY['cpu', 'gpu', 'pc', 'motherboard']::text[]) NOT VALID;
+
+-- Allow infinite companies per owner, max 1 company per manufacturing type
+DO $$
+DECLARE
+  v_idx record;
+BEGIN
+  -- Drop any unique constraint on product_companies(owner_id) only
+  FOR v_idx IN
+    SELECT c.conname
+    FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = cl.relnamespace
+    WHERE n.nspname = 'public'
+      AND cl.relname = 'product_companies'
+      AND c.contype = 'u'
+      AND array_length(c.conkey, 1) = 1
+      AND EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = cl.oid AND a.attnum = c.conkey[1] AND a.attname = 'owner_id'
+      )
+  LOOP
+    EXECUTE format('ALTER TABLE public.product_companies DROP CONSTRAINT IF EXISTS %I', v_idx.conname);
+  END LOOP;
+
+  -- Drop any standalone unique index on product_companies(owner_id) only
+  FOR v_idx IN
+    SELECT i.relname AS idx_name
+    FROM pg_index ix
+    JOIN pg_class i ON i.oid = ix.indexrelid
+    JOIN pg_class cl ON cl.oid = ix.indrelid
+    JOIN pg_namespace n ON n.oid = cl.relnamespace
+    WHERE n.nspname = 'public'
+      AND cl.relname = 'product_companies'
+      AND ix.indisunique
+      AND NOT ix.indisprimary
+      AND ix.indnkeyatts = 1
+      AND EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = cl.oid AND a.attnum = ix.indkey[0] AND a.attname = 'owner_id'
+      )
+  LOOP
+    EXECUTE format('DROP INDEX IF EXISTS public.%I', v_idx.idx_name);
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_companies_owner_line
+  ON public.product_companies (owner_id, (COALESCE(product_lines[1], 'cpu')));
 
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_product_line_check
-  CHECK (product_line IN ('cpu', 'gpu', 'pc')) NOT VALID;
+  CHECK (product_line IN ('cpu', 'gpu', 'pc', 'motherboard')) NOT VALID;
 
 ALTER TABLE public.product_company_products
   ADD CONSTRAINT product_company_products_body_type_check
@@ -114,7 +161,10 @@ ALTER TABLE public.product_company_research
     'chip_custom_pcb_color','chip_emerald_pcb','chip_anti_crush_color','chip_copper_shim',
     -- PC Company
     'pc_rgb_case','pc_medium_case','pc_large_case',
-    'pc_small_fans','pc_medium_fans','pc_smart_fans'
+    'pc_small_fans','pc_medium_fans','pc_smart_fans',
+    -- Motherboard Company
+    'mobo_medium_board','mobo_large_board',
+    'mobo_ram_1','mobo_ram_2','mobo_ram_4','mobo_ram_6'
   )) NOT VALID;
 
 -- 4) Unified unlock_company_research RPC (GPU + CHIP + PC)
@@ -196,6 +246,13 @@ BEGIN
     WHEN 'pc_small_fans' THEN v_cost := 225;
     WHEN 'pc_medium_fans' THEN v_cost := 600; v_pre := 'pc_small_fans';
     WHEN 'pc_smart_fans' THEN v_cost := 1800; v_pre := 'pc_medium_fans';
+    -- Motherboard Company
+    WHEN 'mobo_medium_board' THEN v_cost := 75;
+    WHEN 'mobo_large_board' THEN v_cost := 150; v_pre := 'mobo_medium_board';
+    WHEN 'mobo_ram_1' THEN v_cost := 200;
+    WHEN 'mobo_ram_2' THEN v_cost := 280; v_pre := 'mobo_ram_1';
+    WHEN 'mobo_ram_4' THEN v_cost := 680; v_pre := 'mobo_ram_2';
+    WHEN 'mobo_ram_6' THEN v_cost := 1200; v_pre := 'mobo_ram_4';
     ELSE
       RAISE EXCEPTION 'Unknown research upgrade: %', p_research_key;
   END CASE;
@@ -212,8 +269,19 @@ BEGIN
     RAISE EXCEPTION 'Not enough cash ($% required)', v_cost;
   END IF;
 
-  INSERT INTO public.product_company_research (company_id, owner_id, research_key)
-  VALUES (p_company_id, v_uid, p_research_key);
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'product_company_research'
+      AND column_name = 'owner_id'
+  ) THEN
+    EXECUTE 'INSERT INTO public.product_company_research (company_id, owner_id, research_key) VALUES ($1, $2, $3)'
+      USING p_company_id, v_uid, p_research_key;
+  ELSE
+    INSERT INTO public.product_company_research (company_id, research_key)
+    VALUES (p_company_id, p_research_key);
+  END IF;
 
   UPDATE public.profiles
   SET cash = ROUND((COALESCE(cash, 0) - v_cost)::numeric, 2)
@@ -297,6 +365,79 @@ BEGIN
 END;
 $$;
 
+-- 5B) Save / Edit Motherboard Draft RPC
+CREATE OR REPLACE FUNCTION public.save_mobo_product_draft(
+  p_product_id uuid,
+  p_company_id uuid,
+  p_product_name text,
+  p_body_type text,
+  p_production_cost numeric,
+  p_product_value numeric,
+  p_listed_price numeric,
+  p_score integer,
+  p_tier text,
+  p_design_data jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_owner uuid;
+  v_row public.product_company_products;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  SELECT owner_id INTO v_owner
+  FROM public.product_companies
+  WHERE id = p_company_id;
+
+  IF v_owner IS NULL OR v_owner <> v_uid THEN
+    RAISE EXCEPTION 'Not authorized for this company';
+  END IF;
+
+  IF p_product_id IS NOT NULL THEN
+    UPDATE public.product_company_products
+    SET product_name = p_product_name,
+        body_type = COALESCE(p_body_type, 'small'),
+        production_cost = GREATEST(0, COALESCE(p_production_cost, 0)),
+        product_value = GREATEST(0, COALESCE(p_product_value, 0)),
+        listed_price = GREATEST(1, COALESCE(p_listed_price, 1)),
+        cpu_score = GREATEST(0, COALESCE(p_score, 0)),
+        cpu_tier = COALESCE(p_tier, 'F'),
+        design_data = COALESCE(p_design_data, '{}'::jsonb)
+    WHERE id = p_product_id
+      AND company_id = p_company_id
+      AND owner_id = v_uid
+      AND status IN ('draft', 'published')
+    RETURNING * INTO v_row;
+
+    IF v_row.id IS NULL THEN
+      RAISE EXCEPTION 'Motherboard product not found or unauthorized';
+    END IF;
+  ELSE
+    INSERT INTO public.product_company_products (
+      company_id, owner_id, product_line, product_name, body_type,
+      production_cost, product_value, listed_price,
+      cpu_score, cpu_tier, stock, status, design_data
+    ) VALUES (
+      p_company_id, v_uid, 'motherboard', p_product_name, COALESCE(p_body_type, 'small'),
+      GREATEST(0, COALESCE(p_production_cost, 0)),
+      GREATEST(0, COALESCE(p_product_value, 0)),
+      GREATEST(1, COALESCE(p_listed_price, 1)),
+      GREATEST(0, COALESCE(p_score, 0)), COALESCE(p_tier, 'F'), 0, 'draft', COALESCE(p_design_data, '{}'::jsonb)
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
+  RETURN to_jsonb(v_row);
+END;
+$$;
+
 -- 6) Produce PC Units + Validate & Deduct Component Stock + Pay Component Maker Companies RPC
 CREATE OR REPLACE FUNCTION public.produce_pc_product(
   p_product_id uuid,
@@ -353,6 +494,10 @@ BEGIN
         END
       ) AS elem
       WHERE (elem #>> '{}') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'motherboard'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'motherboard'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
       UNION ALL
       SELECT (v_pc.design_data->'components'->'cpu'->>'id')::uuid AS part_id
       WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
@@ -419,6 +564,10 @@ BEGIN
         END
       ) AS elem
       WHERE (elem #>> '{}') ~ '^[0-9a-fA-F-]{36}$'
+      UNION ALL
+      SELECT (v_pc.design_data->'components'->'motherboard'->>'id')::uuid AS part_id
+      WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
+        AND COALESCE(v_pc.design_data->'components'->'motherboard'->>'id', '') ~ '^[0-9a-fA-F-]{36}$'
       UNION ALL
       SELECT (v_pc.design_data->'components'->'cpu'->>'id')::uuid AS part_id
       WHERE jsonb_typeof(v_pc.design_data->'component_ids') IS DISTINCT FROM 'array'
@@ -910,6 +1059,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.unlock_company_research(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.save_pc_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.save_mobo_product_draft(uuid, uuid, text, text, numeric, numeric, numeric, integer, text, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.produce_pc_product(uuid, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.buy_company_stock(uuid, numeric) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.sell_company_stock(uuid, numeric) TO authenticated;
